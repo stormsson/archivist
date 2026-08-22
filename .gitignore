@@ -117,3 +117,6 @@ InitTestScene*.unity*
 .DS_Store
 .idea/
 .vscode/
+
+# Claude Code personal overrides (not team config)
+.claude/settings.local.json
