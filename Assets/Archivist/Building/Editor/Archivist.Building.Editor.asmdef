@@ -1,0 +1,14 @@
+{
+    "name": "Archivist.Building.Editor",
+    "rootNamespace": "Archivist.Building.Editor",
+    "references": ["Archivist.Building", "Archivist.Generation", "Archivist.Render", "Unity.InputSystem", "UnityEngine.UI"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

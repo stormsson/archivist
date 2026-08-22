@@ -1,0 +1,14 @@
+{
+    "name": "Archivist.Building",
+    "rootNamespace": "Archivist.Building",
+    "references": ["Archivist.Generation", "Archivist.Render", "Unity.InputSystem", "UnityEngine.UI"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
