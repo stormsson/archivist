@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Headless harness. Compiles the Generation assembly outside Unity so the §13
+       acceptance tests can run without the Editor. Possible only because §14 forbids
+       Generation from referencing UnityEngine. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>            <!-- Unity 6000.0 ships C# 9 -->
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>GenHarness</AssemblyName>
+    <RootNamespace>Archivist.Harness</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>CS0649;CS0169</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Archivist/Generation/**/*.cs" />
+    <Compile Include="../../Assets/Archivist/Render/**/*.cs" />
+    <Compile Include="*.cs" />
+  </ItemGroup>
+</Project>

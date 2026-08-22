@@ -1,0 +1,14 @@
+{
+    "name": "Archivist.Render",
+    "rootNamespace": "Archivist.Render",
+    "references": ["Archivist.Generation"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
