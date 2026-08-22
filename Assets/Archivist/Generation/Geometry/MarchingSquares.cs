@@ -52,22 +52,35 @@ namespace Archivist.Generation.Geometry
 
         /// <summary>
         /// §6.2: targetGroundCell = PaperDetailMm / 1000 * scaleDenominator,
-        /// lod = clamp(ceil(log2(BaseCell / targetGroundCell)), 0, MaxLod).
+        /// lod = clamp(ceil(log2(BaseCell / targetGroundCell)), 0, MaxPaperContourLod).
         ///
         /// ceil(log2(a/b)) is the smallest L with a / 2^L &lt;= b, so this halves BaseCell in an
         /// integer loop instead of trusting the last ulp of a transcendental that feeds an
         /// int branch (§4.4).
+        ///
+        /// <para>The result is capped at <see cref="Tuning.MaxPaperContourLod"/>, because the
+        /// paper rule alone asks for detail the FIELD does not have — see that constant for the
+        /// measurements. Uncapped, a 1:2500 sheet asked for lod 7 and spent 2.5 s sampling 2.58 M
+        /// cells of which 0.15% straddled the coastline, to move the line by 0.03 m.</para>
+        ///
+        /// <para>The cap does not weaken §6.2's seam guarantee: it is a function of the
+        /// denominator alone, so two rects of the same survey still resolve to the same LOD and
+        /// still sample identical lattice points along a shared border (A3).</para>
+        ///
+        /// <para><b>This is the PAPER path only</b> — the Editor panes, the SVG export and the
+        /// acceptance checks. The raster renderer picks its LOD from the pixel instead, via
+        /// <c>RenderLod.ForPixelsPerMetre</c>, and must not be capped this way.</para>
         /// </summary>
         public static int LodForScale(int scaleDenominator)
         {
-            if (scaleDenominator <= 0) return Tuning.MaxLod;
+            if (scaleDenominator <= 0) return Tuning.MaxPaperContourLod;
 
             double targetGroundCell = Tuning.PaperDetailMm / Tuning.MmPerMetre * scaleDenominator;
-            if (!(targetGroundCell > 0.0)) return Tuning.MaxLod;
+            if (!(targetGroundCell > 0.0)) return Tuning.MaxPaperContourLod;
 
             int lod = 0;
             double cell = Tuning.BaseCell;
-            while (lod < Tuning.MaxLod && cell > targetGroundCell)
+            while (lod < Tuning.MaxPaperContourLod && cell > targetGroundCell)
             {
                 cell *= 0.5;
                 lod++;

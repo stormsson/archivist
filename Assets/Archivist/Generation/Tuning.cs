@@ -67,6 +67,37 @@ namespace Archivist.Generation
         /// instead of as a bare 1000 that could be mistaken for a magic number.</summary>
         public const double MmPerMetre        = 1000.0;
 
+        /// <summary>
+        /// The finest LOD <see cref="Geometry.Contours.LodForScale"/> will ask for — cell 4 m.
+        ///
+        /// <para><b>The field is band-limited, and §6.2's paper rule does not know it.</b>
+        /// <c>LodForScale</c> derives detail from paper alone (<see cref="PaperDetailMm"/> times
+        /// the scale denominator), which assumes the coastline has structure at every scale. It
+        /// does not: the field is a 5-octave fbm on a <see cref="FeatureScale"/> of 2600 m, so
+        /// its finest real wavelength is ~160 m and there is nothing left to resolve below a few
+        /// metres. Past that, halving the cell quadruples the work and returns the same line.</para>
+        ///
+        /// <para>Measured on one 1:2500 sheet (963 x 671 m), against lod 7 as ground truth:</para>
+        /// <code>
+        /// lod 2 (16 m)    124 verts     3 ms    max deviation 1.094 m   = 0.44  mm on paper
+        /// lod 3 ( 8 m)    242 verts    11 ms                   0.241 m   = 0.096 mm
+        /// lod 4 ( 4 m)    477 verts    42 ms                   0.214 m   = 0.086 mm
+        /// lod 5 ( 2 m)    948 verts   165 ms                   0.214 m
+        /// lod 7 (0.5 m)  3655 verts  2556 ms                   0
+        /// </code>
+        /// <para>Accuracy plateaus at lod 3; lod 7 costs 256x lod 3 for 0.03 m. Both are already
+        /// finer than <see cref="PaperDetailMm"/> can print. Lod 4 is chosen over lod 3 for line
+        /// SMOOTHNESS rather than accuracy — it doubles the vertex count, so the drawn chords are
+        /// ~3 m rather than ~6 m of ground, and the two cost 42 ms against 11 ms.</para>
+        ///
+        /// <para><b>This must NOT be applied to <c>RenderLod.ForGroundCell</c>.</b> That path ties
+        /// the cell to the PIXEL on purpose: the fill computes its water edge per pixel from the
+        /// analytic field, and a coarser contour makes the stroke float off the water it edges
+        /// (the warning on <c>Strokes.DrawCoast</c>). There the fine LOD buys agreement between
+        /// two renderings, not coastline detail, and the argument above does not apply.</para>
+        /// </summary>
+        public const int    MaxPaperContourLod = 4;
+
         // --- quantisation (D3 / §4.4) ---
         public const double GradientStep      = 20.0;     // central difference h, metres
 

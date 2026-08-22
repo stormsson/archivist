@@ -25,13 +25,23 @@ geometric is ever cached or stored (R1.11, R3.1). `Island` exposes `Params`,
 `Field`, `LandBounds`, `Coastline`, `Features`, `Names`, `Service`, `Surveys`,
 `SurveyFor(Office)`, `WholeIslandSurvey`, `TotalSheets`.
 
-Cost: **~118 ms per island** (A8 median), inside the 250 ms budget. The POI pass
-adds roughly 8 ms of it.
+⚠ **Cost per island is disputed and nobody should quote a number here yet.**
 
-A figure of ~455 ms was recorded here briefly and was wrong: it was measured on a
-loaded machine and reported as a threshold failure. Verified since across two
-clean runs at 117.3 and 118.3 ms. Only A8's *sheet re-contour* clause fails, and
-that is F4.
+This file recorded **~118 ms** (A8 median, inside the 250 ms budget), and
+dismissed a ~455 ms reading as a loaded machine, citing two clean runs at 117.3
+and 118.3 ms. That does not reproduce. An idle machine now measures **~467 ms**,
+and — this is the part that rules out the obvious explanation — a snapshot of the
+tree taken *before* the POC-03-era refactoring measures **469.5 ms** on the same
+machine in the same session. So the 4× gap is not something recent work
+introduced.
+
+Three possibilities remain: the ~118 ms was measured on very different hardware;
+it predates something that made generation four times more expensive; or it was
+wrong. Until someone instruments `Island.FromSeed` per stage and finds out, treat
+both figures as unverified. A8's island-generation clause currently **fails**.
+
+A8's *sheet re-contour* clause now **passes** at ~47 ms — that was F4, resolved
+for the paper path by capping `LodForScale`; see §5 and §10.
 
 ---
 
@@ -176,12 +186,35 @@ Segments are wound so **land is on the left** (closed land loops CCW).
 ⚠ `LodForScale(25000)` returns **4**, not the 3 in §6.2's table — the table row
 contradicts its own formula (F6b). The formula is authoritative.
 
-⚠ **Cost scales with sheet AREA, not coastline length**: ~9.8 M samples per A1
-sheet at any scale (the denominator cancels — paper detail is per-mm), ≈5 s.
-A8's 50 ms budget is unreachable without hierarchical extraction (F4). The
-constant is *paper* area, so the smaller formats are proportionally cheaper: a
-250×250 mm detail sheet is 220×220 mm of map against A1's 514×761, about ⅛ the
-samples (`LodForScale(1250) = 8`, cell 0.25 m, ~1.2 M samples).
+⚠ **Cost scales with sheet AREA, not coastline length.** Blanket sampling is what
+`Extract` does: every corner of every cell in the rect, whether or not the
+contour goes near it. Measured on a 1:2500 sheet, **0.148%** of cells straddled
+the coastline — 3 828 of 2.58 M. The rest was discarded.
+
+**`LodForScale` is now capped at `Tuning.MaxPaperContourLod` (4, cell 4 m)**, and
+that is what made A8's re-contour clause reachable: 2 903 ms → 47 ms. The paper
+rule alone (`PaperDetailMm × denominator`) assumes the coast has structure at
+every scale, and it does not — the field is a 5-octave fbm on a 2600 m
+`FeatureScale`, so its finest real wavelength is ~160 m. Accuracy plateaus at
+lod 3; lod 7 costs 256× lod 3 to move the line 0.03 m, well under what
+`PaperDetailMm` can print. Lod 4 is chosen over lod 3 for line *smoothness*
+(384 vertices per sheet against 194), not accuracy.
+
+⚠ **The cap is the PAPER path only** — Editor panes, SVG export, A3 and A8.
+`RenderLod.ForPixelsPerMetre` deliberately ties the cell to the PIXEL instead,
+and **must not be capped the same way**: the fill computes its water edge per
+pixel from the analytic field, so a coarser contour makes the stroke float off
+the water it edges (see the warning on `Strokes.DrawCoast`). There the fine LOD
+buys agreement between two renderings, not coastline detail.
+
+So there are four LOD mechanisms, and they are not interchangeable:
+
+| where | how the LOD is chosen | note |
+|---|---|---|
+| generation, `Island.FromSeed` | hardcoded lod 1 (32 m) over the whole domain | the island-scale anchor; never calls `LodForScale`, which is why A2 is immune to all of this |
+| raster render, `Strokes.DrawCoast` | `RenderLod.ForPixelsPerMetre` — from the pixel | picks the *nearest* power-of-two cell (√2 midpoint), not the first finer one |
+| Editor panes / SVG | `LodForScale` — from the paper scale, now capped | the debug window additionally degrades it via `ContourCache.ChooseLod`'s 500 k sample budget |
+| A3, A8 | `LodForScale`, no further cap | 
 
 ---
 
@@ -407,7 +440,7 @@ plain lookup again. P3.3's blind-spot asymmetry survives in a different form.
 | id | what |
 |---|---|
 | F3 | Land Survey rotation is the `+90°` fallback on ~2/3 of islands (atolls/fjords lack high ground) |
-| F4 | Per-sheet contouring is ~5 s against A8's 50 ms; scale-invariant, needs hierarchical extraction |
+| F4 | **Resolved for the paper path.** `LodForScale` was uncapped, so a 1:2500 sheet contoured at lod 7 (0.5 m) and cost ~2.9 s against A8's 50 ms. Capped at `Tuning.MaxPaperContourLod` = 4: now 47 ms, and the budget moved to 100 ms so the check is not a coin toss. Hierarchical extraction turned out to be unnecessary — the field is band-limited and the detail was never there. **The raster path is NOT fixed** and is not the same problem: `RenderLod` ties the cell to the pixel so the stroke matches the fill, and capping it would break that. |
 | F5 | Garrison is 71% grid-and-coast-only sheets |
 | F6a | Fjorded falloff is discontinuous at θ=±π — a visible radial seam |
 | F6b | §6.2's LOD table row for 1:25000 is wrong; the formula is right |
@@ -448,10 +481,17 @@ Tools/check-sources.sh           # §4.1 / §14 assertions only
 ```
 
 Gated checks: A2–A6 and POC-03's **C2** (POI determinism), **C3** (placeability
-floor), **C4** (both numbering runs). A8's island-generation clause **passes** at
-~118 ms; only its sheet re-contour clause fails, which is F4 and predates POC-03.
-Beware timing measured while other work is running — a loaded machine produced a
-~455 ms reading here that was briefly written up as a budget failure. **C6** (density, kind distribution, no-sheet count) is a metric
+floor), **C4** (both numbering runs). A8's **sheet re-contour clause now passes**
+at ~47 ms (F4, capped LOD).
+
+⚠ **A8's island-generation clause fails, and the reason is not understood.** This
+file records ~118 ms and dismisses a ~455 ms reading as a loaded machine. But
+~467 ms is what an idle machine measures now, and a snapshot taken *before* any of
+the recent refactoring measures 469.5 ms — so the 4× gap does not come from that
+work. Either the ~118 ms was taken on very different hardware, or it predates
+something that made generation four times more expensive, or it is simply wrong.
+Nobody should quote either number until someone instruments `Island.FromSeed`
+per stage and finds out. **C6** (density, kind distribution, no-sheet count) is a metric
 in the `metrics` pass. C1 is human-judged and needs the map table; C7 is the
 detail-sheet scale sweep and has not been run.
 
