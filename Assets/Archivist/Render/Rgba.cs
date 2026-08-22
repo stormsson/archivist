@@ -9,10 +9,6 @@ namespace Archivist.Render
 
         public Rgba(byte r, byte g, byte b, byte a = 255) { R = r; G = g; B = b; A = a; }
 
-        public static readonly Rgba Transparent = new Rgba(0, 0, 0, 0);
-        public static readonly Rgba White = new Rgba(255, 255, 255);
-        public static readonly Rgba Black = new Rgba(0, 0, 0);
-
         /// <summary>Hex without '#', e.g. "16324f".</summary>
         public static Rgba FromHex(string rrggbb)
         {

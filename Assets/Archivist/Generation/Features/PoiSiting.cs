@@ -69,7 +69,7 @@ namespace Archivist.Generation.Features
             // --- step 4: the cap, its own named stream (§4.3) --------------------------
             int minInc, maxExc;
             IslandParams.PoiRangeFor(field.Params.Character, out minInc, out maxExc);
-            Pcg32 rng = Streams.For(field.Params.Seed, "poi");
+            Pcg32 rng = Streams.For(field.Params.Seed, StreamNames.Poi);
             int want = rng.Range(minInc, maxExc);
 
             // --- step 3: greedy selection at minimum spacing ---------------------------
@@ -111,7 +111,7 @@ namespace Archivist.Generation.Features
             PoiKind[] order = new PoiKind[PoiKinds.Count];
             for (int i = 0; i < PoiKinds.Count; i++) order[i] = PoiKinds.All[i];
 
-            Pcg32 rng = Streams.For(islandSeed, "poi.kind");
+            Pcg32 rng = Streams.For(islandSeed, StreamNames.PoiKind);
             for (int i = PoiKinds.Count - 1; i > 0; i--)
             {
                 int j = rng.Range(0, i + 1);

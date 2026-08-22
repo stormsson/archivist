@@ -112,7 +112,7 @@ namespace Archivist.Generation.Features
             // --- step 5: the count, its own sub-stream ------------------------------
             int minInc, maxExc;
             IslandParams.SettlementRangeFor(field.Params.Character, out minInc, out maxExc);
-            Pcg32 rng = Streams.For(field.Params.Seed, "settlements");
+            Pcg32 rng = Streams.For(field.Params.Seed, StreamNames.Settlements);
             int want = rng.Range(minInc, maxExc);
 
             // --- step 4: greedy selection at minimum spacing -------------------------

@@ -361,16 +361,6 @@ namespace Archivist.Editor
 
         static readonly List<Vector2> _buffer = new List<Vector2>(1024);
 
-        /// <summary>Stroke one polyline. Prefer <see cref="Lines"/> when there are many.</summary>
-        public static void Line(Painter2D p, IReadOnlyList<V2> pts, bool closed, ViewTransform t, Rect clip)
-        {
-            p.BeginPath();
-            if (AppendPolyline(p, pts, closed, t, clip))
-            {
-                p.Stroke();
-            }
-        }
-
         /// <summary>Stroke many polylines as one batched path — one Stroke call, one weight (§8.2).</summary>
         public static void Lines(Painter2D p, IEnumerable<Polyline> lines, ViewTransform t, Rect clip)
         {
@@ -401,7 +391,7 @@ namespace Archivist.Editor
         }
 
         /// <summary>Stroke many already-clipped point runs as one batched path.</summary>
-        public static void Runs(Painter2D p, IEnumerable<List<V2>> runs, bool closed, ViewTransform t, Rect clip)
+        public static void Runs(Painter2D p, IEnumerable<List<V2>> runs, ViewTransform t, Rect clip)
         {
             if (runs == null)
             {
@@ -412,7 +402,7 @@ namespace Archivist.Editor
             bool any = false;
             foreach (List<V2> run in runs)
             {
-                if (AppendPolyline(p, run, closed, t, clip))
+                if (AppendPolyline(p, run, false, t, clip))
                 {
                     any = true;
                 }
@@ -422,42 +412,6 @@ namespace Archivist.Editor
             {
                 p.Stroke();
             }
-        }
-
-        /// <summary>Stroke an axis-aligned ground rect.</summary>
-        public static void Rect2Outline(Painter2D p, Rect2 r, ViewTransform t)
-        {
-            if (r.IsEmpty)
-            {
-                return;
-            }
-
-            ScratchQuad[0] = Clamp(t.ToView(new V2(r.MinX, r.MinY)));
-            ScratchQuad[1] = Clamp(t.ToView(new V2(r.MaxX, r.MinY)));
-            ScratchQuad[2] = Clamp(t.ToView(new V2(r.MaxX, r.MaxY)));
-            ScratchQuad[3] = Clamp(t.ToView(new V2(r.MinX, r.MaxY)));
-            StrokeQuadPx(p, ScratchQuad);
-        }
-
-        /// <summary>
-        /// Stroke a rotated ground rect — a sheet footprint (§8.1 centre/size/rotation).
-        /// This is how the island pane overlays sheet outlines (§11.0 Pane 1).
-        /// </summary>
-        public static void RotatedRect(Painter2D p, V2 centre, double widthM, double heightM,
-                                       double rotationDeg, ViewTransform t)
-        {
-            double hw = widthM * 0.5;
-            double hh = heightM * 0.5;
-            V2 a = new V2(-hw, -hh).RotateDeg(rotationDeg);
-            V2 b = new V2(hw, -hh).RotateDeg(rotationDeg);
-            V2 c = new V2(hw, hh).RotateDeg(rotationDeg);
-            V2 d = new V2(-hw, hh).RotateDeg(rotationDeg);
-
-            ScratchQuad[0] = Clamp(t.ToView(centre + a));
-            ScratchQuad[1] = Clamp(t.ToView(centre + b));
-            ScratchQuad[2] = Clamp(t.ToView(centre + c));
-            ScratchQuad[3] = Clamp(t.ToView(centre + d));
-            StrokeQuadPx(p, ScratchQuad);
         }
 
         /// <summary>Stroke a ground-space quad (four corners, in order).</summary>
@@ -502,18 +456,6 @@ namespace Archivist.Editor
             p.LineTo(q[1]);
             p.LineTo(q[2]);
             p.LineTo(q[3]);
-            p.ClosePath();
-            p.Stroke();
-        }
-
-        /// <summary>Stroke a view-space rect — paper edge and margin frame (§11.0 Pane 2).</summary>
-        public static void RectPx(Painter2D p, Rect r)
-        {
-            p.BeginPath();
-            p.MoveTo(new Vector2(r.xMin, r.yMin));
-            p.LineTo(new Vector2(r.xMax, r.yMin));
-            p.LineTo(new Vector2(r.xMax, r.yMax));
-            p.LineTo(new Vector2(r.xMin, r.yMax));
             p.ClosePath();
             p.Stroke();
         }
@@ -713,7 +655,7 @@ namespace Archivist.Editor
             }
             else if (runs != null)
             {
-                Runs(p, runs, false, view, clip);
+                Runs(p, runs, view, clip);
             }
         }
 

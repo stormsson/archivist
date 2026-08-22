@@ -11,27 +11,7 @@ namespace Archivist.Generation.Field
     /// </summary>
     public static class Falloff
     {
-        // --- §5.3 recipe constants ---------------------------------------------------------
-        //
-        // TODO: these should move to Tuning.cs (§12), which is the single home for constants.
-        // They are local consts only because Tuning.cs is a frozen contract file in this change.
-
-        /// <summary>Mountainous: land is solid to 0.35 of the nominal radius, gone by 1.00.</summary>
-        const double MountainousEdge0 = 0.35;
-        const double MountainousEdge1 = 1.00;
-
-        /// <summary>Fjorded: the same ramp started earlier, with an angular cut added to r.</summary>
-        const double FjordedEdge0 = 0.30;
-        const double FjordedEdge1 = 1.00;
-
-        /// <summary>Fjorded: amplitude and angular frequency of the inlet cut.</summary>
-        const double FjordedCutAmplitude = 0.18;
-        const double FjordedCutFrequency = 6.00;
-
-        /// <summary>Atoll: the ring sits at 0.62 of the nominal radius and is 0.14 wide either side.</summary>
-        const double AtollRingRadius = 0.62;
-        const double AtollRingCore   = 0.00;
-        const double AtollRingWidth  = 0.14;
+        // The §5.3 recipe constants live in Tuning.cs (§12), under "falloff (§5.3 recipes)".
 
         /// <summary>
         /// The falloff multiplier at polar coordinate (<paramref name="r"/>, <paramref name="theta"/>).
@@ -54,14 +34,14 @@ namespace Archivist.Generation.Field
             {
                 case IslandCharacter.Mountainous:
                     // Compact, high relief, one main massif.
-                    return 1.0 - Smoothstep(MountainousEdge0, MountainousEdge1, r);
+                    return 1.0 - Smoothstep(Tuning.MountainousEdge0, Tuning.MountainousEdge1, r);
 
                 case IslandCharacter.Fjorded:
                 {
                     // The angular term pushes the coast in and out with theta, producing inlets;
                     // where the field dips below sea level mid-island, islets detach naturally.
-                    double cut = FjordedCutAmplitude * Noise.Fbm1(theta * FjordedCutFrequency, seed);
-                    return 1.0 - Smoothstep(FjordedEdge0, FjordedEdge1, r + cut);
+                    double cut = Tuning.FjordedCutAmplitude * Noise.Fbm1(theta * Tuning.FjordedCutFrequency, seed);
+                    return 1.0 - Smoothstep(Tuning.FjordedEdge0, Tuning.FjordedEdge1, r + cut);
                 }
 
                 case IslandCharacter.Atoll:
@@ -72,12 +52,12 @@ namespace Archivist.Generation.Field
                     // is the point of the recipe (§5.3) and the reason atoll is in the set: the
                     // contour code must handle multiple loops (§6.1). It must never be smoothed
                     // into one loop, and the lagoon must never be filled in.
-                    double d = r - AtollRingRadius;
+                    double d = r - Tuning.AtollRingRadius;
                     if (d < 0.0)
                     {
                         d = -d;
                     }
-                    return 1.0 - Smoothstep(AtollRingCore, AtollRingWidth, d);
+                    return 1.0 - Smoothstep(Tuning.AtollRingCore, Tuning.AtollRingWidth, d);
                 }
             }
         }

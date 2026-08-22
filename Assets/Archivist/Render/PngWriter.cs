@@ -100,7 +100,7 @@ namespace Archivist.Render
                 throw new ArgumentException("Pixels is smaller than Width * Height * 4", "buf");
             }
 
-            byte[] raw = BuildRawScanlines(buf, width, height, stride);
+            byte[] raw = BuildRawScanlines(buf, height, stride);
             byte[] idat = ZlibStored(raw);
 
             List<byte> png = new List<byte>(Signature.Length + 12 + 13 + 12 + idat.Length + 12);
@@ -118,7 +118,7 @@ namespace Archivist.Render
         /// already top-left origin and row-major (§2), so rows go out in storage order
         /// with no flip.
         /// </summary>
-        static byte[] BuildRawScanlines(ImageBuffer buf, int width, int height, int stride)
+        static byte[] BuildRawScanlines(ImageBuffer buf, int height, int stride)
         {
             byte[] raw = new byte[height * (1 + stride)];
             byte[] pixels = buf.Pixels;

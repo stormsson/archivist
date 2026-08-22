@@ -49,7 +49,7 @@ namespace Archivist.Render
                                              LayerMask layers = LayerMask.All)
         {
             SurveySpec spec = sheet.Survey;
-            double pxPerMetre = pixelsPerPaperMm * 1000.0 / spec.Scale.Denominator;
+            double pxPerMetre = pixelsPerPaperMm * Tuning.MmPerMetre / spec.Scale.Denominator;
             // The frame rect is axis-aligned in FRAME space and GroundImage rotates it about
             // the ground origin, so its POSITION must survive. Normalising it to (0,0,W,H)
             // renders a correctly-sized, correctly-rotated rectangle of the WRONG GROUND.

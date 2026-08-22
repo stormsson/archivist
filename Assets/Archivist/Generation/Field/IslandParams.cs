@@ -101,11 +101,11 @@ namespace Archivist.Generation.Field
             }
             else
             {
-                var rc = Streams.For(islandSeed, "character");
+                var rc = Streams.For(islandSeed, StreamNames.Character);
                 character = (IslandCharacter)rc.Range(0, 3);
             }
 
-            var rr = Streams.For(islandSeed, "radius");
+            var rr = Streams.For(islandSeed, StreamNames.Radius);
             double jitter = rr.Range(-Tuning.NominalRadiusJitter, Tuning.NominalRadiusJitter);
             double nominal = Tuning.DomainMetres * Tuning.NominalRadiusFrac * (1.0 + jitter);
 

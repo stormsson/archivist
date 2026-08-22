@@ -47,6 +47,5 @@ namespace Archivist.Generation.Sheets
         public double MapHeightMm { get { return HeightMm - 2 * MarginMm; } }   // 761
 
         public SheetFormat Landscape { get { return new SheetFormat(HeightMm, WidthMm, MarginMm); } }
-        public bool IsPortrait { get { return HeightMm >= WidthMm; } }
     }
 }

@@ -52,13 +52,13 @@ namespace Archivist.Tests
         public void NamedStreamsAreIndependentOfCallOrder()
         {
             ulong seed = Streams.IslandSeed(Collection, 2);
-            Pcg32 a1 = Streams.For(seed, "peaks");
-            Pcg32 b1 = Streams.For(seed, "settlements");
+            Pcg32 a1 = Streams.For(seed, StreamNames.Peaks);
+            Pcg32 b1 = Streams.For(seed, StreamNames.Settlements);
             uint a1v = a1.NextUInt();
             uint b1v = b1.NextUInt();
 
-            Pcg32 b2 = Streams.For(seed, "settlements");   // drawn in the opposite order
-            Pcg32 a2 = Streams.For(seed, "peaks");
+            Pcg32 b2 = Streams.For(seed, StreamNames.Settlements);   // drawn in the opposite order
+            Pcg32 a2 = Streams.For(seed, StreamNames.Peaks);
             Assert.AreEqual(b1v, b2.NextUInt());
             Assert.AreEqual(a1v, a2.NextUInt());
         }

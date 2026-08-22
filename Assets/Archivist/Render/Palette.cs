@@ -43,7 +43,7 @@ namespace Archivist.Render
         /// scope — but every caller already goes through the island, so seed-derived tints
         /// can be added here alone.
         ///
-        /// <para>The stream name for that work is reserved now: <c>Streams.For(seed, "palette")</c>.
+        /// <para>The stream name for that work is reserved now: <c>Streams.For(seed, StreamNames.Palette)</c>.
         /// §4.3 guarantees one stream per purpose drawn independently, so adding this stream
         /// later cannot reshuffle any feature that already exists — the character, radius,
         /// field, settlement, river or naming draws are all unaffected by a new named purpose.

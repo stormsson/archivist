@@ -87,7 +87,7 @@ namespace Archivist.Harness
             // §6.4 reserves for seed-derived tints; drawing from it today must change nothing.
             Pcg32 unrelated = Streams.For(seed, "unrelated.purpose");
             for (int i = 0; i < 1000; i++) unrelated.NextUInt();
-            Pcg32 reserved = Streams.For(seed, "palette");
+            Pcg32 reserved = Streams.For(seed, StreamNames.Palette);
             for (int i = 0; i < 1000; i++) reserved.NextUInt();
 
             ulong after = IslandRenderer.Render(Island.FromSeed(seed), req).ContentHash();

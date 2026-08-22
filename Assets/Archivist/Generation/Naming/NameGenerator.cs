@@ -52,7 +52,7 @@ namespace Archivist.Generation.Naming
         /// </summary>
         public static Phonology PhonologyFor(ulong islandSeed)
         {
-            Pcg32 rng = Streams.For(islandSeed, "names");
+            Pcg32 rng = Streams.For(islandSeed, StreamNames.Names);
             return Phonology.All[rng.Range(0, Phonology.All.Count)];
         }
 
@@ -80,14 +80,14 @@ namespace Archivist.Generation.Naming
             HashSet<string> used = new HashSet<string>(StringComparer.Ordinal);
 
             // 1. island
-            Pcg32 rngIsland = Streams.For(islandSeed, "names.island");
+            Pcg32 rngIsland = Streams.For(islandSeed, StreamNames.NamesIsland);
             string island = Draw(ref rngIsland, phon, phon.Suffixes, IslandQualifierChance, used);
 
             // 2. settlements, in feature order
             string[] settlements = new string[settlementCount];
             for (int i = 0; i < settlementCount; i++)
             {
-                Pcg32 rngTown = Streams.For(islandSeed, "names.settlements", i);
+                Pcg32 rngTown = Streams.For(islandSeed, StreamNames.NamesSettlements, i);
                 settlements[i] = Draw(ref rngTown, phon, phon.Suffixes, SettlementQualifierChance, used);
             }
 
@@ -95,7 +95,7 @@ namespace Archivist.Generation.Naming
             string[] peaks = new string[namedPeakCount];
             for (int i = 0; i < namedPeakCount; i++)
             {
-                Pcg32 rngPeak = Streams.For(islandSeed, "names.peaks", i);
+                Pcg32 rngPeak = Streams.For(islandSeed, StreamNames.NamesPeaks, i);
                 peaks[i] = Draw(ref rngPeak, phon, phon.PeakSuffixes, PeakQualifierChance, used);
             }
 

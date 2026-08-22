@@ -52,6 +52,12 @@ namespace Archivist.Editor
         float _mapW;
         float _mapH;
 
+        /// <summary>Millimetres per inch — the mm/DPI conversion, nothing more.</summary>
+        const float MmPerInch = 25.4f;
+
+        /// <summary>Fallback screen DPI when Screen.dpi is unreported, as it is in some editors.</summary>
+        const float FallbackDpi = 96.0f;
+
         public VisualElement Root { get { return _root; } }
 
         public SheetPane(DebugModel model)
@@ -170,7 +176,7 @@ namespace Archivist.Editor
             float dpi = Screen.dpi;
             if (dpi <= 1.0f || float.IsNaN(dpi))
             {
-                dpi = 96.0f;
+                dpi = FallbackDpi;
             }
 
             return dpi;
@@ -183,7 +189,7 @@ namespace Archivist.Editor
         /// </summary>
         static float PointsPerMm()
         {
-            float devicePxPerMm = ScreenDpi() / 25.4f;
+            float devicePxPerMm = ScreenDpi() / MmPerInch;
             float ppp = EditorGUIUtility.pixelsPerPoint;
             if (ppp <= 0.0f || float.IsNaN(ppp))
             {
@@ -245,7 +251,7 @@ namespace Archivist.Editor
             _view.PixelsPerMetre = ppm;
             _view.ViewCentre = new Vector2(map.width * 0.5f, map.height * 0.5f);
 
-            UpdateText(sheet, spec, map);
+            UpdateText(spec, map);
             _mapArea.MarkDirtyRepaint();
         }
 
@@ -403,7 +409,7 @@ namespace Archivist.Editor
 
         // ------------------------------------------------------------------ text
 
-        void UpdateText(Sheet sheet, SurveySpec spec, Rect map)
+        void UpdateText(SurveySpec spec, Rect map)
         {
             _text.Begin();
             Office office = spec.Office;

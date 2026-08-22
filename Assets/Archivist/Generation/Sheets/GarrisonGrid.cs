@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using Archivist.Generation.Determinism;
 using Archivist.Generation.Geometry;
 
 namespace Archivist.Generation.Sheets
@@ -77,43 +75,6 @@ namespace Archivist.Generation.Sheets
             }
 
             return lines;
-        }
-
-        /// <summary>
-        /// The easting of a vertical grid line, in metres from the domain origin (§6.4).
-        ///
-        /// <para>
-        /// IMPLEMENTATION CHOICE, not a spec value: §6.4 says only "easting and northing
-        /// labels in metres from origin" and the domain origin sits at the centre of the
-        /// generation domain, so half of every island has negative coordinates. Rather than
-        /// print a minus sign on a map sheet, the magnitude is suffixed with the hemisphere
-        /// letter — <c>"3000E"</c>, <c>"2000W"</c> — which is how a real sheet reads and is
-        /// unambiguous. Zero is <c>"0E"</c>.
-        /// </para>
-        /// </summary>
-        public static string EastingLabel(double x)
-        {
-            return Metres(x) + (x < 0.0 ? "W" : "E");
-        }
-
-        /// <summary>
-        /// The northing of a horizontal grid line, in metres from the domain origin (§6.4).
-        /// Same choice as <see cref="EastingLabel"/>: <c>"4000N"</c>, <c>"1000S"</c>.
-        /// </summary>
-        public static string NorthingLabel(double y)
-        {
-            return Metres(y) + (y < 0.0 ? "S" : "N");
-        }
-
-        /// <summary>
-        /// Magnitude in whole metres. InvariantCulture is not optional: the editor may run
-        /// under a locale whose group and decimal separators differ, and a label baked into
-        /// a hashed sheet must not depend on the machine (§4.1's spirit — no ambient state).
-        /// </summary>
-        static string Metres(double v)
-        {
-            double m = Q.Metre(Math.Abs(v));
-            return m.ToString("F0", CultureInfo.InvariantCulture);
         }
     }
 }

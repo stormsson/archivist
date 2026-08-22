@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace Archivist.Generation.Determinism
 {
     /// <summary>
@@ -58,13 +55,5 @@ namespace Archivist.Generation.Determinism
                 if (r >= threshold) return minInclusive + (int)(r % span);
             }
         }
-
-        public T Pick<T>(IReadOnlyList<T> items)
-        {
-            if (items == null || items.Count == 0) throw new ArgumentException("empty", nameof(items));
-            return items[Range(0, items.Count)];
-        }
-
-        public bool Chance(double p) { return NextDouble() < p; }
     }
 }

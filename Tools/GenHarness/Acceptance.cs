@@ -14,6 +14,19 @@ namespace Archivist.Harness
     /// <summary>§13 acceptance. Runs headless because Generation has no UnityEngine reference (§14).</summary>
     public static class Acceptance
     {
+        // ---------------------------------------------------------------- budgets
+        // Named so the comparison and the printed message cannot drift apart: each threshold
+        // is interpolated into the text it gates, never re-typed there.
+
+        /// <summary>§13.6 shared-class coverage target, percent. Reported, not gated.</summary>
+        const double A6SharedClassTargetPct = 90.0;
+
+        /// <summary>§13.8 island-generation budget, milliseconds (median of ten warm runs).</summary>
+        const double A8IslandGenBudgetMs = 250.0;
+
+        /// <summary>§13.8 single-sheet re-contour budget, milliseconds, at the survey's own scale.</summary>
+        const double A8SheetRecontourBudgetMs = 50.0;
+
         // ---------------------------------------------------------------- A2
         /// <summary>§13.2 — same seed, identical island, across runs.</summary>
         public static void A2_Determinism()
@@ -273,7 +286,8 @@ namespace Archivist.Harness
         }
 
         // ---------------------------------------------------------------- A6
-        /// <summary>§13.6 — overlapping sheets from different offices must share a drawn class. Target >= 90%.</summary>
+        /// <summary>§13.6 — overlapping sheets from different offices must share a drawn class.
+        /// Target is <see cref="A6SharedClassTargetPct"/>.</summary>
         public static void A6_SharedClassCoverage()
         {
             Console.WriteLine("A6  Shared-class coverage");
@@ -299,7 +313,8 @@ namespace Archivist.Harness
             }
             double pct = pairs == 0 ? 0 : 100.0 * shared / pairs;
             string msg = pct.ToString("F1", Inv) + "% of " + pairs + " overlapping cross-office pairs share a class in the intersection";
-            if (pct >= 90.0) Pass("A6", msg); else Metric("A6", msg + "  (target >= 90%, reported not gated)");
+            if (pct >= A6SharedClassTargetPct) Pass("A6", msg);
+            else Metric("A6", msg + "  (target >= " + A6SharedClassTargetPct.ToString("F0", Inv) + "%, reported not gated)");
         }
 
         /// <summary>
@@ -386,8 +401,8 @@ namespace Archivist.Harness
 
         // ---------------------------------------------------------------- A8
         /// <summary>
-        /// §13.8 — island gen &lt; 250 ms, one sheet re-contoured at the survey's own scale
-        /// &lt; 50 ms.
+        /// §13.8 — island gen under <see cref="A8IslandGenBudgetMs"/>, one sheet re-contoured at
+        /// the survey's own scale under <see cref="A8SheetRecontourBudgetMs"/>.
         ///
         /// <para>Both loops now warm up before measuring, via <see cref="Timing.MedianMs"/>.
         /// They did not before, while POC-02's render timing did — so A8's first sample was
@@ -401,8 +416,9 @@ namespace Archivist.Harness
             Island warm = Island.FromSeed(Streams.IslandSeed(Collection, 99));
 
             double medGen = Timing.MedianMs(10, true, i => Island.FromSeed(Streams.IslandSeed(Collection, 200 + i)));
-            if (medGen < 250.0) Pass("A8", "island generation median " + medGen.ToString("F1", Inv) + " ms (< 250)");
-            else Fail("A8", "island generation median " + medGen.ToString("F1", Inv) + " ms (>= 250)");
+            string genBudget = A8IslandGenBudgetMs.ToString("F0", Inv);
+            if (medGen < A8IslandGenBudgetMs) Pass("A8", "island generation median " + medGen.ToString("F1", Inv) + " ms (< " + genBudget + ")");
+            else Fail("A8", "island generation median " + medGen.ToString("F1", Inv) + " ms (>= " + genBudget + ")");
 
             Survey sv = warm.SurveyFor(Office.LandSurvey);
             if (sv == null || sv.SheetCount == 0) sv = warm.SurveyFor(Office.Hydrographic);
@@ -416,8 +432,9 @@ namespace Archivist.Harness
 
             double medSheet = Timing.MedianMs(10, true,
                 i => Contours.Extract(warm.Field, sv.Sheets[i % sv.SheetCount].GroundBounds, cell, warm.Params.SeaLevel));
-            if (medSheet < 50.0) Pass("A8", "sheet re-contour at 1:" + denom + " median " + medSheet.ToString("F1", Inv) + " ms (< 50)");
-            else Fail("A8", "sheet re-contour at 1:" + denom + " median " + medSheet.ToString("F1", Inv) + " ms (>= 50)");
+            string sheetBudget = A8SheetRecontourBudgetMs.ToString("F0", Inv);
+            if (medSheet < A8SheetRecontourBudgetMs) Pass("A8", "sheet re-contour at 1:" + denom + " median " + medSheet.ToString("F1", Inv) + " ms (< " + sheetBudget + ")");
+            else Fail("A8", "sheet re-contour at 1:" + denom + " median " + medSheet.ToString("F1", Inv) + " ms (>= " + sheetBudget + ")");
         }
     }
 }

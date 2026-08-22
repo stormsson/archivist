@@ -102,7 +102,7 @@ namespace Archivist.Generation.Sheets
         /// </summary>
         public static double RotationFor(ulong islandSeed, int poiIndex)
         {
-            Pcg32 rng = Streams.For(islandSeed, "poi.sheet", poiIndex);
+            Pcg32 rng = Streams.For(islandSeed, StreamNames.PoiSheet, poiIndex);
             return Rotations.NormaliseAxisDeg(rng.Range(0.0, 180.0));
         }
     }

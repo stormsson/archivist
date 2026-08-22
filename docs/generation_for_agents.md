@@ -60,6 +60,23 @@ Named streams currently in use — do not repurpose:
 `wholeIsland`, `year`[office], `yearWholeIsland`[office],
 `poi`, `poi.kind`, `poi.sheet`[poiIndex], `coastRegion`.
 
+**They are constants now — `Determinism/StreamNames.cs`.** Call `Streams.For(seed,
+StreamNames.Poi)`, never `Streams.For(seed, "poi")`. The purpose string is seed
+material (`Streams.For` hashes it), so a typo in a literal silently regenerates
+every island and *nothing fails* — no test catches it, the archive just quietly
+becomes a different one. Routing every call site through one constant is what
+makes that typo a compile error instead. The C# constant NAME may be renamed
+freely; the string literal beside it may never change. Append only.
+
+The dotted prefixes (`names.island`, `poi.kind`) are a reader convention only —
+nothing in the code treats them as a hierarchy, and `names` and `names.island`
+are as unrelated as `radius` and `falloff`.
+
+The three literals still spelled out in the suite — `"some.future.purpose"`,
+`"unrelated.purpose"`, `"test"` — are deliberately NOT in `StreamNames`. They
+exist to prove that an *unregistered* stream leaves the island bit-identical
+(§4.3), so naming them would defeat the test.
+
 `coastRegion` seeds the Hydrographic coast-walk survey region — the anchor point
 on the main shore and the disc radius around it (`CoastRegionRadiusMin/Max` in
 `Tuning.cs`, and the comment above them explaining why the survey is a region

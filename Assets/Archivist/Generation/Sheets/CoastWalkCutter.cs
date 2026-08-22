@@ -68,7 +68,7 @@ namespace Archivist.Generation.Sheets
             if (order.Count > 0)
             {
                 Polyline main = coast[order[0]];            // longest, by the sort below
-                Pcg32 rr = Streams.For(spec.IslandSeed, "coastRegion");
+                Pcg32 rr = Streams.For(spec.IslandSeed, StreamNames.CoastRegion);
                 double anchorS = rr.NextDouble() * main.Length;
                 V2 anchorTan;
                 if (SampleAt(main, anchorS, out regionCentre, out anchorTan))
@@ -88,14 +88,9 @@ namespace Archivist.Generation.Sheets
                 double len = loop.Length;
                 if (len <= 0.0) continue;
 
-                // A loop shorter than one sheet still gets exactly one — a skerry is a real
-                // thing to chart, and one sheet is the smallest a survey can spend on it.
-                int full = (int)Math.Max(1, Math.Ceiling(len / step));
-
-                // Every loop is walked in full; the region decides what is actually cut.
-                double arc = 1.0;
-                double startFrac = 0.0;
-
+                // Every loop is walked in full; the region disc decides what is actually cut,
+                // so there is no per-loop partial arc to start or stop at.
+                //
                 // Resample the shore at CHORD intervals of one step, then lay each sheet
                 // BETWEEN consecutive points, oriented along that chord.
                 //
@@ -109,15 +104,13 @@ namespace Archivist.Generation.Sheets
                 // A chord between two points a step apart has neither problem: it is stable
                 // by construction, and consecutive sheets abut end to end like a ribbon,
                 // which is what a survey of a shore actually looks like.
-                double covered = len * arc;
                 double walk = step * 0.04;
-                double s0 = startFrac * len;
 
                 var chain = new List<V2>();
                 V2 lastPt = V2.Zero;
-                for (double travelled = 0.0; travelled <= covered; travelled += walk)
+                for (double travelled = 0.0; travelled <= len; travelled += walk)
                 {
-                    double sPos = s0 + travelled;
+                    double sPos = travelled;
                     if (loop.Closed) { sPos = sPos % len; if (sPos < 0) sPos += len; }
                     else if (sPos > len) break;
 

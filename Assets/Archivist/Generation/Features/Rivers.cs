@@ -43,7 +43,7 @@ namespace Archivist.Generation.Features
 
             for (int pi = 0; pi < peaks.Count; pi++)
             {
-                Pcg32 rng = Streams.For(seed, "rivers", pi);
+                Pcg32 rng = Streams.For(seed, StreamNames.Rivers, pi);
 
                 List<V2> course = new List<V2>();
                 V2 p = peaks[pi].Position;
@@ -78,7 +78,7 @@ namespace Archivist.Generation.Features
                 Polyline polyline = new Polyline(course, false);
                 if (polyline.Length < Tuning.RiverMinLength) continue;
 
-                result.Add(new River(new FeatureId(FeatureClass.River, result.Count), polyline, pi));
+                result.Add(new River(new FeatureId(FeatureClass.River, result.Count), polyline));
 
                 V2[] pts = new V2[course.Count];
                 course.CopyTo(pts);

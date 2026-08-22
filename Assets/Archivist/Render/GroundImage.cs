@@ -46,13 +46,6 @@ namespace Archivist.Render
 
         static V2 Rotate(V2 p, double c, double s) { return new V2(p.X * c - p.Y * s, p.X * s + p.Y * c); }
 
-        /// <summary>Ground position of the start of image row y. Rows are computed from the
-        /// origin, never accumulated across the image, so error cannot build along a scanline.</summary>
-        public V2 RowStart(int y) { return _origin + _stepY * y; }
-
-        public V2 StepX { get { return _stepX; } }
-        public V2 StepY { get { return _stepY; } }
-
         public V2 GroundAt(int x, int y) { return _origin + _stepX * x + _stepY * y; }
 
         /// <summary>Inverse: ground -> continuous image coordinates. Used by stroke rasterisation.</summary>

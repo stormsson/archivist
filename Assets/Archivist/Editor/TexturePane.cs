@@ -385,7 +385,7 @@ namespace Archivist.Editor
                 string derived = "";
                 if (_model.SelectedSheet.HasValue)
                 {
-                    double pxPerMetre = ppmm * 1000.0 / _model.SelectedSheet.Value.Survey.Scale.Denominator;
+                    double pxPerMetre = ppmm * Tuning.MmPerMetre / _model.SelectedSheet.Value.Survey.Scale.Denominator;
                     derived = " (= " + pxPerMetre.ToString("F3", ci) + " px/m)";
                 }
 
@@ -592,7 +592,7 @@ namespace Archivist.Editor
         {
             Rect2 frame = sheet.FrameRect;
             double denominator = sheet.Survey.Scale.Denominator;
-            double askedPxPerMetre = askedPpmm * 1000.0 / denominator;
+            double askedPxPerMetre = askedPpmm * Tuning.MmPerMetre / denominator;
 
             double usedPxPerMetre = FitResolution(frame.Width, frame.Height, askedPxPerMetre, out clamped);
 

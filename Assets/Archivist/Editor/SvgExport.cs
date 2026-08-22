@@ -30,6 +30,18 @@ namespace Archivist.Editor
         /// <summary>Nominal pixel width of island.svg; the viewBox stays in ground metres.</summary>
         const double IslandPixelWidth = 1600.0;
 
+        /// <summary>
+        /// Contour detail for island.svg. Fixed rather than derived: the whole-island view is a
+        /// single fixed-size document, so it wants one fixed level of detail (§6.2 lod).
+        /// </summary>
+        const int IslandContourLod = 2;
+
+        /// <summary>SVG spelling of <see cref="VectorDraw.Ink"/>: everything drawn is this (§8.2).</summary>
+        const string InkHex = "#000000";
+
+        /// <summary>SVG spelling of <see cref="VectorDraw.Paper"/>: the sheet under the ink (§8.2).</summary>
+        const string PaperHex = "#ffffff";
+
         static readonly CultureInfo Ci = CultureInfo.InvariantCulture;
 
         /// <summary>Writes every file. Returns a one-line summary for the console and the dialog.</summary>
@@ -187,7 +199,8 @@ namespace Archivist.Editor
             Rect2 extent = DebugModel.SafeExtent(model.Island.LandBounds,
                                                  model.Island.Params.DomainMetres);
 
-            extent = extent.Expanded(Math.Max(200.0, extent.Diagonal * 0.03));
+            extent = extent.Expanded(Math.Max(DebugModel.ViewPadMinMetres,
+                                             extent.Diagonal * DebugModel.ViewPadFraction));
 
             double w = extent.Width;
             double h = extent.Height;
@@ -206,13 +219,13 @@ namespace Archivist.Editor
             sb.Append("\">\n");
             sb.Append("<title>").Append(Xml(model.Island.Name)).Append("</title>\n");
             sb.Append("<rect x=\"0\" y=\"0\" width=\"").Append(Num(w)).Append("\" height=\"")
-              .Append(Num(h)).Append("\" fill=\"#ffffff\"/>\n");
+              .Append(Num(h)).Append("\" fill=\"" + PaperHex + "\"/>\n");
 
             // §8.2 neutral rendering: one weight, black on white, for every class.
-            string open = "<g fill=\"none\" stroke=\"#000000\" stroke-width=\"" + Num(stroke)
+            string open = "<g fill=\"none\" stroke=\"" + InkHex + "\" stroke-width=\"" + Num(stroke)
                         + "\" stroke-linejoin=\"round\">\n";
 
-            int lod = 2;
+            int lod = IslandContourLod;
             sb.Append("<g id=\"contours\">\n").Append(open);
             List<Polyline> contours = model.ContoursFor(extent, lod, model.ContourLevels);
             for (int i = 0; i < contours.Count; i++)
@@ -254,7 +267,7 @@ namespace Archivist.Editor
                 Peak pk = f.Peaks[i];
                 V2 q = proj(pk.Position);
                 sb.Append("<circle cx=\"").Append(Num(q.X)).Append("\" cy=\"").Append(Num(q.Y))
-                  .Append("\" r=\"").Append(Num(markR)).Append("\" fill=\"#000000\"/>\n");
+                  .Append("\" r=\"").Append(Num(markR)).Append("\" fill=\"" + InkHex + "\"/>\n");
                 AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, FeatureLabels.PeakText(pk));
             }
 
@@ -266,7 +279,8 @@ namespace Archivist.Editor
                 Settlement st = f.Settlements[i];
                 V2 q = proj(st.Position);
                 sb.Append("<circle cx=\"").Append(Num(q.X)).Append("\" cy=\"").Append(Num(q.Y))
-                  .Append("\" r=\"").Append(Num(markR)).Append("\" fill=\"none\" stroke=\"#000000\" stroke-width=\"")
+                  .Append("\" r=\"").Append(Num(markR))
+                  .Append("\" fill=\"none\" stroke=\"" + InkHex + "\" stroke-width=\"")
                   .Append(Num(stroke)).Append("\"/>\n");
                 AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, st.Name);
             }
@@ -317,7 +331,7 @@ namespace Archivist.Editor
             Office office = spec.Office;
             SheetFormat fmt = spec.Format;
 
-            double mmPerMetre = 1000.0 / Math.Max(1, spec.Scale.Denominator);
+            double mmPerMetre = Tuning.MmPerMetre / Math.Max(1, spec.Scale.Denominator);
             double cx = fmt.MarginMm + fmt.MapWidthMm * 0.5;
             double cy = fmt.MarginMm + fmt.MapHeightMm * 0.5;
             double rot = sheet.RotationDeg;
@@ -346,10 +360,10 @@ namespace Archivist.Editor
               .Append("\"/></clipPath></defs>\n");
 
             sb.Append("<rect x=\"0\" y=\"0\" width=\"").Append(Num(fmt.WidthMm))
-              .Append("\" height=\"").Append(Num(fmt.HeightMm)).Append("\" fill=\"#ffffff\"/>\n");
+              .Append("\" height=\"").Append(Num(fmt.HeightMm)).Append("\" fill=\"" + PaperHex + "\"/>\n");
 
             string stroke = Num(SheetStrokeMm);
-            sb.Append("<g fill=\"none\" stroke=\"#000000\" stroke-width=\"").Append(stroke).Append("\">\n");
+            sb.Append("<g fill=\"none\" stroke=\"" + InkHex + "\" stroke-width=\"").Append(stroke).Append("\">\n");
             sb.Append("<rect x=\"0\" y=\"0\" width=\"").Append(Num(fmt.WidthMm))
               .Append("\" height=\"").Append(Num(fmt.HeightMm)).Append("\"/>\n");
             sb.Append("<rect x=\"").Append(Num(fmt.MarginMm)).Append("\" y=\"").Append(Num(fmt.MarginMm))
@@ -358,7 +372,7 @@ namespace Archivist.Editor
             sb.Append("</g>\n");
 
             sb.Append("<g clip-path=\"url(#map)\">\n");
-            sb.Append("<g fill=\"none\" stroke=\"#000000\" stroke-width=\"").Append(stroke)
+            sb.Append("<g fill=\"none\" stroke=\"" + InkHex + "\" stroke-width=\"").Append(stroke)
               .Append("\" stroke-linejoin=\"round\">\n");
 
             Rect2 ground = sheet.GroundBounds;
@@ -418,7 +432,7 @@ namespace Archivist.Editor
 
                     V2 q = proj(pk.Position);
                     sb.Append("<circle cx=\"").Append(Num(q.X)).Append("\" cy=\"").Append(Num(q.Y))
-                      .Append("\" r=\"").Append(Num(markR)).Append("\" fill=\"#000000\"/>\n");
+                      .Append("\" r=\"").Append(Num(markR)).Append("\" fill=\"" + InkHex + "\"/>\n");
                     AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, FeatureLabels.PeakText(pk));
                 }
             }
@@ -435,7 +449,8 @@ namespace Archivist.Editor
 
                     V2 q = proj(st.Position);
                     sb.Append("<circle cx=\"").Append(Num(q.X)).Append("\" cy=\"").Append(Num(q.Y))
-                      .Append("\" r=\"").Append(Num(markR)).Append("\" fill=\"none\" stroke=\"#000000\" stroke-width=\"")
+                      .Append("\" r=\"").Append(Num(markR))
+                      .Append("\" fill=\"none\" stroke=\"" + InkHex + "\" stroke-width=\"")
                       .Append(Num(SheetStrokeMm)).Append("\"/>\n");
                     AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, st.Name);
                 }
@@ -459,7 +474,7 @@ namespace Archivist.Editor
                       .Append(Num(q.X + markR)).Append(',').Append(Num(q.Y)).Append(' ')
                       .Append(Num(q.X)).Append(',').Append(Num(q.Y + markR)).Append(' ')
                       .Append(Num(q.X - markR)).Append(',').Append(Num(q.Y))
-                      .Append("\" fill=\"none\" stroke=\"#000000\" stroke-width=\"")
+                      .Append("\" fill=\"none\" stroke=\"" + InkHex + "\" stroke-width=\"")
                       .Append(Num(SheetStrokeMm)).Append("\"/>\n");
                     AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, poi.Kind.Label());
                 }
@@ -485,7 +500,7 @@ namespace Archivist.Editor
             }
 
             sb.Append("<text x=\"").Append(Num(x)).Append("\" y=\"").Append(Num(y))
-              .Append("\" font-size=\"").Append(Num(size)).Append("\" fill=\"#000000\">")
+              .Append("\" font-size=\"").Append(Num(size)).Append("\" fill=\"" + InkHex + "\">")
               .Append(Xml(text)).Append("</text>\n");
         }
 

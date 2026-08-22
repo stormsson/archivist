@@ -12,12 +12,6 @@ namespace Archivist.Generation.Geometry
     /// </summary>
     public static class Contours
     {
-        /// <summary>§6.1 endpoint weld tolerance, as a fraction of cellSize. Belongs in Tuning.cs.</summary>
-        const double WeldFraction = 1e-6;
-
-        /// <summary>Millimetres per metre, for the §6.2 paper-detail conversion. Belongs in Tuning.cs.</summary>
-        const double MmPerMetre = 1000.0;
-
         /// <summary>One marching-squares segment, directed so that land lies on its left.</summary>
         readonly struct Seg
         {
@@ -68,7 +62,7 @@ namespace Archivist.Generation.Geometry
         {
             if (scaleDenominator <= 0) return Tuning.MaxLod;
 
-            double targetGroundCell = Tuning.PaperDetailMm / MmPerMetre * scaleDenominator;
+            double targetGroundCell = Tuning.PaperDetailMm / Tuning.MmPerMetre * scaleDenominator;
             if (!(targetGroundCell > 0.0)) return Tuning.MaxLod;
 
             int lod = 0;
@@ -117,7 +111,7 @@ namespace Archivist.Generation.Geometry
             int nx = (int)nxL;
             int ny = (int)nyL;
 
-            double weldEps = cellSize * WeldFraction;
+            double weldEps = cellSize * Tuning.WeldFraction;
 
             // Corner x's are hoisted so that two rects sharing a border compute bit-identical
             // abscissae: always (latticeIndex * cellSize), never an accumulated sum.

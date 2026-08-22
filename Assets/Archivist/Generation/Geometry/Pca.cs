@@ -31,12 +31,6 @@ namespace Archivist.Generation.Geometry
             Degenerate = degenerate;
         }
 
-        /// <summary>Lambda1/Lambda2, or +infinity when Lambda2 is not positive. Reported by §13.7.</summary>
-        public double Isotropy
-        {
-            get { return Lambda2 > 0.0 ? Lambda1 / Lambda2 : double.PositiveInfinity; }
-        }
-
         public override string ToString()
         {
             return (Degenerate ? "degenerate " : "") + AngleDeg.ToString("F1") + "deg"

@@ -186,9 +186,6 @@ namespace Archivist.Editor
         /// <summary>§6.1 contour levels, in Height01, one per 50 m of elevation above sea.</summary>
         public IReadOnlyList<double> ContourLevels01 { get { return _levels; } }
 
-        /// <summary>The coastline level (§6.1: coastline = Extract at SeaLevel).</summary>
-        public double SeaLevel01 { get { return _seaLevel; } }
-
         public static HeightMapping Calibrate(IHeightField field, Rect2 landBounds)
         {
             HeightMapping m = new HeightMapping();
@@ -293,8 +290,6 @@ namespace Archivist.Editor
         public string WholeIslandScale = "-";
 
         public int LandSamples;
-        public int CoastalSamples;
-        public int InteriorSamples;
 
         /// <summary>Coastal land covered by all three offices — the "coast x3" of §10.3.</summary>
         public double CoastAllThreePct;
@@ -490,8 +485,6 @@ namespace Archivist.Editor
             }
 
             LandSamples = landCount;
-            CoastalSamples = coastal;
-            InteriorSamples = interior;
             CoastAllThreePct = coastal > 0 ? 100.0 * coastAll3 / coastal : 0.0;
             InteriorCoveredPct = interior > 0 ? 100.0 * interiorCovered / interior : 0.0;
             GapPct = landCount > 0 ? 100.0 * gaps / landCount : 0.0;
@@ -610,6 +603,16 @@ namespace Archivist.Editor
     /// </summary>
     public sealed class DebugModel
     {
+        /// <summary>
+        /// Breathing room around a fitted ground extent: 3% of its diagonal, never less than
+        /// 200 m. Shared with <see cref="SvgExport"/> so the island pane and island.svg frame
+        /// the same island the same way.
+        /// </summary>
+        public const double ViewPadFraction = 0.03;
+
+        /// <inheritdoc cref="ViewPadFraction"/>
+        public const double ViewPadMinMetres = 200.0;
+
         public ulong CollectionSeed = 8412;
         public int IslandIndex;
         public IslandCharacter? ForcedCharacter;
@@ -935,7 +938,7 @@ namespace Archivist.Editor
                 }
             }
 
-            double pad = Math.Max(200.0, r.Diagonal * 0.03);
+            double pad = Math.Max(ViewPadMinMetres, r.Diagonal * ViewPadFraction);
             return r.Expanded(pad);
         }
 

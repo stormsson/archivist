@@ -27,11 +27,6 @@ namespace Archivist.Generation.Geometry
         public static double Dist(V2 a, V2 b)  { return (a - b).Length; }
         public static double DistSq(V2 a, V2 b) { return (a - b).LengthSq; }
 
-        public V2 Normalized
-        {
-            get { double l = Length; return l > 0 ? new V2(X / l, Y / l) : Zero; }
-        }
-
         public static V2 Lerp(V2 a, V2 b, double t) { return new V2(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t); }
 
         /// <summary>Rotate by radians. Caller is responsible for §4.4 if the result feeds a branch.</summary>

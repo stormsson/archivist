@@ -408,7 +408,7 @@ namespace Archivist.Generation.Sheets
             //      whole-island survey's office AND its year (PickYear is indexed by office) on
             //      roughly a quarter of them. P1.5 requires that adding POIs leave every existing
             //      feature bit-identical, and A2 asserts it.
-            Pcg32 pick = Streams.For(islandSeed, "wholeIsland");
+            Pcg32 pick = Streams.For(islandSeed, StreamNames.WholeIsland);
             var office = (Office)pick.Range(0, 3);
 
             MapScale scale;
@@ -541,7 +541,7 @@ namespace Archivist.Generation.Sheets
         /// </summary>
         static int PickYear(ulong islandSeed, Office office, bool wholeIsland)
         {
-            Pcg32 rng = Streams.For(islandSeed, wholeIsland ? "yearWholeIsland" : "year", (int)office);
+            Pcg32 rng = Streams.For(islandSeed, wholeIsland ? StreamNames.YearWholeIsland : StreamNames.Year, (int)office);
             return rng.Range(YearMinInclusive, YearMaxExclusive);
         }
 

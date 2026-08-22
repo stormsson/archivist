@@ -52,8 +52,8 @@ namespace Archivist.Generation.Field
 
             // One stream per purpose, drawn independently (§4.3): adding a purpose later must not
             // reshuffle these. Never System.Random or UnityEngine.Random (§4.1).
-            _fieldSeed = SeedFrom(p.Seed, "field");
-            _falloffSeed = SeedFrom(p.Seed, "falloff");
+            _fieldSeed = SeedFrom(p.Seed, StreamNames.Field);
+            _falloffSeed = SeedFrom(p.Seed, StreamNames.Falloff);
 
             _character = p.Character;
             _gain = IslandParams.GainFor(p.Character);

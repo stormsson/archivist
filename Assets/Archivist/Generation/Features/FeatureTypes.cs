@@ -66,10 +66,9 @@ namespace Archivist.Generation.Features
     {
         public readonly FeatureId Id;
         public readonly Polyline Course;
-        public readonly int SourcePeakIndex;
 
-        public River(FeatureId id, Polyline course, int sourcePeakIndex)
-        { Id = id; Course = course; SourcePeakIndex = sourcePeakIndex; }
+        public River(FeatureId id, Polyline course)
+        { Id = id; Course = course; }
     }
 
     /// <summary>Field-derived, so no stable id (§6.3).</summary>
