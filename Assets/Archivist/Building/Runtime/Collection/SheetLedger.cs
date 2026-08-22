@@ -1,68 +1,39 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace Archivist.Building.Collection
 {
     /// <summary>
-    /// Which sheets have entered the world, per island. <b>A different memory structure from
-    /// the island itself, and it has to be.</b>
+    /// The ledger, as a thing in the scene. Sits under the generator because issuance is
+    /// collection state, not world state: sheets come and go from the floor, and none of that
+    /// changes what has been issued.
     ///
-    /// <para>An <see cref="Generation.Island"/> is a pure function of its seed (R1.1) and
-    /// nothing geometric is ever persisted (R1.11, R3.1) — the island is thrown away and
-    /// regenerated on demand, identically, forever. So it is exactly the wrong place to
-    /// record a fact about the player's collection: the moment issuance lived on the island
-    /// object, it would either be lost on the next regeneration or would have to be persisted,
-    /// and persisting it would make the island something other than a function of its seed.</para>
+    /// <para>Thin on purpose. The logic is in <see cref="SheetLedgerStore"/>, which knows
+    /// nothing about UnityEngine; this component is where persistence, inspector visibility
+    /// and editor tooling will attach as the ledger grows a scope of its own.</para>
     ///
-    /// <para>The ledger holds only identities. It is small, flat, trivially serialisable, and
-    /// it is what makes R2.10 — every sheet in the collection is unique, no duplicates, no
-    /// reprints — an enforceable rule rather than an intention. R2.10b follows directly: a
-    /// slot is binary because issuance is.</para>
-    ///
-    /// <para>Deliberately free of UnityEngine, so it can move to a headless assembly and be
-    /// covered by <c>Tools/run-acceptance.sh</c> the day it needs tests.</para>
+    /// <para><b>Not yet persisted.</b> The store is rebuilt empty on every load, which is only
+    /// safe because spawned sheets are never written into a scene either (see
+    /// <c>SheetSpawner</c>). The two must be saved and loaded as one unit, or a sheet exists
+    /// with nothing recording it and R2.10 breaks silently.</para>
     /// </summary>
-    public sealed class SheetLedger
+    public sealed class SheetLedger : MonoBehaviour
     {
-        readonly Dictionary<ulong, HashSet<SheetId>> issued = new Dictionary<ulong, HashSet<SheetId>>();
+        readonly SheetLedgerStore store = new SheetLedgerStore();
 
-        public bool IsIssued(SheetId id)
-        {
-            HashSet<SheetId> set;
-            return issued.TryGetValue(id.IslandSeed, out set) && set.Contains(id);
-        }
+        /// <summary>Read-only in the inspector; the count is the only thing worth watching.</summary>
+        public int KnownIslandCount { get { return store.KnownIslandCount; } }
+
+        public bool IsIssued(SheetId id) { return store.IsIssued(id); }
 
         /// <summary>True if this call issued it; false if it was already out.</summary>
-        public bool MarkIssued(SheetId id)
-        {
-            HashSet<SheetId> set;
-            if (!issued.TryGetValue(id.IslandSeed, out set))
-            {
-                set = new HashSet<SheetId>();
-                issued[id.IslandSeed] = set;
-            }
-            return set.Add(id);
-        }
+        public bool MarkIssued(SheetId id) { return store.MarkIssued(id); }
 
-        public int IssuedCount(ulong islandSeed)
-        {
-            HashSet<SheetId> set;
-            return issued.TryGetValue(islandSeed, out set) ? set.Count : 0;
-        }
+        public int IssuedCount(ulong islandSeed) { return store.IssuedCount(islandSeed); }
 
-        /// <summary>
-        /// A copy, because the picker runs on a worker thread while the main thread may still
-        /// be writing. Cheap: a few hundred structs at worst.
-        /// </summary>
-        public HashSet<SheetId> Snapshot(ulong islandSeed)
-        {
-            HashSet<SheetId> set;
-            return issued.TryGetValue(islandSeed, out set)
-                ? new HashSet<SheetId>(set)
-                : new HashSet<SheetId>();
-        }
+        /// <summary>A copy, safe to hand to a worker thread.</summary>
+        public HashSet<SheetId> Snapshot(ulong islandSeed) { return store.Snapshot(islandSeed); }
 
-        public IEnumerable<ulong> KnownIslands { get { return issued.Keys; } }
-
-        public int KnownIslandCount { get { return issued.Count; } }
+        public IEnumerable<ulong> KnownIslands { get { return store.KnownIslands; } }
     }
 }

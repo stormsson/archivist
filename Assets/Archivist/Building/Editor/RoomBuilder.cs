@@ -72,10 +72,10 @@ namespace Archivist.Building.Editor
             InteractionPrompt prompt = BuildInteractionUi();
             BuildPlayer(prompt);
 
-            CollectionService collection;
+            IslandGenerator generator;
             SheetSpawner spawner;
-            BuildCollection(out collection, out spawner);
-            BuildMapCrate(collection, spawner);
+            BuildGenerator(out generator, out spawner);
+            BuildMapCrate(generator, spawner);
 
             ApplyEnvironment();
 
@@ -365,15 +365,35 @@ namespace Archivist.Building.Editor
         // --------------------------------------------------------------------
 
         /// <summary>
-        /// Collection-wide state: the seed, the island counter, and the ledger. One object,
-        /// deliberately not attached to anything physical — none of it is geometry and none
-        /// of it belongs to a room.
+        /// The generator and the two things it remembers, each its own object so each can
+        /// grow a scope without the others: <b>IslandCache</b> is where a generated island is
+        /// stored, <b>SheetLedger</b> is what has been issued. Split because they have
+        /// opposite lifetimes — the cache can be thrown away at any moment for nothing worse
+        /// than a re-generation, and the ledger cannot be lost at all without breaking R2.10.
+        ///
+        /// <para>None of it is geometry and none of it belongs to a room, so none of it is
+        /// attached to anything physical. The spawner is a separate root: putting sheets on
+        /// the floor is a world concern, not a collection one.</para>
         /// </summary>
-        static void BuildCollection(out CollectionService collection, out SheetSpawner spawner)
+        static void BuildGenerator(out IslandGenerator generator, out SheetSpawner spawner)
         {
-            var go = new GameObject("Collection");
-            collection = go.AddComponent<CollectionService>();
-            spawner = go.AddComponent<SheetSpawner>();
+            var root = new GameObject("Generator");
+            generator = root.AddComponent<IslandGenerator>();
+
+            var cacheGo = new GameObject("IslandCache");
+            cacheGo.transform.SetParent(root.transform, false);
+            IslandCache cache = cacheGo.AddComponent<IslandCache>();
+
+            var ledgerGo = new GameObject("SheetLedger");
+            ledgerGo.transform.SetParent(root.transform, false);
+            SheetLedger ledger = ledgerGo.AddComponent<SheetLedger>();
+
+            var gso = new SerializedObject(generator);
+            gso.FindProperty("cache").objectReferenceValue = cache;
+            gso.FindProperty("ledger").objectReferenceValue = ledger;
+            gso.ApplyModifiedPropertiesWithoutUndo();
+
+            spawner = new GameObject("SheetSpawner").AddComponent<SheetSpawner>();
 
             var so = new SerializedObject(spawner);
             so.FindProperty("sheetMaterial").objectReferenceValue =
@@ -383,7 +403,7 @@ namespace Archivist.Building.Editor
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        static void BuildMapCrate(CollectionService collection, SheetSpawner spawner)
+        static void BuildMapCrate(IslandGenerator generator, SheetSpawner spawner)
         {
             var crate = GameObject.CreatePrimitive(PrimitiveType.Cube);
             crate.name = "MapCrate";
@@ -401,7 +421,7 @@ namespace Archivist.Building.Editor
             var mapCrate = crate.AddComponent<MapCrate>();
             var so = new SerializedObject(mapCrate);
             so.FindProperty("label").stringValue = "Create map";
-            so.FindProperty("collection").objectReferenceValue = collection;
+            so.FindProperty("generator").objectReferenceValue = generator;
             so.FindProperty("spawner").objectReferenceValue = spawner;
             so.FindProperty("dropAnchor").objectReferenceValue = drop.transform;
             so.ApplyModifiedPropertiesWithoutUndo();

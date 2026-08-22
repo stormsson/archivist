@@ -25,7 +25,7 @@ namespace Archivist.Building.Interactables
     public sealed class MapCrate : Interactable
     {
         [Header("Wiring")]
-        [SerializeField] CollectionService collection;
+        [SerializeField] IslandGenerator generator;
         [SerializeField] SheetSpawner spawner;
         [Tooltip("Where the pile lands. Falls back to this transform.")]
         [SerializeField] Transform dropAnchor;
@@ -53,9 +53,9 @@ namespace Archivist.Building.Interactables
         public override void Interact(PlayerInteractor by)
         {
             if (busy) return;
-            if (collection == null || spawner == null)
+            if (generator == null || spawner == null)
             {
-                Debug.LogError("[MapCrate] Not wired to a CollectionService and SheetSpawner.", this);
+                Debug.LogError("[MapCrate] Not wired to an IslandGenerator and SheetSpawner.", this);
                 return;
             }
             StartCoroutine(Open());
@@ -65,23 +65,28 @@ namespace Archivist.Building.Interactables
         {
             busy = true;
 
-            ulong seed = (openNewIslandEachTime || collection.LastIslandSeed == 0)
-                ? collection.ReserveNextIslandSeed()
-                : collection.LastIslandSeed;
+            ulong seed = (openNewIslandEachTime || generator.LastIslandSeed == 0)
+                ? generator.ReserveNextIslandSeed()
+                : generator.LastIslandSeed;
 
             // Snapshot on the main thread, before any work: the picker must not read a
             // structure the main thread can write.
-            HashSet<SheetId> issued = collection.Ledger.Snapshot(seed);
+            HashSet<SheetId> issued = generator.Ledger.Snapshot(seed);
             int drawSeed = unchecked((int)(seed ^ ((ulong)issued.Count * 0x9E3779B97F4A7C15UL)));
 
             int count = sheetsPerOpening;
             double ppmm = pixelsPerPaperMm;
 
-            // Generation (~0.5 s) and five renders are pure, engine-free C# — Archivist.Generation
-            // may not even reference UnityEngine — so they belong on a worker thread. Doing
-            // them inline would freeze the room for a second or more on every interaction,
-            // which is the one thing T5's "quiet" cannot survive.
-            Task<List<SheetRender>> job = Task.Run(() => Draw(seed, issued, count, drawSeed, ppmm));
+            // Generation and five renders are pure, engine-free C# — Archivist.Generation may
+            // not even reference UnityEngine — so they belong on a worker thread. Doing them
+            // inline would freeze the room for a second or more on every interaction, which is
+            // the one thing T5's "quiet" cannot survive.
+            //
+            // The generator reference is captured on the main thread and only its
+            // thread-safe GetOrGenerate is touched off it; nothing here compares a
+            // UnityEngine.Object against null, which is the operation that would not be safe.
+            IslandGenerator source = generator;
+            Task<List<SheetRender>> job = Task.Run(() => Draw(source, seed, issued, count, drawSeed, ppmm));
 
             while (!job.IsCompleted) yield return null;
 
@@ -109,14 +114,14 @@ namespace Archivist.Building.Interactables
 
                 // R2.10 enforced here and nowhere else: a sheet that is already out is never
                 // issued twice, even if a picker somewhere later gets it wrong.
-                if (!collection.Ledger.MarkIssued(render.Id)) continue;
+                if (!generator.Ledger.MarkIssued(render.Id)) continue;
 
                 spawner.Place(render, i, batch.Count, anchor);
                 yield return null;   // one texture upload per frame
             }
 
             Debug.Log($"[MapCrate] {batch[0].IslandName} ({seed:X16}) — issued {batch.Count} sheets, " +
-                      $"{collection.Ledger.IssuedCount(seed)} out in total.", this);
+                      $"{generator.Ledger.IssuedCount(seed)} out in total.", this);
 
             busy = false;
         }
@@ -128,10 +133,14 @@ namespace Archivist.Building.Interactables
         /// validator drives it directly — proving generation, picking and rendering without
         /// entering play mode.</para>
         /// </summary>
-        public static List<SheetRender> Draw(ulong islandSeed, HashSet<SheetId> issued, int count,
-                                      int drawSeed, double pixelsPerPaperMm)
+        public static List<SheetRender> Draw(IslandGenerator generator, ulong islandSeed,
+                                             HashSet<SheetId> issued, int count,
+                                             int drawSeed, double pixelsPerPaperMm)
         {
-            Island island = Island.FromSeed(islandSeed);
+            // Through the generator, never Island.FromSeed directly: the island lands in the
+            // cache, so every later question a spawned sheet asks about itself is a dictionary
+            // lookup rather than another third of a second.
+            Island island = generator.GetOrGenerate(islandSeed);
             List<Sheet> picks = SheetPicker.PickUnissued(island, count, issued, drawSeed);
 
             var rendered = new List<SheetRender>(picks.Count);
