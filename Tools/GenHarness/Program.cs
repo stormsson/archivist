@@ -19,10 +19,17 @@ namespace Archivist.Harness
                 Acceptance.A5_NoBlankSheets();
                 Acceptance.A6_SharedClassCoverage();
                 Acceptance.A8_Performance();
+
+                Console.WriteLine();
+                Console.WriteLine("-- POC-03 points of interest ---------------------------");
+                Poc03Acceptance.C2_Determinism();
+                Poc03Acceptance.C3_PlaceabilityFloor();
+                Poc03Acceptance.C4_Numbering();
             }
             if (mode == "all" || mode == "metrics")
             {
                 Acceptance.A7_SheetEconomy(mode == "all" ? 50 : 50);
+                Poc03Acceptance.C6_Density(50);
             }
 
             // POC-02 §11. Only B2 and B3 gate, so only those two join `all`; B4 and B5 are
@@ -46,11 +53,14 @@ namespace Archivist.Harness
 
             if (mode == "describe")
             {
-                for (int i = 0; i < 6; i++) Acceptance.Describe(8412UL, i);
-                for (int i = 0; i < 6; i++) Poc02Acceptance.Describe(8412UL, i);
+                // One Describe, not one per suite: the two used to print the same island header
+                // twice, each with half the fields.
+                for (int i = 0; i < 6; i++) Describe.Print(Report.Collection, i);
             }
 
-            bool failed = Acceptance.Failed || Poc02Acceptance.Failed;
+            // One flag for the whole harness (Report.Failed). This used to be three separate
+            // flags OR'd together here, so a new suite that forgot to be added exited 0.
+            bool failed = Report.Failed;
             Console.WriteLine();
             Console.WriteLine(failed ? "RESULT: FAILURES PRESENT" : "RESULT: all gated checks pass");
             return failed ? 1 : 0;

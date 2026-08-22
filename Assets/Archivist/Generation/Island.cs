@@ -28,7 +28,12 @@ namespace Archivist.Generation
         public IslandNames Names { get; private set; }
         public ServiceRule Service { get; private set; }
 
-        /// <summary>Whole-island survey first (R2.2a — the entry point), then one per office.</summary>
+        /// <summary>
+        /// Whole-island survey first (R2.2a — the entry point), then one per office in
+        /// <see cref="Offices.All"/> order. The Antiquarian survey holds detail sheets
+        /// (POC-03 §2), every other survey holds survey sheets; <see cref="Sheet.IsDetail"/>
+        /// tells them apart.
+        /// </summary>
         public IReadOnlyList<Survey> Surveys { get; private set; }
 
         public string Name { get { return Names != null ? Names.Island : null; } }
@@ -40,6 +45,36 @@ namespace Archivist.Generation
                 int n = 0;
                 for (int i = 0; i < Surveys.Count; i++) n += Surveys[i].SheetCount;
                 return n;
+            }
+        }
+
+        /// <summary>
+        /// DEBUG ONLY — which offices actually cut sheets. Ambient static state, which §4.1
+        /// otherwise forbids because it changes generated output: an island generated with an
+        /// office switched off is NOT the island that seed describes. Determinism still
+        /// holds (A2 passes either way), which is exactly why this is a footgun — nothing
+        /// will fail to tell you a survey is missing. The debug window shows a warning while
+        /// any of these is false. Must be true everywhere outside the Editor.
+        /// </summary>
+        public static bool CutHydrographic = true;
+        public static bool CutLandSurvey = true;
+        public static bool CutGarrison = true;
+        public static bool CutAntiquarian = true;
+
+        public static bool AllOfficesEnabled
+        {
+            get { return CutHydrographic && CutLandSurvey && CutGarrison && CutAntiquarian; }
+        }
+
+        static bool CutsOffice(Office office)
+        {
+            switch (office)
+            {
+                case Office.Hydrographic: return CutHydrographic;
+                case Office.LandSurvey: return CutLandSurvey;
+                case Office.Garrison: return CutGarrison;
+                case Office.Antiquarian: return CutAntiquarian;
+                default: return true;
             }
         }
 
@@ -67,6 +102,14 @@ namespace Archivist.Generation
             List<Settlement> towns = Settlements.Generate(island.Field, island.LandBounds, island.Coastline);
             List<River> rivers = Rivers.Generate(island.Field, peaks);
 
+            // POC-03 spec §1.3: POIs run AFTER peaks, settlements and rivers — RuinedTower needs
+            // peaks, RuinedChapel needs settlements — and before naming, because nothing
+            // references POIs. Their one PRNG draw is the count, from the new "poi" stream, so
+            // §4.3 guarantees every feature above is bit-identical to what it was before POIs
+            // existed (P1.5, asserted by A2).
+            List<Poi> pois = PoiSiting.Generate(island.Field, island.LandBounds, island.Coastline,
+                                                peaks, towns);
+
             // Naming is a separate pass so it cannot perturb feature selection (§9).
             int namedPeaks = Math.Min(Tuning.PeakNamedCount, peaks.Count);
             island.Names = NameGenerator.Generate(islandSeed, towns.Count, namedPeaks);
@@ -74,7 +117,7 @@ namespace Archivist.Generation
             for (int i = 0; i < namedPeaks; i++) peaks[i] = peaks[i].WithName(island.Names.Peaks[i]);
             for (int i = 0; i < towns.Count; i++) towns[i] = towns[i].WithName(island.Names.Settlements[i]);
 
-            island.Features = new IslandFeatures(peaks, towns, rivers);
+            island.Features = new IslandFeatures(peaks, towns, rivers, pois);
             island.Service = new ServiceRule(island.Field, island.LandBounds, island.Features,
                                              island.Params.ServiceRadius);
 
@@ -89,24 +132,39 @@ namespace Archivist.Generation
         static List<Survey> CutSurveys(Island island)
         {
             var surveys = new List<Survey>();
-            surveys.Add(SurveyCutter.CutWholeIsland(island.Field, island.LandBounds, island.Seed));
+            surveys.Add(SurveyCutter.CutWholeIsland(island.LandBounds, island.Seed));
 
             PcaResult ignored;
             double hydroDeg = Rotations.Hydrographic(island.Coastline, island.Params.ServiceRadius, out ignored);
 
-            Office[] offices = { Office.Hydrographic, Office.LandSurvey, Office.Garrison };
-            for (int i = 0; i < offices.Length; i++)
+            for (int i = 0; i < Offices.All.Length; i++)
             {
-                SurveySpec spec = SurveyCutter.PlanSurvey(island.Field, island.Coastline,
-                                                          island.LandBounds, offices[i], hydroDeg);
+                Office office = Offices.All[i];
+                if (!CutsOffice(office)) continue;
 
-                // Two cutters, one per coverage shape. Hydrographic walks the shore with
+                SurveySpec spec = SurveyCutter.PlanSurvey(island.Field, island.Coastline,
+                                                          island.LandBounds, office, hydroDeg);
+
+                // Three cutters, one per coverage shape. Hydrographic walks the shore with
                 // per-sheet rotation (D-H2); Land Survey and Garrison keep the single-
-                // rotation lattice R2.4 requires of them.
-                surveys.Add(offices[i] == Office.Hydrographic
-                    ? CoastWalkCutter.Cut(island.Field, island.Coastline, island.Service, spec)
-                    : SurveyCutter.Cut(island.Field, island.Coastline, island.Service,
-                                       island.LandBounds, spec));
+                // rotation lattice R2.4 requires of them; Antiquarian cuts one small sheet per
+                // qualifying POI and neither walks nor tiles (POC-03 §2).
+                Survey survey;
+                if (office == Office.Antiquarian)
+                {
+                    survey = DetailSheetCutter.Cut(island.Features.Pois, island.Service, spec);
+                }
+                else if (office == Office.Hydrographic)
+                {
+                    survey = CoastWalkCutter.Cut(island.Field, island.Coastline, island.Service,
+                                                 island.LandBounds, spec);
+                }
+                else
+                {
+                    survey = SurveyCutter.Cut(island.Field, island.Coastline, island.Service,
+                                              island.LandBounds, spec);
+                }
+                surveys.Add(survey);
             }
             return surveys;
         }

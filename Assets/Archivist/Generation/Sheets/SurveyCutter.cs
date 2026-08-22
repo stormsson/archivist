@@ -253,9 +253,18 @@ namespace Archivist.Generation.Sheets
             // The coast walk always runs the sheet's LONG edge along the shore, so its
             // orientation is fixed rather than chosen: landscape, every sheet. The lattice
             // offices still pick whichever orientation covers their extent in fewer rects.
-            SheetFormat format = office == Office.Hydrographic
-                ? SheetFormat.A1.Landscape
-                : ChooseOrientation(landBounds, rotationDeg, scale, Tuning.OverlapFraction);
+            // The coast walk uses a long thin strip, landscape, always: length along the
+            // water, minimal depth inland. The lattice offices still pick whichever A1
+            // orientation covers their extent in fewer rects.
+            // CoastalStrip is already landscape (841 wide x 297 tall) — .Landscape swaps
+            // unconditionally and would stand it on end.
+            // POC-03: the Antiquarian office does not tile ground at all — one small square
+            // sheet per POI (spec §2.1), so there is no extent to fit an orientation to.
+            SheetFormat format;
+            if (office == Office.Antiquarian) format = SheetFormat.DetailSheet;
+            else if (office == Office.Hydrographic) format = SheetFormat.CoastalStrip;
+            else format = ChooseOrientation(landBounds, rotationDeg, scale, Tuning.OverlapFraction);
+
             ulong islandSeed = field.Params.Seed;
 
             return new SurveySpec(islandSeed, office, PickYear(islandSeed, office, false),
@@ -387,8 +396,18 @@ namespace Archivist.Generation.Sheets
         /// It is the entry point for the island and, in v1, doubles as the reference map.
         /// </para>
         /// </summary>
-        public static Survey CutWholeIsland(IHeightField field, Rect2 landBounds, ulong islandSeed)
+        // No IHeightField parameter: the whole-island sheet is sized from the land bbox and the
+        // paper alone (D5), and never samples the field. It used to take one and ignore it.
+        public static Survey CutWholeIsland(Rect2 landBounds, ulong islandSeed)
         {
+            // Range(0, 3), NOT Offices.Count. Two reasons, and both matter.
+            //   1. The whole-island sheet is a RECONNAISSANCE map of the island (§10.5). POC-03's
+            //      Antiquarian office maps single curiosities close up; it has no island-scale
+            //      remit and would never cut one.
+            //   2. Widening this draw would re-roll the office on existing islands, changing the
+            //      whole-island survey's office AND its year (PickYear is indexed by office) on
+            //      roughly a quarter of them. P1.5 requires that adding POIs leave every existing
+            //      feature bit-identical, and A2 asserts it.
             Pcg32 pick = Streams.For(islandSeed, "wholeIsland");
             var office = (Office)pick.Range(0, 3);
 
@@ -416,6 +435,8 @@ namespace Archivist.Generation.Sheets
                 case Office.LandSurvey:
                     return Rotations.LandSurvey(field, landBounds, hydroDeg, out pca);
                 default:
+                    // Garrison by D2; and Antiquarian, whose survey rotation is NOMINAL — every
+                    // detail sheet carries its own, rolled per POI (POC-03 §2.2).
                     return Rotations.Garrison();
             }
         }
@@ -623,29 +644,27 @@ namespace Archivist.Generation.Sheets
         {
             int n = Tuning.CullSampleGrid;
             int total = n * n;
-            int landCount = 0;
-            int servedCount = 0;
 
             double width = frameRect.Width;
             double height = frameRect.Height;
 
-            for (int b = 0; b < n; b++)
+            int landCount, servedCount;
+            RectCull.Count(field, service, office, (a, b) =>
             {
+                // Frame space, cell centres, anchored on the rect's min corner. Written
+                // exactly as §10.3 states it and not to be rearranged (§4.4).
+                //
+                // CoastWalkCutter.Keeps samples the same nominal grid from the opposite
+                // anchor — around zero, translated by the centre afterwards — and the two
+                // must NOT be collapsed into one expression. See the note there for why the
+                // reason is the anchor rather than the multiply/divide order.
                 double frameY = frameRect.MinY + height * (b + 0.5) / n;
-                for (int a = 0; a < n; a++)
-                {
-                    double frameX = frameRect.MinX + width * (a + 0.5) / n;
-                    V2 ground = ToGround(new V2(frameX, frameY), rotationDeg);
-
-                    if (!field.IsLand(ground)) continue;
-                    landCount++;
-
-                    if (service == null || service.Served(ground, office)) servedCount++;
-                }
-            }
+                double frameX = frameRect.MinX + width * (a + 0.5) / n;
+                return ToGround(new V2(frameX, frameY), rotationDeg);
+            }, out landCount, out servedCount);
 
             landFraction = (double)landCount / total;
-            servedFraction = landCount > 0 ? (double)servedCount / landCount : 0.0;
+            servedFraction = RectCull.ServedFraction(landCount, servedCount);
         }
 
         /// <summary>
@@ -674,7 +693,7 @@ namespace Archivist.Generation.Sheets
         static bool Keeps(Office office, Rect2 frameRect, List<V2[]> coastFrame,
                           List<Rect2> coastFrameBounds, double landFraction, double servedFraction)
         {
-            if (servedFraction < Tuning.ServedThreshold) return false;
+            if (!RectCull.MeetsServedThreshold(servedFraction)) return false;
 
             switch (office)
             {

@@ -15,5 +15,11 @@ echo "== source assertions =="
 "$ROOT/Tools/check-sources.sh"
 
 echo
+echo "== editor/tests type check =="
+# The build above covers Generation + Render only (§11). This is the only thing short of
+# opening Unity that looks at Editor/ and Tests/. It self-skips when no editor is installed.
+"$ROOT/Tools/check-editor.sh"
+
+echo
 echo "== acceptance =="
 "$DOTNET" run --project "$ROOT/Tools/GenHarness/GenHarness.csproj" --no-build -- "${1:-all}"

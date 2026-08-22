@@ -197,12 +197,9 @@ namespace Archivist.Editor
             m._linear = false;
             m.MaxLandMetres = 0.0;
 
-            Rect2 area = landBounds;
-            if (area.IsEmpty || area.Width <= 0.0 || area.Height <= 0.0)
-            {
-                double half = field.Params.DomainMetres * 0.5;
-                area = new Rect2(-half, -half, half, half);
-            }
+            // An island with no land at all leaves LandBounds empty, and the probe grid below
+            // would step backwards over it. DebugModel.SafeExtent is the one fallback (§11.0).
+            Rect2 area = DebugModel.SafeExtent(landBounds, field.Params.DomainMetres);
 
             const int n = 48;
             double hMin = double.MaxValue, hMax = double.MinValue;
@@ -288,9 +285,9 @@ namespace Archivist.Editor
         /// <summary>Land lattice resolution per axis. 96 x 96 over the land bbox.</summary>
         public const int Lattice = 96;
 
-        public int[] SheetsPerOffice = new int[3];
-        public double[] RotationPerOffice = new double[3];
-        public bool[] OfficePresent = new bool[3];
+        public int[] SheetsPerOffice = new int[Offices.Count];
+        public double[] RotationPerOffice = new double[Offices.Count];
+        public bool[] OfficePresent = new bool[Offices.Count];
         public int WholeIslandSheets;
         public int TotalSheets;
         public string WholeIslandScale = "-";
@@ -312,8 +309,8 @@ namespace Archivist.Editor
         public int[] OverlapHistogram = new int[4];
 
         /// <summary>A5b (§13.5a): sheets whose only content is Coast and/or Grid.</summary>
-        public int[] ThinSheets = new int[3];
-        public double[] ThinSheetPct = new double[3];
+        public int[] ThinSheets = new int[Offices.Count];
+        public double[] ThinSheetPct = new double[Offices.Count];
 
         public string Note = "";
 
@@ -345,7 +342,7 @@ namespace Archivist.Editor
                 else
                 {
                     int o = (int)survey.Spec.Office;
-                    if (o >= 0 && o < 3)
+                    if (o >= 0 && o < Offices.Count)
                     {
                         s.SheetsPerOffice[o] = survey.SheetCount;
                         s.RotationPerOffice[o] = survey.Spec.RotationDeg;
@@ -377,7 +374,7 @@ namespace Archivist.Editor
                 }
 
                 int o = (int)survey.Spec.Office;
-                if (o < 0 || o >= 3)
+                if (o < 0 || o >= Offices.Count)
                 {
                     continue;
                 }
@@ -412,7 +409,12 @@ namespace Archivist.Editor
             for (int i = 0; i < island.Surveys.Count; i++)
             {
                 Survey sv = island.Surveys[i];
-                if (sv != null && !sv.Spec.IsWholeIsland && sv.SheetCount > 0)
+                // POC-03: the Antiquarian office is excluded here on purpose. These are the
+                // R1.8 coverage numbers — how much ground the SURVEYS reach, and how much they
+                // leave blank. A 275 m detail sheet is not survey coverage, and counting it
+                // would move "coast x3" and the gap percentage for no meaning at all.
+                if (sv != null && !sv.Spec.IsWholeIsland && sv.SheetCount > 0
+                    && Offices.CutsSurvey(sv.Spec.Office))
                 {
                     offices.Add(sv);
                 }
@@ -506,6 +508,18 @@ namespace Archivist.Editor
 
             if (features != null)
             {
+                // POC-03: a detail sheet always carries its own POI, so it is never thin.
+                if (FeatureMatrix.Draws(office, FeatureClass.Poi))
+                {
+                    for (int i = 0; i < features.Pois.Count; i++)
+                    {
+                        if (DebugModel.SheetContains(sheet, features.Pois[i].Position))
+                        {
+                            return false;
+                        }
+                    }
+                }
+
                 if (FeatureMatrix.Draws(office, FeatureClass.Peak))
                 {
                     for (int i = 0; i < features.Peaks.Count; i++)
@@ -612,7 +626,7 @@ namespace Archivist.Editor
 
         public readonly ContourCache Cache = new ContourCache();
 
-        readonly bool[] _layers = new bool[7];
+        readonly bool[] _layers = new bool[8];   // FeatureClass.Coast .. FeatureClass.Poi
 
         /// <summary>Per-survey outline visibility in the island pane, parallel to Island.Surveys.</summary>
         public bool[] SurveyVisible = new bool[0];
@@ -772,11 +786,21 @@ namespace Archivist.Editor
             get { return Mapping != null ? Mapping.ContourLevels01 : (IReadOnlyList<double>)new double[0]; }
         }
 
-        /// <summary>Point-in-rotated-rect: transform into frame space, where the sheet is axis-aligned.</summary>
+        /// <summary>
+        /// Point-in-rotated-rect. The test itself now lives on <see cref="Sheet.Contains"/> in the
+        /// Generation assembly; this is a thin forwarder kept so the eleven Editor call sites read
+        /// the same as they always did.
+        ///
+        /// <para>It moved because the Editor was not the only place asking the question. The
+        /// headless harness asked it too and answered it differently — with
+        /// <see cref="Sheet.GroundBounds"/>, the AABB <i>of</i> the rotated rect — so A5b and A6
+        /// measured a larger sheet than the one drawn here, on every rotated survey (Hydrographic
+        /// and Antiquarian are rotated in full). One definition, in the assembly both can see, is
+        /// the fix. Do not re-inline this.</para>
+        /// </summary>
         public static bool SheetContains(Sheet sheet, V2 groundPoint)
         {
-            V2 f = groundPoint.RotateDeg(-sheet.RotationDeg);
-            return sheet.FrameRect.Contains(f);
+            return sheet.Contains(groundPoint);
         }
 
         public static bool SurveyCovers(Survey survey, V2 groundPoint)
@@ -826,6 +850,63 @@ namespace Archivist.Editor
             return hits;
         }
 
+        /// <summary>
+        /// A ground rect it is safe to size a render, a probe grid or a view from.
+        ///
+        /// <para>A degenerate island — no land above sea level at all — leaves
+        /// <c>Island.LandBounds</c> empty, and <see cref="Rect2.Empty"/> has a NEGATIVE width, so
+        /// every dimension derived from it collapses: a render is 1 px on each axis, a probe grid
+        /// steps backwards. Fall back to the domain square, which is the one rect that is always
+        /// valid. Five sites wrote this four-line fallback out by hand — one of them with a comment
+        /// saying it copied <see cref="ViewExtent"/> — so it lives here now.</para>
+        ///
+        /// <para><see cref="ViewExtent"/>'s own copy tested only <c>IsEmpty</c>; this tests the
+        /// width and height too, as the other four did. A land bbox that is non-empty but has zero
+        /// extent on an axis is just as unusable, so the stricter test is the right one everywhere.</para>
+        /// </summary>
+        public static Rect2 SafeExtent(Rect2 landBounds, double domainMetres)
+        {
+            bool ignored;
+            return SafeExtent(landBounds, domainMetres, out ignored);
+        }
+
+        /// <summary>
+        /// <see cref="SafeExtent(Rect2,double)"/>, reporting whether the fallback was taken.
+        /// The texture pane says so on screen rather than silently rendering the wrong ground.
+        /// </summary>
+        public static Rect2 SafeExtent(Rect2 landBounds, double domainMetres, out bool fellBack)
+        {
+            if (landBounds.IsEmpty || landBounds.Width <= 0.0 || landBounds.Height <= 0.0)
+            {
+                double half = domainMetres * 0.5;
+                fellBack = true;
+                return new Rect2(-half, -half, half, half);
+            }
+
+            fellBack = false;
+            return landBounds;
+        }
+
+        /// <summary>
+        /// The one "there is nothing to draw" line. Every pane and the window itself guarded on
+        /// <see cref="HasIsland"/> and then spelled out the same ternary, each with its own suffix
+        /// on the failure branch — so a change of wording reached one site at a time and the window
+        /// could say "generation failed" while a pane beside it said "no island".
+        ///
+        /// <para><paramref name="failureDetail"/> is whatever that site appends to
+        /// "generation failed": <c>" — " + Error</c>, <c>": " + Error</c>, " — see console", or
+        /// null for the bare phrase. The branch itself is here.</para>
+        /// </summary>
+        public string NoIslandMessage(string failureDetail)
+        {
+            if (Error == null)
+            {
+                return "no island";
+            }
+
+            return "generation failed" + (failureDetail ?? string.Empty);
+        }
+
         /// <summary>Ground extent worth fitting the island pane to: land plus every sheet footprint.</summary>
         public Rect2 ViewExtent()
         {
@@ -834,12 +915,7 @@ namespace Archivist.Editor
                 return new Rect2(-1000, -1000, 1000, 1000);
             }
 
-            Rect2 r = Island.LandBounds;
-            if (r.IsEmpty)
-            {
-                double half = Island.Params.DomainMetres * 0.5;
-                r = new Rect2(-half, -half, half, half);
-            }
+            Rect2 r = SafeExtent(Island.LandBounds, Island.Params.DomainMetres);
 
             for (int i = 0; i < Island.Surveys.Count; i++)
             {
@@ -866,48 +942,40 @@ namespace Archivist.Editor
         /// <summary>
         /// Short office tag for the Compare pane, where four headers share one row and the
         /// full names overflow. Full names stay everywhere there is room.
+        ///
+        /// <para>The tag itself now lives in the one office table, <see cref="OfficeStyle"/>;
+        /// this is a thin forwarder kept so the existing call sites read as they always did.</para>
         /// </summary>
         public static string OfficeAbbr(Office office)
         {
-            switch (office)
-            {
-                case Office.Hydrographic: return "HYD";
-                case Office.LandSurvey: return "LS";
-                case Office.Garrison: return "GAR";
-                default: return office.ToString();
-            }
+            OfficeStyle style = OfficeStyle.For(office);
+            return style != null ? style.Abbr : office.ToString();
         }
 
+        /// <summary>Forwarder onto <see cref="OfficeStyle"/>, as <see cref="OfficeAbbr"/> is.</summary>
         public static string OfficeName(Office office)
         {
-            switch (office)
-            {
-                case Office.Hydrographic: return "Hydrographic";
-                case Office.LandSurvey: return "Land Survey";
-                case Office.Garrison: return "Garrison";
-                default: return office.ToString();
-            }
+            OfficeStyle style = OfficeStyle.For(office);
+            return style != null ? style.Name : office.ToString();
         }
 
         /// <summary>
         /// Debug chrome only (§11.0). This is the ONLY colour anywhere in the window: §8.2 keeps
         /// the maps themselves to one line style, black on white, so that any difference the eye
         /// finds in Pane 3 is a difference of content.
+        ///
+        /// <para>Forwarder onto <see cref="OfficeStyle"/>. The whole-island survey is not an
+        /// office, so it has no row there and keeps its own neutral grey.</para>
         /// </summary>
         public static Color OfficeColour(SurveySpec spec)
         {
             if (spec.IsWholeIsland)
             {
-                return new Color(0.45f, 0.45f, 0.45f);
+                return OfficeStyle.WholeIslandColour;
             }
 
-            switch (spec.Office)
-            {
-                case Office.Hydrographic: return new Color(0.10f, 0.45f, 0.85f);
-                case Office.LandSurvey: return new Color(0.12f, 0.58f, 0.24f);
-                case Office.Garrison: return new Color(0.85f, 0.45f, 0.10f);
-                default: return Color.magenta;
-            }
+            OfficeStyle style = OfficeStyle.For(spec.Office);
+            return style != null ? style.Colour : Color.magenta;
         }
 
         public static string SurveyLabel(Survey survey)
@@ -919,19 +987,33 @@ namespace Archivist.Editor
 
             SurveySpec spec = survey.Spec;
             string who = spec.IsWholeIsland ? "whole-island" : OfficeName(spec.Office);
+
+            // Hydrographic walks the shore, so its survey rotation is nominal and each sheet
+            // carries its own (D-H2); so does Antiquarian, whose detail sheets roll one each
+            // (POC-03 §2.2). Printing the nominal number here would read as fact.
+            bool rotPerSheet = !spec.IsWholeIsland
+                && (spec.Office == Office.Hydrographic || spec.Office == Office.Antiquarian);
+            string rot = rotPerSheet
+                ? "rot per sheet"
+                : string.Format(CultureInfo.InvariantCulture, "rot {0:F1}°", spec.RotationDeg);
+
             return string.Format(CultureInfo.InvariantCulture,
-                                 "{0}  {1}   {2} sheet{3}   {4}   rot {5:F1}°",
+                                 "{0}  {1}   {2} sheet{3}   {4}   {5}",
                                  who, spec.Year, survey.SheetCount, survey.SheetCount == 1 ? "" : "s",
-                                 spec.Scale, spec.RotationDeg);
+                                 spec.Scale, rot);
         }
 
         public static string SheetLabel(Sheet sheet)
         {
             SurveySpec spec = sheet.Survey;
             string who = spec.IsWholeIsland ? "whole-island" : OfficeName(spec.Office);
+
+            // POC-03 §2.4: the detail run is numbered independently of any survey run, so it is
+            // displayed D1..DM — a gap in one run must not read as a gap in the other (R2.10b).
+            string number = sheet.IsDetail ? "D" + sheet.Number : "#" + sheet.Number;
             return string.Format(CultureInfo.InvariantCulture,
-                                 "{0} #{1}  {2}  rot {3:F1}°",
-                                 who, sheet.Number, spec.Scale, sheet.RotationDeg);
+                                 "{0} {1}  {2}  rot {3:F1}°",
+                                 who, number, spec.Scale, sheet.RotationDeg);
         }
     }
 
@@ -1082,6 +1164,14 @@ namespace Archivist.Editor
             regen.text = "Regenerate";
             bar.Add(regen);
 
+            // Which offices cut sheets at all. Debug affordance: it changes what is
+            // GENERATED, not merely what is drawn, so the footer warns while any is off.
+            bar.Add(Tag("cut"));
+            for (int i = 0; i < OfficeStyle.All.Count; i++)
+            {
+                bar.Add(OfficeCutToggle(OfficeStyle.All[i]));
+            }
+
             bar.Add(Tag("character"));
             DropdownField character = new DropdownField();
             character.choices = new List<string>(CharacterChoices);
@@ -1185,6 +1275,7 @@ namespace Archivist.Editor
             sidebar.Add(LayerToggle("town", FeatureClass.Settlement));
             sidebar.Add(LayerToggle("sounding", FeatureClass.Sounding));
             sidebar.Add(LayerToggle("grid", FeatureClass.Grid));
+            sidebar.Add(LayerToggle("poi", FeatureClass.Poi));
 
             Toggle outlines = new Toggle("sheet outlines");
             outlines.value = _model.ShowSheetOutlines;
@@ -1198,6 +1289,76 @@ namespace Archivist.Editor
 
             return sidebar;
         }
+
+        /// <summary>
+        /// Toggle for whether an office cuts sheets. Regenerates on change, because this
+        /// alters generation rather than display.
+        /// </summary>
+        Toggle OfficeCutToggle(OfficeStyle style)
+        {
+            Toggle t = new Toggle(style.Abbr);
+            t.value = OfficeCutEnabled(style.Office);
+            t.style.marginRight = 6.0f;
+            t.RegisterValueChangedCallback(evt =>
+            {
+                OfficeCut(style.Office, evt.newValue);
+                Regenerate();
+            });
+            return t;
+        }
+
+        /// <summary>
+        /// Loud, because switching an office off changes what is GENERATED. Determinism
+        /// still holds with it off, so nothing else in the suite will tell you.
+        /// </summary>
+        static string OfficeCutWarning()
+        {
+            if (Island.AllOfficesEnabled) return string.Empty;
+            List<string> off = new List<string>();
+            for (int i = 0; i < OfficeStyle.All.Count; i++)
+            {
+                OfficeStyle style = OfficeStyle.All[i];
+                if (!OfficeCutEnabled(style.Office))
+                {
+                    off.Add(style.Name);
+                }
+            }
+
+            return "DEBUG: not cutting " + string.Join(", ", off.ToArray()) + " — this island is incomplete.\n";
+        }
+
+        /// <summary>
+        /// The ONE place Editor-side that maps an office onto its <c>Island.Cut*</c> static.
+        ///
+        /// <para>Those are four separate static fields over in Generation/Island.cs — replacing
+        /// them with an array indexed by <c>(int)office</c> is scheduled separately — so a switch
+        /// is unavoidable here. What is avoidable is having two of them, a reader and a writer, in
+        /// different methods: they drifted apart trivially and nothing would have caught a toggle
+        /// that wrote Garrison and read Hydrographic. Read and write share the switch instead.
+        /// <paramref name="assign"/> null reads; a value writes it and returns what was written.</para>
+        /// </summary>
+        static bool OfficeCut(Office office, bool? assign)
+        {
+            switch (office)
+            {
+                case Office.Hydrographic:
+                    if (assign.HasValue) Island.CutHydrographic = assign.Value;
+                    return Island.CutHydrographic;
+                case Office.LandSurvey:
+                    if (assign.HasValue) Island.CutLandSurvey = assign.Value;
+                    return Island.CutLandSurvey;
+                case Office.Garrison:
+                    if (assign.HasValue) Island.CutGarrison = assign.Value;
+                    return Island.CutGarrison;
+                case Office.Antiquarian:
+                    if (assign.HasValue) Island.CutAntiquarian = assign.Value;
+                    return Island.CutAntiquarian;
+                default:
+                    return true;
+            }
+        }
+
+        static bool OfficeCutEnabled(Office office) { return OfficeCut(office, null); }
 
         Toggle LayerToggle(string label, FeatureClass cls)
         {
@@ -1268,7 +1429,18 @@ namespace Archivist.Editor
             RefreshPanes();
         }
 
-        /// <summary>Editor-side only; the Generation assembly never hashes text (§13.2).</summary>
+        /// <summary>
+        /// Editor-side only; the Generation assembly never hashes text (§13.2).
+        ///
+        /// <para><b>Not <see cref="Hash.Fnv1a64"/>, and not interchangeable with it.</b> This looks
+        /// like a hand-rolled copy of it and the multiplier is indeed <c>Hash.FnvPrime</c>, but the
+        /// offset below is <c>1469598103934665603</c> where the FNV-1a 64 offset basis — and
+        /// <c>Hash.FnvOffset</c> — is <c>14695981039346656037</c>: a digit short, and a different
+        /// number, not a different spelling of the same one. Every input hashes differently under
+        /// the two, so calling Hash.Fnv1a64 here would silently re-seat every island a user
+        /// reached by typing a word into the seed field. Left as is deliberately; if it is ever
+        /// worth switching, that is a behaviour change to make on purpose, not a tidy-up.</para>
+        /// </summary>
         static long StableTextSeed(string text)
         {
             unchecked
@@ -1289,7 +1461,7 @@ namespace Archivist.Editor
             _sidebarSurveys.Clear();
             if (!_model.HasIsland)
             {
-                _sidebarSurveys.Add(new Label(_model.Error != null ? "generation failed" : "no island"));
+                _sidebarSurveys.Add(new Label(_model.NoIslandMessage(null)));
                 return;
             }
 
@@ -1439,9 +1611,7 @@ namespace Archivist.Editor
 
             if (!_model.HasIsland)
             {
-                _footer.text = _model.Error != null
-                    ? "generation failed — " + _model.Error
-                    : "no island";
+                _footer.text = OfficeCutWarning() + _model.NoIslandMessage(" — " + _model.Error);
                 return;
             }
 
@@ -1458,16 +1628,24 @@ namespace Archivist.Editor
             if (s == null)
             {
                 sb.Append(" · stats unavailable");
-                _footer.text = sb.ToString();
+                _footer.text = OfficeCutWarning() + sb.ToString();
                 return;
             }
 
             sb.Append(" · sheets ");
-            sb.Append(FormatOffice(s, Office.Hydrographic, "hyd"));
-            sb.Append(' ');
-            sb.Append(FormatOffice(s, Office.LandSurvey, "land"));
-            sb.Append(' ');
-            sb.Append(FormatOffice(s, Office.Garrison, "garr"));
+            for (int i = 0; i < OfficeStyle.All.Count; i++)
+            {
+                OfficeStyle style = OfficeStyle.All[i];
+                if (i > 0)
+                {
+                    sb.Append(' ');
+                }
+
+                sb.Append(style.FooterTag);
+                sb.Append(' ');
+                sb.Append(s.SheetsPerOffice[(int)style.Office].ToString(ci));
+            }
+
             sb.Append(" whole ");
             sb.Append(s.WholeIslandSheets.ToString(ci));
             sb.Append(" — total ");
@@ -1492,13 +1670,20 @@ namespace Archivist.Editor
             sb.Append((100.0 * s.OverlapHistogram[3] / total).ToString("F0", ci));
             sb.Append('%');
 
-            sb.Append("\nthin sheets (A5b) hyd ");
-            sb.Append(s.ThinSheetPct[(int)Office.Hydrographic].ToString("F0", ci));
-            sb.Append("% · land ");
-            sb.Append(s.ThinSheetPct[(int)Office.LandSurvey].ToString("F0", ci));
-            sb.Append("% · garr ");
-            sb.Append(s.ThinSheetPct[(int)Office.Garrison].ToString("F0", ci));
-            sb.Append("% · whole-island scale ");
+            sb.Append("\nthin sheets (A5b)");
+            for (int i = 0; i < OfficeStyle.All.Count; i++)
+            {
+                OfficeStyle style = OfficeStyle.All[i];
+                sb.Append(i == 0 ? " " : " · ");
+                sb.Append(style.FooterTag);
+                sb.Append(' ');
+                sb.Append(s.ThinSheetPct[(int)style.Office].ToString("F0", ci));
+                sb.Append('%');
+            }
+
+            sb.Append(" · pois ");
+            sb.Append(_model.Island.Features.Pois.Count.ToString(ci));
+            sb.Append(" · whole-island scale ");
             sb.Append(s.WholeIslandScale);
             sb.Append(" · gen ");
             sb.Append(_model.GenMillis.ToString("F0", ci));
@@ -1522,13 +1707,8 @@ namespace Archivist.Editor
                 sb.Append(_model.Error);
             }
 
-            _footer.text = sb.ToString();
+            _footer.text = OfficeCutWarning() + sb.ToString();
         }
 
-        static string FormatOffice(IslandStats s, Office office, string tag)
-        {
-            int i = (int)office;
-            return tag + " " + s.SheetsPerOffice[i].ToString(CultureInfo.InvariantCulture);
-        }
     }
 }

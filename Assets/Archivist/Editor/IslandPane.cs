@@ -127,7 +127,7 @@ namespace Archivist.Editor
         Rect CanvasRect()
         {
             Rect r = _canvas.contentRect;
-            if (float.IsNaN(r.width) || float.IsNaN(r.height) || r.width < 2.0f || r.height < 2.0f)
+            if (!VectorDraw.Settled(r, 2.0f))
             {
                 return new Rect(0.0f, 0.0f, 0.0f, 0.0f);
             }
@@ -234,54 +234,40 @@ namespace Archivist.Editor
             _cachedLod = lod;
             _cacheValid = true;
 
-            // The coastline at overview zoom is already in hand — Island.Coastline is extracted at
-            // lod 1 over the whole domain (§6.1). Re-extracting it would cost a second of nothing.
-            if (lod <= 1)
-            {
-                _coast = new List<Polyline>(_model.Island.Coastline);
-            }
-            else
-            {
-                _coast = _model.CoastFor(tile, lod);
-            }
+            SheetGeometry g = SheetContent.Gather(_model, tile, lod, GarrisonScale(), GatherGate, true);
+            _coast = g.Coast;
+            _contours = g.Contours;
+            _grid = g.Grid;
+            _soundings = g.Soundings;
+        }
 
-            _contours = _model.ContoursFor(tile, lod, _model.ContourLevels);
+        /// <summary>
+        /// This pane has no office, so the §8.3 matrix does not apply: the user's layer toggles
+        /// decide instead. Coast and contours are the exception — they are gathered whatever the
+        /// toggles say, because the cache above is keyed on (area, lod) alone, so emptying them
+        /// here would leave an empty list behind a still-valid cache when they are switched back
+        /// on. The toggle is applied to them at paint time instead.
+        /// </summary>
+        bool GatherGate(FeatureClass cls)
+        {
+            return cls == FeatureClass.Coast || cls == FeatureClass.Contour || _model.Layer(cls);
+        }
 
-            _soundings.Clear();
-            if (_model.Layer(FeatureClass.Sounding))
-            {
-                try
-                {
-                    List<Sounding> s = Soundings.ForRect(_model.Island.Field, tile);
-                    if (s != null)
-                    {
-                        _soundings = s;
-                    }
-                }
-                catch (Exception e)
-                {
-                    UnityEngine.Debug.LogWarning("[Archivist] soundings failed: " + e.Message);
-                }
-            }
+        /// <summary>
+        /// The §6.4 grid is defined by a survey's scale. Pane 1 has no sheet, so it borrows the
+        /// Garrison survey's — the only office that draws a grid at all.
+        /// </summary>
+        MapScale GarrisonScale()
+        {
+            Survey garrison = _model.Island.SurveyFor(Office.Garrison);
+            return garrison != null ? garrison.Spec.Scale : MapScale.WholeIsland;
+        }
 
-            _grid.Clear();
-            if (_model.Layer(FeatureClass.Grid))
-            {
-                try
-                {
-                    Survey garrison = _model.Island.SurveyFor(Office.Garrison);
-                    MapScale scale = garrison != null ? garrison.Spec.Scale : MapScale.WholeIsland;
-                    List<Polyline> g = GarrisonGrid.ForRect(tile, scale);
-                    if (g != null)
-                    {
-                        _grid = g;
-                    }
-                }
-                catch (Exception e)
-                {
-                    UnityEngine.Debug.LogWarning("[Archivist] garrison grid failed: " + e.Message);
-                }
-            }
+        /// <summary>The point features this pane draws and letters.</summary>
+        FeatureMarks Marks()
+        {
+            IslandFeatures f = _model.Island.Features;
+            return new FeatureMarks(_soundings, f.Peaks, f.Settlements, f.Pois);
         }
 
         static bool SameRect(Rect2 a, Rect2 b)
@@ -303,60 +289,7 @@ namespace Archivist.Editor
                 return;
             }
 
-            IslandFeatures f = _model.Island.Features;
-
-            if (_model.Layer(FeatureClass.Peak))
-            {
-                for (int i = 0; i < f.Peaks.Count; i++)
-                {
-                    Peak p = f.Peaks[i];
-                    Vector2 v = _view.ToView(p.Position);
-                    if (!Inside(rect, v))
-                    {
-                        continue;
-                    }
-
-                    string label = p.SpotHeightM.ToString(CultureInfo.InvariantCulture);
-                    if (!string.IsNullOrEmpty(p.Name))
-                    {
-                        label = p.Name + " " + label;
-                    }
-
-                    _text.Add(label, new Vector2(v.x + 6.0f, v.y - 7.0f), 10.0f, VectorDraw.Ink);
-                }
-            }
-
-            if (_model.Layer(FeatureClass.Settlement))
-            {
-                for (int i = 0; i < f.Settlements.Count; i++)
-                {
-                    Settlement s = f.Settlements[i];
-                    Vector2 v = _view.ToView(s.Position);
-                    if (!Inside(rect, v))
-                    {
-                        continue;
-                    }
-
-                    _text.Add(s.Name, new Vector2(v.x + 6.0f, v.y - 7.0f), 10.0f, VectorDraw.Ink);
-                }
-            }
-
-            // Sounding depths only once a sounding lattice step is wide enough to read.
-            if (_model.Layer(FeatureClass.Sounding)
-                && _view.PixelsPerMetre * Tuning.SoundingLattice > 34.0)
-            {
-                for (int i = 0; i < _soundings.Count; i++)
-                {
-                    Vector2 v = _view.ToView(_soundings[i].Position);
-                    if (!Inside(rect, v))
-                    {
-                        continue;
-                    }
-
-                    _text.Add(_soundings[i].DepthM.ToString(CultureInfo.InvariantCulture),
-                              new Vector2(v.x + 3.0f, v.y - 6.0f), 9.0f, VectorDraw.Ink);
-                }
-            }
+            FeatureLabels.Add(_text, Marks(), _view, LabelGate, v => Inside(rect, v));
 
             // Sheet numbers, so the outlines are readable without hovering every one.
             if (_model.ShowSheetOutlines)
@@ -387,6 +320,20 @@ namespace Archivist.Editor
             }
 
             _text.End();
+        }
+
+        /// <summary>
+        /// Which classes get lettering. Same layer toggles as the ink, with one extra rule:
+        /// sounding depths appear only once a sounding lattice step is wide enough to read.
+        /// </summary>
+        bool LabelGate(FeatureClass cls)
+        {
+            if (cls == FeatureClass.Sounding)
+            {
+                return _model.Layer(cls) && _view.PixelsPerMetre * Tuning.SoundingLattice > 34.0;
+            }
+
+            return _model.Layer(cls);
         }
 
         static bool Inside(Rect rect, Vector2 v)
@@ -423,78 +370,13 @@ namespace Archivist.Editor
 
             Painter2D p = ctx.painter2D;
 
-            // --- map ink: one style, uniform weight, black on white (§8.2) ---
-            VectorDraw.BeginInk(p);
-
-            if (_model.Layer(FeatureClass.Grid))
-            {
-                VectorDraw.Lines(p, _grid, _view, rect);
-            }
-
-            if (_model.Layer(FeatureClass.Contour))
-            {
-                VectorDraw.Lines(p, _contours, _view, rect);
-            }
-
-            if (_model.Layer(FeatureClass.Coast))
-            {
-                VectorDraw.Lines(p, _coast, _view, rect);
-            }
-
+            // --- map ink: one style, uniform weight, black on white (§8.2). This pane has no
+            // office, so the layer toggles stand in for the §8.3 matrix, and the marks are drawn a
+            // notch smaller than on a sheet because the whole island is in view at once. ---
             IslandFeatures f = _model.Island.Features;
-
-            if (_model.Layer(FeatureClass.River))
-            {
-                p.BeginPath();
-                bool any = false;
-                for (int i = 0; i < f.Rivers.Count; i++)
-                {
-                    Polyline course = f.Rivers[i].Course;
-                    if (course != null && VectorDraw.AppendPolyline(p, course.Points, course.Closed, _view, rect))
-                    {
-                        any = true;
-                    }
-                }
-
-                if (any)
-                {
-                    p.Stroke();
-                }
-            }
-
-            if (_model.Layer(FeatureClass.Sounding) && _soundings.Count > 0)
-            {
-                p.BeginPath();
-                for (int i = 0; i < _soundings.Count; i++)
-                {
-                    Vector2 v = _view.ToView(_soundings[i].Position);
-                    if (Inside(rect, v))
-                    {
-                        VectorDraw.AppendTick(p, _soundings[i].Position, 1.5f, _view);
-                    }
-                }
-
-                p.Stroke();
-            }
-
-            if (_model.Layer(FeatureClass.Peak))
-            {
-                p.BeginPath();
-                for (int i = 0; i < f.Peaks.Count; i++)
-                {
-                    VectorDraw.AppendTriangle(p, f.Peaks[i].Position, 3.5f, _view);
-                }
-
-                p.Stroke();
-            }
-
-            if (_model.Layer(FeatureClass.Settlement))
-            {
-                for (int i = 0; i < f.Settlements.Count; i++)
-                {
-                    VectorDraw.Ring(p, f.Settlements[i].Position, 3.0f, _view);
-                }
-            }
+            VectorDraw.PaintFeatures(p,
+                FeatureLines.FromPolylines(_grid, _contours, _coast, VectorDraw.Courses(f.Rivers)),
+                Marks(), _view, rect, MarkSizes.Overview, _model.Layer, v => Inside(rect, v));
 
             // --- debug chrome: the sheet outlines, colour-coded by office (§11.0) ---
             if (_model.ShowSheetOutlines)

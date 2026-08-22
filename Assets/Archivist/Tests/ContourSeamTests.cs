@@ -1,7 +1,6 @@
-using System;
-using System.Collections.Generic;
 using NUnit.Framework;
 using Archivist.Generation;
+using Archivist.Generation.Analysis;
 using Archivist.Generation.Determinism;
 using Archivist.Generation.Geometry;
 
@@ -13,27 +12,27 @@ namespace Archivist.Tests
     /// </summary>
     public class ContourSeamTests
     {
+        /// <summary>
+        /// The fixture and the comparison both come from <see cref="ContourSeam"/>, shared with
+        /// the headless harness's A3. They used to be two copies with an identical preamble and
+        /// a DIFFERENT verdict: this test sorted both sides and required equal counts, the
+        /// harness took nearest neighbours and never compared counts at all. An extra crossing on
+        /// one side failed here and passed there.
+        ///
+        /// <para>This call site keeps the STRICTER form — equal counts, one-to-one pairing.</para>
+        /// </summary>
         [Test]
         public void AdjacentRectsAgreeOnTheSharedBorder()
         {
-            Island isl = Island.FromSeed(Streams.IslandSeed(8412UL, 3));
-            int lod = Contours.LodForScale(5000);
-            double cell = Contours.CellSizeForLod(lod);
-            double tol = 1e-6 * cell;
+            Island isl = Island.FromSeed(Streams.IslandSeed(TestSeeds.Collection, 3));
 
-            V2 c = isl.LandBounds.Centre;
-            Rect2 left  = new Rect2(c.X - 2000, c.Y - 2000, c.X, c.Y + 2000);
-            Rect2 right = new Rect2(c.X, c.Y - 2000, c.X + 2000, c.Y + 2000);
+            ContourSeam.Border border = ContourSeam.AcrossLandCentre(isl, 5000, 2000.0);
+            if (border.Inconclusive) Assert.Ignore("no coastline crosses the border on this seed");
 
-            List<double> a = BorderYs(Contours.Extract(isl.Field, left,  cell, isl.Params.SeaLevel), c.X, tol);
-            List<double> b = BorderYs(Contours.Extract(isl.Field, right, cell, isl.Params.SeaLevel), c.X, tol);
-
-            if (a.Count == 0 && b.Count == 0) Assert.Ignore("no coastline crosses the border on this seed");
-
-            a.Sort(); b.Sort();
-            Assert.AreEqual(a.Count, b.Count, "different number of border crossings");
-            for (int i = 0; i < a.Count; i++)
-                Assert.LessOrEqual(Math.Abs(a[i] - b[i]), tol, "border vertex " + i + " disagrees");
+            ContourSeam.Comparison r = ContourSeam.Compare(border.Left, border.Right, border.Tol,
+                                                           ContourSeam.Matching.SortedPairwise,
+                                                           true /* the counts must match too */);
+            Assert.IsTrue(r.Agree, r.Why);
         }
 
         [Test]
@@ -46,15 +45,6 @@ namespace Archivist.Tests
             Assert.AreEqual(0.0, b.MinX % 64.0, 1e-9);
             Assert.AreEqual(0.0, a.MinY % 64.0, 1e-9);
             Assert.AreEqual(0.0, b.MinY % 64.0, 1e-9);
-        }
-
-        static List<double> BorderYs(IReadOnlyList<Polyline> lines, double x, double tol)
-        {
-            List<double> ys = new List<double>();
-            for (int i = 0; i < lines.Count; i++)
-                for (int v = 0; v < lines[i].Count; v++)
-                    if (Math.Abs(lines[i][v].X - x) <= tol) ys.Add(lines[i][v].Y);
-            return ys;
         }
     }
 }

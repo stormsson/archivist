@@ -49,6 +49,7 @@ namespace Archivist.Editor
             public readonly List<Peak> Peaks = new List<Peak>();
             public readonly List<Settlement> Towns = new List<Settlement>();
             public readonly List<Sounding> Soundings = new List<Sounding>();
+            public readonly List<Poi> Pois = new List<Poi>();
 
             public void ClearGeometry()
             {
@@ -59,6 +60,23 @@ namespace Archivist.Editor
                 Peaks.Clear();
                 Towns.Clear();
                 Soundings.Clear();
+                Pois.Clear();
+            }
+
+            /// <summary>
+            /// The cell's point features. These lists were already filtered by the §8.3 matrix and
+            /// cropped to the shared ground when they were gathered, so painting and lettering them
+            /// need no further gate.
+            /// </summary>
+            public FeatureMarks Marks()
+            {
+                return new FeatureMarks(Soundings, Peaks, Towns, Pois);
+            }
+
+            /// <summary>The cell's line layers, already cut to the crop polygon.</summary>
+            public FeatureLines Lines()
+            {
+                return FeatureLines.FromRuns(Grid, Contours, Coast, Rivers);
             }
         }
 
@@ -440,59 +458,29 @@ namespace Archivist.Editor
                 // Four headers share one row here, so offices are abbreviated and the
                 // "sheet"/"rot" words dropped — the values are unambiguous without them.
                 cell.Header.text = string.Format(CultureInfo.InvariantCulture,
-                                                 "{0} · {1} · #{2} · {3} · {4:F1}°",
+                                                 "{0} · {1} · {2}{3} · {4} · {5:F1}°",
                                                  spec.IsWholeIsland ? "WHOLE" : DebugModel.OfficeAbbr(office),
-                                                 spec.Year, sheet.Number, spec.Scale, sheet.RotationDeg);
+                                                 spec.Year, sheet.IsDetail ? "D" : "#", sheet.Number,
+                                                 spec.Scale, sheet.RotationDeg);
                 cell.Classes.text = "draws: " + DrawnClasses(office);
 
                 int lod = Contours.LodForScale(spec.Scale.Denominator);
 
                 // §8.3 — draw or omit. Every cell asks the matrix, and nothing else decides.
-                if (FeatureMatrix.Draws(office, FeatureClass.Coast))
-                {
-                    ClipInto(_model.CoastFor(bounds, lod), cell.Coast);
-                }
+                // The area-derived layers come back over the whole shared bounds and are then cut
+                // to the crop polygon here; the rest of the classes are cropped below.
+                SheetGeometry g = SheetContent.Gather(_model, bounds, lod, spec.Scale,
+                                                      cls => FeatureMatrix.Draws(office, cls));
 
-                if (FeatureMatrix.Draws(office, FeatureClass.Contour))
-                {
-                    ClipInto(_model.ContoursFor(bounds, lod, _model.ContourLevels), cell.Contours);
-                }
+                ClipInto(g.Coast, cell.Coast);
+                ClipInto(g.Contours, cell.Contours);
+                ClipInto(g.Grid, cell.Grid);
 
-                if (FeatureMatrix.Draws(office, FeatureClass.Grid))
+                for (int k = 0; k < g.Soundings.Count; k++)
                 {
-                    try
+                    if (Inside(g.Soundings[k].Position))
                     {
-                        List<Polyline> g = GarrisonGrid.ForRect(bounds, spec.Scale);
-                        if (g != null)
-                        {
-                            ClipInto(g, cell.Grid);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        UnityEngine.Debug.LogWarning("[Archivist] garrison grid failed: " + e.Message);
-                    }
-                }
-
-                if (FeatureMatrix.Draws(office, FeatureClass.Sounding))
-                {
-                    try
-                    {
-                        List<Sounding> s = Soundings.ForRect(_model.Island.Field, bounds);
-                        if (s != null)
-                        {
-                            for (int k = 0; k < s.Count; k++)
-                            {
-                                if (Inside(s[k].Position))
-                                {
-                                    cell.Soundings.Add(s[k]);
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        UnityEngine.Debug.LogWarning("[Archivist] soundings failed: " + e.Message);
+                        cell.Soundings.Add(g.Soundings[k]);
                     }
                 }
 
@@ -519,6 +507,17 @@ namespace Archivist.Editor
                     }
                 }
 
+                if (FeatureMatrix.Draws(office, FeatureClass.Poi))
+                {
+                    for (int k = 0; k < features.Pois.Count; k++)
+                    {
+                        if (Inside(features.Pois[k].Position))
+                        {
+                            cell.Pois.Add(features.Pois[k]);
+                        }
+                    }
+                }
+
                 if (FeatureMatrix.Draws(office, FeatureClass.Settlement))
                 {
                     for (int k = 0; k < features.Settlements.Count; k++)
@@ -535,7 +534,7 @@ namespace Archivist.Editor
         static string DrawnClasses(Office office)
         {
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < FeatureClasses.Count; i++)
             {
                 FeatureClass cls = (FeatureClass)i;
                 if (!FeatureMatrix.Draws(office, cls))
@@ -801,7 +800,7 @@ namespace Archivist.Editor
         static Rect CanvasRect(Cell cell)
         {
             Rect r = cell.Canvas.contentRect;
-            if (float.IsNaN(r.width) || r.width < 2.0f || r.height < 2.0f)
+            if (!VectorDraw.Settled(r, 2.0f))
             {
                 return new Rect(0.0f, 0.0f, 0.0f, 0.0f);
             }
@@ -825,42 +824,10 @@ namespace Archivist.Editor
             Rect rect = CanvasRect(cell);
             cell.Text.Begin();
 
-            for (int i = 0; i < cell.Peaks.Count; i++)
-            {
-                Peak p = cell.Peaks[i];
-                Vector2 v = cell.View.ToView(p.Position);
-                if (!rect.Contains(v))
-                {
-                    continue;
-                }
-
-                string label = p.SpotHeightM.ToString(CultureInfo.InvariantCulture);
-                if (!string.IsNullOrEmpty(p.Name))
-                {
-                    label = p.Name + " " + label;
-                }
-
-                cell.Text.Add(label, new Vector2(v.x + 6.0f, v.y - 7.0f), 10.0f, VectorDraw.Ink);
-            }
-
-            for (int i = 0; i < cell.Towns.Count; i++)
-            {
-                Vector2 v = cell.View.ToView(cell.Towns[i].Position);
-                if (rect.Contains(v))
-                {
-                    cell.Text.Add(cell.Towns[i].Name, new Vector2(v.x + 6.0f, v.y - 7.0f), 10.0f, VectorDraw.Ink);
-                }
-            }
-
-            for (int i = 0; i < cell.Soundings.Count; i++)
-            {
-                Vector2 v = cell.View.ToView(cell.Soundings[i].Position);
-                if (rect.Contains(v))
-                {
-                    cell.Text.Add(cell.Soundings[i].DepthM.ToString(CultureInfo.InvariantCulture),
-                                  new Vector2(v.x + 3.0f, v.y - 6.0f), 9.0f, VectorDraw.Ink);
-                }
-            }
+            // Peaks, settlements, POIs, soundings. The POI names used to be missing here, which
+            // left this pane — the one whose entire job is "what did each office record" — showing
+            // an unlabelled diamond.
+            FeatureLabels.Add(cell.Text, cell.Marks(), cell.View, null, v => rect.Contains(v));
 
             cell.Text.End();
         }
@@ -881,39 +848,9 @@ namespace Archivist.Editor
             Painter2D p = ctx.painter2D;
 
             // §8.2 — one line style. This is the whole reason A1 can attribute a difference.
-            VectorDraw.BeginInk(p);
-
-            VectorDraw.Runs(p, cell.Grid, false, cell.View, rect);
-            VectorDraw.Runs(p, cell.Contours, false, cell.View, rect);
-            VectorDraw.Runs(p, cell.Coast, false, cell.View, rect);
-            VectorDraw.Runs(p, cell.Rivers, false, cell.View, rect);
-
-            if (cell.Soundings.Count > 0)
-            {
-                p.BeginPath();
-                for (int i = 0; i < cell.Soundings.Count; i++)
-                {
-                    VectorDraw.AppendTick(p, cell.Soundings[i].Position, 2.0f, cell.View);
-                }
-
-                p.Stroke();
-            }
-
-            if (cell.Peaks.Count > 0)
-            {
-                p.BeginPath();
-                for (int i = 0; i < cell.Peaks.Count; i++)
-                {
-                    VectorDraw.AppendTriangle(p, cell.Peaks[i].Position, 4.0f, cell.View);
-                }
-
-                p.Stroke();
-            }
-
-            for (int i = 0; i < cell.Towns.Count; i++)
-            {
-                VectorDraw.Ring(p, cell.Towns[i].Position, 3.5f, cell.View);
-            }
+            // No gate and no cull: the cell's geometry was already matrix-filtered and cropped.
+            VectorDraw.PaintFeatures(p, cell.Lines(), cell.Marks(), cell.View, rect,
+                                     MarkSizes.Sheet, null, null);
 
             // Chrome: the crop boundary, so a rotated cell still shows where the shared ground ends.
             if (_model.ShowCropOutline)

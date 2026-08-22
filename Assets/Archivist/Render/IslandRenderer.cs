@@ -38,8 +38,11 @@ namespace Archivist.Render
             if (h01 != null)
             {
                 double halfWidthPx = GroundImage.MmToPx(RenderTuning.CoastWidthMm, req.PixelsPerPaperMm) * 0.5;
+                // Ink.CoastInk is the single derivation both coast paths call, so this line
+                // and the Strokes vector fallback are the same colour by construction — they
+                // were NOT when each path derived its own (one rounded, one truncated).
                 FieldCoast.Draw(h01, buf.Width, buf.Height, island.Params.SeaLevel,
-                                halfWidthPx, CoastInk(palette), buf);
+                                halfWidthPx, Ink.CoastInk(palette), buf);
             }
 
             // Strokes still draws the discrete features. Coast is cleared when FieldCoast
@@ -50,15 +53,6 @@ namespace Archivist.Render
                                               req.PixelsPerPaperMm, remaining);
             Strokes.Draw(island, strokeReq, gi, buf, palette);
             return buf;
-        }
-
-        /// <summary>Same derivation Strokes uses, so the two coast paths are indistinguishable.</summary>
-        static Rgba CoastInk(Rgba[] palette)
-        {
-            if (palette == null || palette.Length < Bands.Count) return Rgba.FromHex("0c1e2f");
-            Rgba deep = palette[0];
-            const double Darken = 0.55;
-            return new Rgba((byte)(deep.R * Darken), (byte)(deep.G * Darken), (byte)(deep.B * Darken));
         }
 
         /// <summary>

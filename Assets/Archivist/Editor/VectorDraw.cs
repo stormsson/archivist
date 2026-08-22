@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Archivist.Generation.Features;
 using Archivist.Generation.Geometry;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -136,6 +137,105 @@ namespace Archivist.Editor
             ViewTransform t = this;
             t.ViewCentre = new Vector2(viewport.x + viewport.width * 0.5f, viewport.y + viewport.height * 0.5f);
             return t;
+        }
+    }
+
+    /// <summary>
+    /// How big the point marks are drawn, in view points. §8.2 fixes the line WEIGHT and says
+    /// nothing about mark SIZE, so the panes had quietly drifted into three different schemes plus
+    /// a fourth in the SVG exporter. This is the one record of them.
+    ///
+    /// Nothing in §13 measures these, so the numbers are a judgement, not a requirement:
+    /// <see cref="Sheet"/> is the majority scheme (Panes 2 and 3, which agreed with each other),
+    /// and Pane 1 gets that same table scaled by <see cref="OverviewScale"/> because it draws the
+    /// whole island at once and full-size marks silt it up.
+    /// </summary>
+    public struct MarkSizes
+    {
+        /// <summary>Half-length of a sounding's cross tick (§6.3).</summary>
+        public readonly float SoundingTickHalf;
+
+        /// <summary>Half-size of a peak's triangle (§7.1).</summary>
+        public readonly float PeakHalf;
+
+        /// <summary>Radius of a settlement's ring (§7.2).</summary>
+        public readonly float SettlementRadius;
+
+        /// <summary>Half-diagonal of a POI's diamond (POC-03).</summary>
+        public readonly float PoiHalf;
+
+        public MarkSizes(float soundingTickHalf, float peakHalf, float settlementRadius, float poiHalf)
+        {
+            SoundingTickHalf = soundingTickHalf;
+            PeakHalf = peakHalf;
+            SettlementRadius = settlementRadius;
+            PoiHalf = poiHalf;
+        }
+
+        public MarkSizes Scaled(float k)
+        {
+            return new MarkSizes(SoundingTickHalf * k, PeakHalf * k, SettlementRadius * k, PoiHalf * k);
+        }
+
+        /// <summary>Marks on a sheet — one sheet's worth of ground, drawn on its paper.</summary>
+        public static readonly MarkSizes Sheet = new MarkSizes(2.0f, 4.0f, 3.5f, 4.0f);
+
+        /// <summary>
+        /// Pane 1 draws the whole island with every sounding in view at once, and wants the same
+        /// marks a fraction smaller. One factor, so the four stay in proportion and the reason is
+        /// written down rather than living in four unexplained literals.
+        /// </summary>
+        public const float OverviewScale = 0.875f;
+
+        /// <summary>Marks at island overview (Pane 1). Declared after <see cref="Sheet"/>, which it reads.</summary>
+        public static readonly MarkSizes Overview = Sheet.Scaled(OverviewScale);
+
+        /// <summary>
+        /// SVG marks are sized in multiples of the stroke width, not in view points: the file is in
+        /// millimetres on paper, so a fixed point size would mean nothing there.
+        /// </summary>
+        public const double SvgStrokeMultiple = 4.0;
+    }
+
+    /// <summary>
+    /// The line layers a pane has ready to draw, in whichever of the two shapes it holds them:
+    /// whole polylines (Panes 1 and 2 draw them and let the painter cull), or point runs already
+    /// cut to a crop polygon (Pane 3). Exactly one of the two sets is populated.
+    /// </summary>
+    public struct FeatureLines
+    {
+        public IEnumerable<Polyline> Grid, Contours, Coast, Rivers;
+        public IEnumerable<List<V2>> GridRuns, ContourRuns, CoastRuns, RiverRuns;
+
+        public static FeatureLines FromPolylines(IEnumerable<Polyline> grid, IEnumerable<Polyline> contours,
+                                                 IEnumerable<Polyline> coast, IEnumerable<Polyline> rivers)
+        {
+            FeatureLines l = new FeatureLines();
+            l.Grid = grid; l.Contours = contours; l.Coast = coast; l.Rivers = rivers;
+            return l;
+        }
+
+        public static FeatureLines FromRuns(IEnumerable<List<V2>> grid, IEnumerable<List<V2>> contours,
+                                            IEnumerable<List<V2>> coast, IEnumerable<List<V2>> rivers)
+        {
+            FeatureLines l = new FeatureLines();
+            l.GridRuns = grid; l.ContourRuns = contours; l.CoastRuns = coast; l.RiverRuns = rivers;
+            return l;
+        }
+    }
+
+    /// <summary>The point features a pane has ready to draw and to letter.</summary>
+    public struct FeatureMarks
+    {
+        public readonly IReadOnlyList<Sounding> Soundings;
+        public readonly IReadOnlyList<Peak> Peaks;
+        public readonly IReadOnlyList<Settlement> Settlements;
+        public readonly IReadOnlyList<Poi> Pois;
+
+        public FeatureMarks(IReadOnlyList<Sounding> soundings, IReadOnlyList<Peak> peaks,
+                            IReadOnlyList<Settlement> settlements, IReadOnlyList<Poi> pois)
+        {
+            Soundings = soundings; Peaks = peaks; Settlements = settlements; Pois = pois;
         }
     }
 
@@ -446,6 +546,20 @@ namespace Archivist.Editor
             p.LineTo(new Vector2(v.x, v.y + halfPx));
         }
 
+        /// <summary>
+        /// Append a POI's diamond mark as a subpath (POC-03). Distinct at a glance from a
+        /// peak's triangle, a settlement's ring and a sounding's cross, at one line weight.
+        /// </summary>
+        public static void AppendDiamond(Painter2D p, V2 world, float halfPx, ViewTransform t)
+        {
+            Vector2 v = Clamp(t.ToView(world));
+            p.MoveTo(new Vector2(v.x, v.y - halfPx));
+            p.LineTo(new Vector2(v.x + halfPx, v.y));
+            p.LineTo(new Vector2(v.x, v.y + halfPx));
+            p.LineTo(new Vector2(v.x - halfPx, v.y));
+            p.ClosePath();
+        }
+
         /// <summary>Append a peak's triangle mark as a subpath.</summary>
         public static void AppendTriangle(Painter2D p, V2 world, float halfPx, ViewTransform t)
         {
@@ -454,6 +568,168 @@ namespace Archivist.Editor
             p.LineTo(new Vector2(v.x + halfPx, v.y + halfPx));
             p.LineTo(new Vector2(v.x - halfPx, v.y + halfPx));
             p.ClosePath();
+        }
+
+        /// <summary>
+        /// True when a laid-out <c>contentRect</c> is big enough to draw into. NaN fails every
+        /// comparison, so the single <c>&gt;=</c> catches "layout has not settled yet" as well as
+        /// "too small" — which is what the three panes' hand-rolled guards each got partly right.
+        /// </summary>
+        public static bool Settled(Rect r, float minPx)
+        {
+            return r.width >= minPx && r.height >= minPx;
+        }
+
+        /// <summary>Any positive, non-NaN size at all.</summary>
+        public static bool Settled(Rect r)
+        {
+            return Settled(r, float.Epsilon);
+        }
+
+        /// <summary>The rivers' courses as plain polylines, ready for <see cref="Lines"/>.</summary>
+        public static IEnumerable<Polyline> Courses(IReadOnlyList<River> rivers)
+        {
+            if (rivers == null)
+            {
+                yield break;
+            }
+
+            for (int i = 0; i < rivers.Count; i++)
+            {
+                Polyline course = rivers[i].Course;
+                if (course != null)
+                {
+                    yield return course;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Paint one office's map ink, in the order the three interactive panes share: grid,
+        /// contours, coast, rivers, then the point marks — soundings, peaks, settlements, POIs.
+        ///
+        /// The SVG exporter deliberately does NOT come through here: it emits soundings last, and
+        /// that per-backend ordering is a real difference, not drift.
+        /// </summary>
+        /// <param name="gate">Per-class "does this get drawn?". Null means everything; pass the
+        /// §8.3 matrix for a sheet or a cell, the layer toggles for Pane 1.</param>
+        /// <param name="visible">View-space cull for the point marks. Null means draw them all —
+        /// which is what a pane whose geometry is already clipped to its viewport wants.</param>
+        public static void PaintFeatures(Painter2D p, FeatureLines lines, FeatureMarks marks,
+                                         ViewTransform view, Rect clip, MarkSizes sizes,
+                                         Func<FeatureClass, bool> gate, Func<Vector2, bool> visible)
+        {
+            // §8.2 — one line style, uniform weight, black on white, for every class below.
+            BeginInk(p);
+
+            if (Draws(gate, FeatureClass.Grid))
+            {
+                StrokeLayer(p, lines.Grid, lines.GridRuns, view, clip);
+            }
+
+            if (Draws(gate, FeatureClass.Contour))
+            {
+                StrokeLayer(p, lines.Contours, lines.ContourRuns, view, clip);
+            }
+
+            if (Draws(gate, FeatureClass.Coast))
+            {
+                StrokeLayer(p, lines.Coast, lines.CoastRuns, view, clip);
+            }
+
+            if (Draws(gate, FeatureClass.River))
+            {
+                StrokeLayer(p, lines.Rivers, lines.RiverRuns, view, clip);
+            }
+
+            if (Draws(gate, FeatureClass.Sounding) && Count(marks.Soundings) > 0)
+            {
+                p.BeginPath();
+                for (int i = 0; i < marks.Soundings.Count; i++)
+                {
+                    V2 at = marks.Soundings[i].Position;
+                    if (Shows(visible, view, at))
+                    {
+                        AppendTick(p, at, sizes.SoundingTickHalf, view);
+                    }
+                }
+
+                p.Stroke();
+            }
+
+            if (Draws(gate, FeatureClass.Peak) && Count(marks.Peaks) > 0)
+            {
+                p.BeginPath();
+                for (int i = 0; i < marks.Peaks.Count; i++)
+                {
+                    V2 at = marks.Peaks[i].Position;
+                    if (Shows(visible, view, at))
+                    {
+                        AppendTriangle(p, at, sizes.PeakHalf, view);
+                    }
+                }
+
+                p.Stroke();
+            }
+
+            if (Draws(gate, FeatureClass.Settlement) && Count(marks.Settlements) > 0)
+            {
+                for (int i = 0; i < marks.Settlements.Count; i++)
+                {
+                    V2 at = marks.Settlements[i].Position;
+                    if (Shows(visible, view, at))
+                    {
+                        Ring(p, at, sizes.SettlementRadius, view);
+                    }
+                }
+            }
+
+            // POC-03 — points of interest. A diamond, so it reads apart from the peak triangles
+            // and the settlement rings at the one line weight §8.2 allows. Only the Antiquarian
+            // office draws them, and its detail sheet is centred on one (spec §2).
+            if (Draws(gate, FeatureClass.Poi) && Count(marks.Pois) > 0)
+            {
+                p.BeginPath();
+                for (int i = 0; i < marks.Pois.Count; i++)
+                {
+                    V2 at = marks.Pois[i].Position;
+                    if (Shows(visible, view, at))
+                    {
+                        AppendDiamond(p, at, sizes.PoiHalf, view);
+                    }
+                }
+
+                p.Stroke();
+            }
+        }
+
+        /// <summary>One line layer, in whichever of the two shapes the caller holds it.</summary>
+        static void StrokeLayer(Painter2D p, IEnumerable<Polyline> polylines, IEnumerable<List<V2>> runs,
+                                ViewTransform view, Rect clip)
+        {
+            if (polylines != null)
+            {
+                Lines(p, polylines, view, clip);
+            }
+            else if (runs != null)
+            {
+                Runs(p, runs, false, view, clip);
+            }
+        }
+
+        static bool Draws(Func<FeatureClass, bool> gate, FeatureClass cls)
+        {
+            return gate == null || gate(cls);
+        }
+
+        static bool Shows(Func<Vector2, bool> visible, ViewTransform view, V2 world)
+        {
+            return visible == null || visible(view.ToView(world));
+        }
+
+        static int Count<T>(IReadOnlyList<T> list)
+        {
+            return list == null ? 0 : list.Count;
         }
     }
 

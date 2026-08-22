@@ -33,6 +33,43 @@ namespace Archivist.Generation
         public const double SheetMarginMm     = 40.0;
         public const double OverlapFraction   = 0.20;
 
+        // --- Hydrographic coastal strip (D-H3) ---
+        // 841 x 297 mm: A1's long edge by A3's short edge. Map area 801 x 257 mm.
+        // 380 x 200 mm, map 350 x 170 mm -> 875 x 425 m of ground at 1:2500.
+        //
+        // The length is set by the coast, not by paper convention. Tuning.FeatureScale is
+        // 2600 m — the wavelength the coastline wiggles on — and a straight rectangle can
+        // only track a curve if it spans well under one wavelength. At 2002 m the strips
+        // cut across every bay; at ~1/3 of a wavelength they follow it.
+        public const double StripWidthMm      = 380.0;
+        public const double StripHeightMm     = 200.0;
+        public const double StripMarginMm     = 15.0;
+
+        // A survey works a STRETCH of coast, not the whole ring. Without this the office
+        // circumnavigates every island exhaustively, which is both implausible and the
+        // reason no ground was ever left unsurveyed (R1.8 / finding F8).
+        // Tuned against the 10-15 sheet target: 0.50-0.85 gave a mean of 17.2. Half a coast
+        // is also the more believable expedition — a season's work, not a circumnavigation.
+        // An expedition works a REGION, not a fraction of each loop independently. Applying
+        // an arc per loop made the office survey 30% of the main shore while charting remote
+        // skerries end to end, because a loop too small to step across gets one sheet
+        // covering all of it — an expedition no one would mount. The survey is now a disc:
+        // a seeded anchor on the main coast, and everything within reach of it, main shore
+        // and offshore rocks alike. Radius is a fraction of the land bbox diagonal.
+        public const double CoastRegionRadiusMin = 0.34;
+        public const double CoastRegionRadiusMax = 0.62;
+
+        // How far seaward of the shoreline the strip sits, as a fraction of its depth.
+        // 0 centres it on the coast, which puts half of every sheet over ground this
+        // office does not chart; 0.3 leaves roughly a fifth of the strip inland.
+        public const double CoastSeawardBias  = 0.30;
+
+        /// <summary>Loops shorter than this are specks, not coastline. ~190 m across.</summary>
+        public const double CoastMinLoopLength = 600.0;
+
+        /// <summary>Minimum gap between sheet centres, as a fraction of the step.</summary>
+        public const double CoastMinSheetSeparation = 0.75;
+
         // --- scales (§8.1, D5, F1) ---
         // Detail surveys moved 1:5000 -> 1:2500 (F1): at 1:5000 one sheet covered 9.78 km2
         // against islands holding 1-27 km2, so sheet economy sat at a median of 13 against
@@ -48,7 +85,8 @@ namespace Archivist.Generation
         // coastal reconnaissance genuinely IS small-scale work where a terrain survey is
         // not. R2.2 never tied surveys to a shared scale; R2.3 allows three or four fixed
         // values and the set is now exactly four: 2500, 5000, 25000, 50000.
-        public const int    CoastalScaleDenominator = 5000;
+        // 1:2500 with the strip format: 2002 x 642 m of ground per sheet.
+        public const int    CoastalScaleDenominator = 2500;
 
         // --- grid (D4 / §6.4) ---
         // D4 gave two pitches: 1000 m at 1:25000 and 200 m at 1:5000. Both are exactly
@@ -98,5 +136,122 @@ namespace Archivist.Generation
 
         // --- peak lattice ---
         public const double PeakLattice      = 64.0;
+
+        // =====================================================================
+        // POC-03 — points of interest (spec §1) and detail sheets (spec §2).
+        // =====================================================================
+
+        /// <summary>Spec §1.2: "sample candidates on the 128 m lattice, exactly as settlements
+        /// do". Same value as <see cref="SettlementLattice"/>, named separately so the two can
+        /// be tuned apart without one silently moving the other.</summary>
+        public const double PoiLattice        = 128.0;
+
+        /// <summary>Spec §1.3 step 3 — greedy selection spacing, "so POIs do not cluster".
+        /// Comfortably wider than a detail sheet at either candidate scale (275 m at 1:1250,
+        /// 550 m at 1:2500), so no two detail sheets can show the same POI twice.</summary>
+        public const double PoiMinSpacing     = 800.0;
+
+        // --- POI count per island, by character (P1.4: "a few per island, varying by
+        //     character"; an island with none at all is a legitimate outcome, which is what
+        //     the atoll minimum of 0 buys). Inclusive min, exclusive max, matching
+        //     IslandParams.SettlementRangeFor.
+        public const int PoiCountMountainousMin = 3;
+        public const int PoiCountMountainousMax = 8;    // 3-7
+        public const int PoiCountFjordedMin     = 3;
+        public const int PoiCountFjordedMax     = 9;    // 3-8
+        public const int PoiCountAtollMin       = 0;
+        public const int PoiCountAtollMax       = 4;    // 0-3
+
+        /// <summary>How close to a coastline polyline counts as "on the coast" for the shore
+        /// kinds. One lattice cell — the finest band the 128 m candidate lattice can resolve
+        /// without the shore kinds becoming unsatisfiable.</summary>
+        public const double PoiShoreBand      = 128.0;
+
+        /// <summary>"High local relief — steep shore" (spec §1.2). Quantised slope, m/m.</summary>
+        public const double PoiSteepShoreGrad = 0.14;
+
+        /// <summary>A sea arch wants the most vertical shore on the island, not merely a steep
+        /// one, which is what separates it from a cave mouth on the same band.</summary>
+        public const double PoiSeaArchGrad    = 0.22;
+
+        /// <summary>Spec §1.2: Blowhole sits "on land within ~60 m of the coast".</summary>
+        public const double PoiBlowholeCoastDist = 60.0;
+
+        /// <summary>Springs sit above the splash zone, not on the beach.</summary>
+        public const double PoiSpringMinElevation = 20.0;
+
+        /// <summary>
+        /// Spec §1.2's "local gradient convergence", as the quantised discrete Laplacian of
+        /// elevation across one POI lattice cell — see <c>PoiSiting.Convergence</c>. Units are
+        /// m/m summed over both axes, so this is a pure slope difference and not a curvature
+        /// in m^-1. Flow converges where the value is positive; the floor keeps a spring off
+        /// dead-flat ground where the sign is noise.
+        /// </summary>
+        public const double PoiSpringConvergence = 0.0060;
+
+        /// <summary>"Open ground, low gradient" / "low gradient" (spec §1.2), m/m.</summary>
+        public const double PoiOpenGrad       = 0.06;
+
+        /// <summary>"Flat ground, low gradient" — standing stones want flatter than open, m/m.</summary>
+        public const double PoiFlatGrad       = 0.03;
+
+        /// <summary>"Moderate slope, inland" — an enclosure is terraced ground, m/m.</summary>
+        public const double PoiModerateGradMin = 0.06;
+        public const double PoiModerateGradMax = 0.20;
+
+        /// <summary>Erratic boulders sit at mid elevation, as a fraction of MaxElevation.</summary>
+        public const double PoiErraticElevMinFrac = 0.20;
+        public const double PoiErraticElevMaxFrac = 0.60;
+
+        /// <summary>A landmark tree sits low-to-mid, as a fraction of MaxElevation.</summary>
+        public const double PoiTreeElevMinFrac    = 0.05;
+        public const double PoiTreeElevMaxFrac    = 0.40;
+
+        /// <summary>"Away from settlements" — a landmark tree is a landmark because nothing
+        /// else near it is.</summary>
+        public const double PoiTreeSettlementDist = 1000.0;
+
+        /// <summary>Spec §1.2: RuinedChapel sits "within ~1 km of a settlement".</summary>
+        public const double PoiChapelSettlementDist = 1000.0;
+
+        /// <summary>"On or beside a peak — commanding ground". Matches
+        /// <see cref="PeakNmsRadius"/>, so "beside" is one peak-suppression radius.</summary>
+        public const double PoiTowerPeakDist  = 400.0;
+
+        /// <summary>Spec §1.2: Cairn sits at or above this fraction of the island's highest
+        /// peak.</summary>
+        public const double PoiCairnPeakFrac  = 0.50;
+
+        /// <summary>A headland is exposed: shelter at or below this (see
+        /// <see cref="ShelterMeasure"/>; 0.50 is an exposed headland, 0.84 a straight coast).</summary>
+        public const double PoiHeadlandShelterMax = 0.55;
+
+        /// <summary>A jetty needs a sheltered coast (spec §1.2, "reuse §7.2's shelter
+        /// measure"); 1.00 is a bay head, 0.84 a straight coast.</summary>
+        public const double PoiJettyShelterMin = 0.88;
+
+        // --- detail sheets (spec §2.1) ---
+
+        /// <summary>250 x 250 mm paper, 15 mm margin -> a 220 x 220 mm map area (spec §2.1).
+        /// Square, small, and unmistakably a different physical object from an A1 survey sheet
+        /// or a coastal strip (P2.1).</summary>
+        public const double DetailSheetWidthMm  = 250.0;
+        public const double DetailSheetHeightMm = 250.0;
+        public const double DetailSheetMarginMm = 15.0;
+
+        /// <summary>
+        /// <b>THE SWEEP KNOB.</b> Spec §2.1 gives 1:1250 (275 x 275 m) and 1:2500 (550 x 550 m)
+        /// and says explicitly <i>do not pick one from this table</i>: open question 1 says the
+        /// whole design rests on this number and that it cannot be reasoned about, only looked
+        /// at (C7). It ships as a constant precisely so the sweep is a one-line change and no
+        /// literal is buried in the cutter.
+        ///
+        /// <para>The value below is the SWEEP DEFAULT, not a finding. 1:1250 is the tighter of
+        /// the two and therefore the one that actually tests the premise — a sheet roomy enough
+        /// to place itself proves nothing. R2.3 permits three or four fixed scale values; the
+        /// live set is 2500 / 25000 / 50000, so 1250 keeps it legal at four and 2500 keeps it
+        /// at three. Either value is legal; neither is decided.</para>
+        /// </summary>
+        public const int PoiScaleDenominator = 1250;
     }
 }

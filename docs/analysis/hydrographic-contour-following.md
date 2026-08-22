@@ -364,6 +364,53 @@ did not cost cross-office referencing. C8 is untested and needs a player.
 
 ---
 
+## 6.8 Built, looked at, and rebuilt — the sheet was far too big
+
+The first build kept A1 at 1:5000 and only replaced the placement rule. On screen
+it was obviously wrong: twenty huge rectangles at scattered angles, each swallowing
+most of the island. The numbers had already said so and were not read closely
+enough — 60–100% of land covered three or more times, and 0.0% gaps.
+
+**The failure was cross-track depth, not placement.** A1 landscape at 1:5000 is
+3805 m long by **2570 m deep**, so a sheet centred on the shore reaches 1285 m
+inland on an island 6.7 km across. Walking the coast changed only *where* those
+rectangles sat.
+
+| | ground L × D | sheets | redundancy | depth / island | gaps |
+|---|---|---|---|---|---|
+| lattice cutter (original) | 3805 × 2570 | 9.2 | — | 39% | 0.0% |
+| coast walk, A1 @ 1:5000 | 3805 × 2570 | 14.3 | **29.2×** | 39% | 0.0% |
+| coast walk, A1 @ 1:2500 | 1902 × 1285 | 23.1 | 11.5× | 20% | — |
+| **coast walk, strip @ 1:2500 + arc** | **2002 × 642** | **14.3** | **3.6×** | **10%** | **7.5%** |
+
+*redundancy = total Hydrographic sheet footprint ÷ island land area.*
+
+Two changes got there:
+
+1. **A dedicated `SheetFormat.CoastalStrip`** — 841 × 297 mm, map area 801 × 257 mm,
+   at 1:2500 giving **2002 × 642 m**: about 320 m either side of the shore. A
+   survey of a shore wants length along the water and almost no depth inland.
+2. **A seeded coast arc.** Each loop is surveyed over a contiguous stretch of
+   `Tuning.CoastArcMin..Max` (0.32–0.68) of its length, starting at a seeded
+   offset, drawn from `Streams.For(seed, "coastArc", loopIndex)`. Loops needing
+   only one sheet are covered whole — you cannot survey 60% of a skerry.
+
+The arc is what D2 removed as circular, returning in the form §7 originally
+recommended: **seeded, not derived**. Which stretch an expedition worked is a
+historical accident, and deriving it from geometry was the mistake.
+
+### Final measured state
+
+- Hydrographic sheets: **mean 14.3, median 15, range 8–21** (target 10–15)
+- Redundancy **3.6×**, down from 29.2×
+- **Unsurveyed land 7.5%** — R1.8 satisfied for the first time, and finding F8
+  closed. §6.5's correction stands: it was the strip depth plus the arc that did
+  it, not the walk.
+- A4 numbering passes; A6 99.5%; A5b Hydrographic 0.4% thin (1 of 273)
+- Unity 21/21, all source assertions pass
+
+---
+
 ## 7. Recommendation
 
 Proceed as decided in §5, with A2 landscape at 1:2500 and 10% overlap, in this

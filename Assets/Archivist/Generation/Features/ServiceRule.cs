@@ -25,7 +25,7 @@ namespace Archivist.Generation.Features
     /// sparing a hillside that has 50 m of relief and no village.</para>
     ///
     /// <para><b>Presence within u, per class (D1).</b>
-    /// Peak / River / Settlement: a discrete feature of that class within <c>u</c>.
+    /// Peak / River / Settlement / Poi: a discrete feature of that class within <c>u</c>.
     /// Sounding: some sample within <c>u</c> has <c>Elevation &lt; -4 m</c>.
     /// Contour: relief within <c>u</c> spans one contour step, <c>max - min &gt;= 50 m</c>.
     /// Grid: always. Coast: never.</para>
@@ -52,6 +52,7 @@ namespace Archivist.Generation.Features
         readonly bool[] _settlement;
         readonly bool[] _sounding;
         readonly bool[] _relief;
+        readonly bool[] _poi;
 
         /// <summary>u, the island-scale unit. D1 pins it to <c>NominalRadius / 4</c> — see
         /// <see cref="IslandParams.ServiceRadius"/> — never to the land bbox, so the service
@@ -88,6 +89,7 @@ namespace Archivist.Generation.Features
             _settlement = new bool[n];
             _sounding = new bool[n];
             _relief = new bool[n];
+            _poi = new bool[n];
 
             // --- discrete classes: stamp a disc of radius u at each feature ----------
             IReadOnlyList<Peak> peaks = features.Peaks;
@@ -100,6 +102,15 @@ namespace Archivist.Generation.Features
             if (towns != null)
             {
                 for (int i = 0; i < towns.Count; i++) StampDisc(_settlement, towns[i].Position);
+            }
+
+            // POC-03: one more discrete class, stamped exactly like the others. Adding it
+            // cannot move an existing mask bit, and no pre-POC-03 office has Poi in its
+            // Serving set, so Served() is unchanged for all three of them (P1.5).
+            IReadOnlyList<Poi> pois = features.Pois;
+            if (pois != null)
+            {
+                for (int i = 0; i < pois.Count; i++) StampDisc(_poi, pois[i].Position);
             }
 
             IReadOnlyList<River> rivers = features.Rivers;
@@ -171,11 +182,28 @@ namespace Archivist.Generation.Features
         /// </summary>
         public bool Served(V2 p, Office office)
         {
-            IReadOnlyList<FeatureClass> serving = FeatureMatrix.Serving(office);
-            if (serving == null) return false;
-            for (int i = 0; i < serving.Count; i++)
+            return ServedByAny(p, FeatureMatrix.Serving(office));
+        }
+
+        /// <summary>
+        /// <b>POC-03 spec §2.3 — the placeability floor (P2.4), on the same machinery.</b>
+        /// True when any class in <paramref name="classes"/> is present within <c>u</c> of
+        /// <paramref name="p"/>.
+        ///
+        /// <para><see cref="Served"/> is this method over
+        /// <see cref="FeatureMatrix.Serving"/>. A detail sheet is this method over
+        /// <see cref="FeatureMatrix.Placeability"/>, which is the same set with the POI's own
+        /// class removed — "does this office draw anything here BESIDES the thing the sheet is
+        /// centred on". Spec §2.3 asks for exactly one rule serving both purposes rather than a
+        /// second D1, and tightening the floor to the locally distinctive classes (open
+        /// question 2) is then a change to the array this is handed, not to any logic here.</para>
+        /// </summary>
+        public bool ServedByAny(V2 p, IReadOnlyList<FeatureClass> classes)
+        {
+            if (classes == null) return false;
+            for (int i = 0; i < classes.Count; i++)
             {
-                if (ServedClass(p, serving[i])) return true;
+                if (ServedClass(p, classes[i])) return true;
             }
             return false;
         }
@@ -196,33 +224,9 @@ namespace Archivist.Generation.Features
                 case FeatureClass.Settlement: return Lookup(_settlement, p);
                 case FeatureClass.Sounding:   return Lookup(_sounding, p);
                 case FeatureClass.Contour:    return Lookup(_relief, p);
+                case FeatureClass.Poi:        return Lookup(_poi, p);
                 default:                      return false;
             }
-        }
-
-        /// <summary>
-        /// Fraction of <paramref name="landSamples"/> that are served for
-        /// <paramref name="office"/>. §10.3 compares this against
-        /// <see cref="Tuning.ServedThreshold"/> for <b>every</b> office, Garrison included (D1),
-        /// reading the same 16x16 rect samples it already takes for <c>landFraction</c> so no
-        /// extra field evaluation is needed. An empty sample set is unserved.
-        /// </summary>
-        public double ServedFraction(V2[] landSamples, Office office)
-        {
-            if (landSamples == null || landSamples.Length == 0) return 0.0;
-
-            IReadOnlyList<FeatureClass> serving = FeatureMatrix.Serving(office);
-            if (serving == null || serving.Count == 0) return 0.0;
-
-            int served = 0;
-            for (int s = 0; s < landSamples.Length; s++)
-            {
-                for (int c = 0; c < serving.Count; c++)
-                {
-                    if (ServedClass(landSamples[s], serving[c])) { served++; break; }
-                }
-            }
-            return (double)served / landSamples.Length;
         }
 
         // -------------------------------------------------------------------------------

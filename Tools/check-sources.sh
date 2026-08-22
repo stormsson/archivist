@@ -5,11 +5,18 @@ set -u
 GEN="$(cd "$(dirname "$0")/.." && pwd)/Assets/Archivist/Generation"
 fail=0
 
+# Comment lines are stripped before matching. The rules forbid these APIs in CODE;
+# a comment that NAMES one ("never use UnityEngine.Random") is documentation, and
+# failing on it trains people to delete the very comments that explain the rule.
+# grep output is prefixed "path:line:", so the anchor must skip past that before
+# looking for the comment marker.
+strip_comments() { grep -vE '^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)'; }
+
 check() {  # name, pattern, extra grep args
   local name="$1"; shift
   local pat="$1"; shift
   local hits
-  hits=$(grep -rnE "$pat" "$GEN" --include='*.cs' "$@" || true)
+  hits=$(grep -rnE "$pat" "$GEN" --include='*.cs' "$@" | strip_comments || true)
   if [ -n "$hits" ]; then
     echo "  FAIL  $name"
     echo "$hits" | sed 's|^|          |'
@@ -25,7 +32,7 @@ check "no UnityEngine.Random"   'UnityEngine\.Random|Random\.(value|Range|inside
 # The §4.1 hazard is seeding from GetHashCode (string.GetHashCode is process-randomised).
 # An `override int GetHashCode()` on our own value type is for dictionary lookup only and
 # never drives generation, so that one declaration line is exempt.
-hits=$(grep -rnE '\.GetHashCode\(\)' "$GEN" --include='*.cs' | grep -v 'override int GetHashCode' || true)
+hits=$(grep -rnE '\.GetHashCode\(\)' "$GEN" --include='*.cs' | strip_comments | grep -v 'override int GetHashCode' || true)
 if [ -n "$hits" ]; then
   echo "  FAIL  no GetHashCode used for seeding"
   echo "$hits" | sed 's|^|          |'

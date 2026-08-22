@@ -47,10 +47,8 @@ namespace Archivist.Generation.Features
             // bbox grown by the shelter radius so that every candidate's 600 m neighbourhood is
             // fully inside the sampled block — otherwise a coastal candidate near the bbox edge
             // would see truncated water and read as more enclosed than it is.
-            int gx0 = (int)Math.Floor((landBounds.MinX - shelterR) / cell);
-            int gx1 = (int)Math.Ceiling((landBounds.MaxX + shelterR) / cell);
-            int gy0 = (int)Math.Floor((landBounds.MinY - shelterR) / cell);
-            int gy1 = (int)Math.Ceiling((landBounds.MaxY + shelterR) / cell);
+            int gx0, gx1, gy0, gy1;
+            Lattice.Bounds(landBounds, cell, shelterR, out gx0, out gx1, out gy0, out gy1);
 
             int nx = gx1 - gx0 + 1;
             int ny = gy1 - gy0 + 1;
@@ -68,11 +66,15 @@ namespace Archivist.Generation.Features
             }
 
             // --- step 1a: proximity to a coastline polyline --------------------------
-            bool[] nearCoast = new bool[nx * ny];
-            MarkNearCoast(coast, nearCoast, gx0, gy0, nx, ny, cell, Tuning.SettlementCoastDist);
+            // The shared sweep records the DISTANCE to the nearest coastline segment and leaves
+            // double.MaxValue outside the band. This pass only asks the boolean question "is this
+            // cell inside the band", which is exactly "did the sweep record anything here" — see
+            // Lattice.MarkCoastDistance for why the two readings are bit-for-bit the same test.
+            double[] coastDist = new double[nx * ny];
+            Lattice.MarkCoastDistance(coast, Tuning.SettlementCoastDist, gx0, gy0, nx, ny, cell, coastDist);
 
             // --- the shelter disc, precomputed once ---------------------------------
-            Offset[] discOffsets = BuildDiscOffsets(shelterR, cell);
+            Lattice.Offset[] discOffsets = Lattice.Disc(shelterR, cell);
 
             // --- steps 1b, 2, 3: candidates, scores, total order ---------------------
             List<Candidate> candidates = new List<Candidate>();
@@ -94,7 +96,7 @@ namespace Archivist.Generation.Features
                     double gradQ = Q.Grad(field.Gradient(x, y).Length);
                     bool flat = gradQ < Tuning.SettlementFlatGrad;
 
-                    if (!flat && !nearCoast[i]) continue;
+                    if (!flat && coastDist[i] == double.MaxValue) continue;
 
                     double shelter = Shelter(isLand, discOffsets, ix, iy, nx, ny);
                     double flatness = Flatness(gradQ);
@@ -173,8 +175,12 @@ namespace Archivist.Generation.Features
         /// matters, concavity, over the whole coastal range <c>land ∈ [0, 2/3]</c>, and it is one
         /// multiply-add per sample. If the map reads wrong, the exponent on <c>land</c> is the
         /// single knob: raising it moves the optimum deeper into the inlet.</para>
+        ///
+        /// <para>The arithmetic itself lives in <see cref="ShelterMeasure.FromLandFraction"/>
+        /// so POC-03's POI siting (spec §1.2) can reuse the same measure rather than copy it.
+        /// Only the land-fraction count is local to this pass.</para>
         /// </summary>
-        static double Shelter(bool[] isLand, Offset[] disc, int ix, int iy, int nx, int ny)
+        static double Shelter(bool[] isLand, Lattice.Offset[] disc, int ix, int iy, int nx, int ny)
         {
             int total = 0;
             int land = 0;
@@ -188,11 +194,7 @@ namespace Archivist.Generation.Features
             }
             if (total == 0) return 0.0;
 
-            double l = (double)land / total;
-            double s = 1.0 - l;
-            double v = 6.75 * l * l * s;          // 27/4, the normaliser for the l = 2/3 maximum
-            if (v < 0.0) return 0.0;
-            return v > 1.0 ? 1.0 : v;
+            return ShelterMeasure.FromLandFraction((double)land / total);
         }
 
         /// <summary>
@@ -212,91 +214,13 @@ namespace Archivist.Generation.Features
 
         // -------------------------------------------------------------------------------
 
-        /// <summary>
-        /// Marks every lattice cell within <paramref name="dist"/> of any coastline segment.
-        /// Exact point-to-segment distance, but only over each segment's bbox grown by
-        /// <paramref name="dist"/>, so the cost is linear in coastline length rather than
-        /// O(candidates x segments).
-        /// </summary>
-        static void MarkNearCoast(IReadOnlyList<Polyline> coast, bool[] nearCoast,
-                                  int gx0, int gy0, int nx, int ny, double cell, double dist)
-        {
-            if (coast == null) return;
-            double dist2 = dist * dist;
-
-            for (int c = 0; c < coast.Count; c++)
-            {
-                Polyline line = coast[c];
-                if (line == null || line.Count < 1) continue;
-
-                int segCount = line.Closed ? line.Count : line.Count - 1;
-                for (int s = 0; s < segCount; s++)
-                {
-                    V2 a = line[s];
-                    V2 b = line[(s + 1) % line.Count];
-
-                    double minX = Math.Min(a.X, b.X) - dist;
-                    double maxX = Math.Max(a.X, b.X) + dist;
-                    double minY = Math.Min(a.Y, b.Y) - dist;
-                    double maxY = Math.Max(a.Y, b.Y) + dist;
-
-                    int ix0 = (int)Math.Ceiling(minX / cell) - gx0;
-                    int ix1 = (int)Math.Floor(maxX / cell) - gx0;
-                    int iy0 = (int)Math.Ceiling(minY / cell) - gy0;
-                    int iy1 = (int)Math.Floor(maxY / cell) - gy0;
-
-                    if (ix0 < 0) ix0 = 0;
-                    if (iy0 < 0) iy0 = 0;
-                    if (ix1 > nx - 1) ix1 = nx - 1;
-                    if (iy1 > ny - 1) iy1 = ny - 1;
-
-                    for (int ix = ix0; ix <= ix1; ix++)
-                    {
-                        double x = (gx0 + ix) * cell;
-                        for (int iy = iy0; iy <= iy1; iy++)
-                        {
-                            int i = ix * ny + iy;
-                            if (nearCoast[i]) continue;
-                            if (DistSqToSegment(new V2(x, (gy0 + iy) * cell), a, b) <= dist2) nearCoast[i] = true;
-                        }
-                    }
-                }
-            }
-        }
-
-        static double DistSqToSegment(V2 p, V2 a, V2 b)
-        {
-            V2 ab = b - a;
-            double len2 = ab.LengthSq;
-            if (len2 <= 0.0) return V2.DistSq(p, a);
-            double t = V2.Dot(p - a, ab) / len2;
-            if (t < 0.0) t = 0.0;
-            else if (t > 1.0) t = 1.0;
-            return V2.DistSq(p, a + ab * t);
-        }
-
-        static Offset[] BuildDiscOffsets(double radius, double cell)
-        {
-            int r = (int)Math.Floor(radius / cell);
-            double r2 = radius * radius;
-            List<Offset> list = new List<Offset>();
-            for (int dx = -r; dx <= r; dx++)
-            {
-                for (int dy = -r; dy <= r; dy++)
-                {
-                    double ox = dx * cell, oy = dy * cell;
-                    if (ox * ox + oy * oy <= r2) list.Add(new Offset(dx, dy));
-                }
-            }
-            return list.ToArray();
-        }
-
+        /// <summary>§7.2 step 3's total order: score desc, then <see cref="TotalOrder.ByPosition"/>.
+        /// Descending on the primary key, which is why the comparator is written out here rather
+        /// than shared whole — <see cref="PoiSiting"/>'s primary key ascends.</summary>
         static int CompareCandidates(Candidate a, Candidate b)
         {
             if (a.Score != b.Score) return a.Score > b.Score ? -1 : 1;      // desc
-            if (a.Position.X != b.Position.X) return a.Position.X < b.Position.X ? -1 : 1;
-            if (a.Position.Y != b.Position.Y) return a.Position.Y < b.Position.Y ? -1 : 1;
-            return 0;
+            return TotalOrder.ByPosition(a.Position, b.Position);
         }
 
         readonly struct Candidate
@@ -304,13 +228,6 @@ namespace Archivist.Generation.Features
             public readonly V2 Position;
             public readonly double Score;
             public Candidate(V2 position, double score) { Position = position; Score = score; }
-        }
-
-        readonly struct Offset
-        {
-            public readonly int Dx;
-            public readonly int Dy;
-            public Offset(int dx, int dy) { Dx = dx; Dy = dy; }
         }
     }
 }

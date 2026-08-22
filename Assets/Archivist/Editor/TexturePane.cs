@@ -403,9 +403,7 @@ namespace Archivist.Editor
         {
             if (!_model.HasIsland)
             {
-                _title.text = _model.Error != null
-                    ? "Texture — generation failed: " + _model.Error
-                    : "Texture — no island";
+                _title.text = "Texture — " + _model.NoIslandMessage(": " + _model.Error);
                 ShowEmpty(_overview, "No island to render.");
                 ShowEmpty(_sheet, "No island to render.");
                 _overview.Key = null;
@@ -542,29 +540,20 @@ namespace Archivist.Editor
         void RenderOverview()
         {
             GenIsland island = _model.Island;
-            Rect2 bounds = island.LandBounds;
-            bool fellBack = false;
 
             // A degenerate island (no land above sea level at all) leaves LandBounds empty, and
             // Rect2.Empty has a negative width — every dimension would collapse to 1 px. Fall back
-            // to the domain square and say so, exactly as DebugModel.ViewExtent does.
-            if (bounds.IsEmpty || bounds.Width <= 0.0 || bounds.Height <= 0.0)
-            {
-                double half = island.Params.DomainMetres * 0.5;
-                bounds = new Rect2(-half, -half, half, half);
-                fellBack = true;
-            }
+            // to the domain square and say so. The fallback itself is DebugModel.SafeExtent, which
+            // is what DebugModel.ViewExtent and HeightMapping.Calibrate use too.
+            bool fellBack;
+            Rect2 bounds = DebugModel.SafeExtent(island.LandBounds, island.Params.DomainMetres,
+                                                 out fellBack);
 
             double asked = OverviewPxPerMetre;
             bool clamped;
-            double used = FitResolution(bounds.Width, bounds.Height, asked, out clamped);
+            double used;
+            RenderRequest req = OverviewRequest(bounds, asked, out used, out clamped);
 
-            RenderRequest req = new RenderRequest(bounds, 0.0, used,
-                                                  RenderTuning.SheetPxPerPaperMm, _layers);
-
-            // ForIsland(island, used, _layers) builds exactly this when LandBounds is healthy; the
-            // explicit constructor is only here so the empty-bounds fallback above has somewhere
-            // to go.
             RenderInto(_overview, island, req, KeyFor(_overview), asked, used, clamped);
 
             if (fellBack)
@@ -573,6 +562,53 @@ namespace Archivist.Editor
                                       + island.Params.DomainMetres.ToString("F0", CultureInfo.InvariantCulture)
                                       + " m domain instead. " + _overview.Status.text;
             }
+        }
+
+        /// <summary>
+        /// The overview request for one asked-for resolution, clamped to fit, and the resolution
+        /// actually used. Shared by the interactive render and the sweep (§11 B5): the sweep exists
+        /// to measure what the interactive path costs, so if the two built their requests
+        /// separately the measurement would quietly stop describing the thing being measured.
+        ///
+        /// <para><c>RenderRequest.ForIsland(island, used, _layers)</c> builds exactly this when
+        /// LandBounds is healthy; the explicit constructor is only here so the empty-bounds
+        /// fallback in <see cref="RenderOverview"/> has somewhere to go.</para>
+        /// </summary>
+        RenderRequest OverviewRequest(Rect2 bounds, double askedPxPerMetre,
+                                      out double used, out bool clamped)
+        {
+            used = FitResolution(bounds.Width, bounds.Height, askedPxPerMetre, out clamped);
+            return new RenderRequest(bounds, 0.0, used, RenderTuning.SheetPxPerPaperMm, _layers);
+        }
+
+        /// <summary>
+        /// The request for one sheet at an asked-for paper resolution, clamped to fit, and the
+        /// paper resolution actually used. Shared by the interactive render and the sweep — and the
+        /// ForSheet workaround below is precisely why: it used to be written out twice, comment
+        /// included, so fixing RenderRequest.ForSheet and deleting one copy would have left the
+        /// other rendering the patch of ground at the origin for every sheet.
+        /// </summary>
+        RenderRequest SheetRequest(Sheet sheet, double askedPpmm, out double usedPpmm, out bool clamped)
+        {
+            Rect2 frame = sheet.FrameRect;
+            double denominator = sheet.Survey.Scale.Denominator;
+            double askedPxPerMetre = askedPpmm * 1000.0 / denominator;
+
+            double usedPxPerMetre = FitResolution(frame.Width, frame.Height, askedPxPerMetre, out clamped);
+
+            // Shrink the paper resolution by the same factor rather than only the ground one, so a
+            // clamped sheet keeps its stroke weights in proportion (§7 widths are paper mm).
+            usedPpmm = askedPpmm * (askedPxPerMetre > 0.0 ? usedPxPerMetre / askedPxPerMetre : 1.0);
+
+            RenderRequest derived = RenderRequest.ForSheet(sheet, usedPpmm, _layers);
+
+            // ForSheet currently re-seats the frame rect at the origin (Archivist.Render/
+            // RenderRequest.cs: `new Rect2(0, 0, frame.Width, frame.Height)`), which would render
+            // the same patch of ground for every sheet and sink B1 outright. Put the real frame
+            // rect back. If ForSheet is fixed to keep the position, this becomes a no-op rather
+            // than a conflict.
+            return new RenderRequest(frame, derived.RotationDeg, derived.PixelsPerMetre,
+                                     derived.PixelsPerPaperMm, derived.Layers);
         }
 
         void RenderSheet()
@@ -598,25 +634,9 @@ namespace Archivist.Editor
             }
 
             double askedPpmm = SheetPxPerPaperMm;
-            double denominator = sheet.Survey.Scale.Denominator;
-            double askedPxPerMetre = askedPpmm * 1000.0 / denominator;
-
             bool clamped;
-            double usedPxPerMetre = FitResolution(frame.Width, frame.Height, askedPxPerMetre, out clamped);
-
-            // Shrink the paper resolution by the same factor rather than only the ground one, so a
-            // clamped sheet keeps its stroke weights in proportion (§7 widths are paper mm).
-            double usedPpmm = askedPpmm * (askedPxPerMetre > 0.0 ? usedPxPerMetre / askedPxPerMetre : 1.0);
-
-            RenderRequest derived = RenderRequest.ForSheet(sheet, usedPpmm, _layers);
-
-            // ForSheet currently re-seats the frame rect at the origin (Archivist.Render/
-            // RenderRequest.cs: `new Rect2(0, 0, frame.Width, frame.Height)`), which would render
-            // the same patch of ground for every sheet and sink B1 outright. Put the real frame
-            // rect back. If ForSheet is fixed to keep the position, this becomes a no-op rather
-            // than a conflict.
-            RenderRequest req = new RenderRequest(frame, derived.RotationDeg, derived.PixelsPerMetre,
-                                                  derived.PixelsPerPaperMm, derived.Layers);
+            double usedPpmm;
+            RenderRequest req = SheetRequest(sheet, askedPpmm, out usedPpmm, out clamped);
 
             RenderInto(_sheet, island, req, KeyFor(_sheet), askedPpmm, usedPpmm, clamped);
 
@@ -687,19 +707,12 @@ namespace Archivist.Editor
         void RenderInto(Side side, GenIsland island, RenderRequest req, string key,
                         double asked, double used, bool clamped)
         {
-            ImageBuffer buf;
             double millis;
-            try
+            string error;
+            ImageBuffer buf = RenderTimed(island, req, out millis, out error);
+            if (buf == null)
             {
-                Stopwatch sw = Stopwatch.StartNew();
-                buf = IslandRenderer.Render(island, req);
-                sw.Stop();
-                millis = sw.Elapsed.TotalMilliseconds;
-            }
-            catch (Exception e)
-            {
-                UnityEngine.Debug.LogException(e);
-                ShowEmpty(side, "Render failed — " + e.GetType().Name + ": " + e.Message);
+                ShowEmpty(side, "Render failed — " + error);
                 side.Key = null;
                 side.Status.text = "";
                 return;
@@ -719,23 +732,71 @@ namespace Archivist.Editor
             side.Status.text = StatusText(side, asked, used, clamped);
         }
 
-        string StatusText(Side side, double asked, double used, bool clamped)
+        /// <summary>
+        /// One render, timed, never throwing. The only place the Editor calls
+        /// <see cref="IslandRenderer.Render"/>: the interactive path and the sweep both need the
+        /// Stopwatch around exactly that one call and the same "a failure is a message, not an
+        /// exception through the Editor" contract, and two copies meant two catch blocks to keep
+        /// in step. Returns null on failure, with <paramref name="error"/> set to the text to show;
+        /// the caller supplies its own prefix.
+        /// </summary>
+        static ImageBuffer RenderTimed(GenIsland island, RenderRequest req,
+                                       out double millis, out string error)
         {
-            CultureInfo ci = CultureInfo.InvariantCulture;
-            ImageBuffer buf = side.Buffer;
+            try
+            {
+                Stopwatch sw = Stopwatch.StartNew();
+                ImageBuffer buf = IslandRenderer.Render(island, req);
+                sw.Stop();
+                millis = sw.Elapsed.TotalMilliseconds;
+                error = null;
+                return buf;
+            }
+            catch (Exception e)
+            {
+                UnityEngine.Debug.LogException(e);
+                millis = 0.0;
+                error = e.GetType().Name + ": " + e.Message;
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// The measurement row: pixels, megapixels, milliseconds, nanoseconds per pixel. §11 B4's
+        /// number, and the sweep's (§11 B5) — they were the same four figures computed twice, so
+        /// the ns/px the status line showed and the ns/px the sweep report showed were only
+        /// coincidentally comparable.
+        ///
+        /// <para>The two differ in spacing alone: the status line is one line of chrome and reads
+        /// with "·", the sweep report is a column and reads with double spaces. The separator is
+        /// the parameter; the numbers are not. (Merging them dropped the parentheses the status
+        /// line used to put round the MP figure — spacing, not information.)</para>
+        /// </summary>
+        static string MetricsRow(ImageBuffer buf, double millis, string separator, CultureInfo ci)
+        {
             long pixels = (long)buf.Width * buf.Height;
 
             StringBuilder sb = new StringBuilder();
             sb.Append(buf.Width.ToString(ci));
             sb.Append(" × ");
             sb.Append(buf.Height.ToString(ci));
-            sb.Append(" px (");
+            sb.Append(" px");
+            sb.Append(separator);
             sb.Append((pixels / 1000000.0).ToString("F2", ci));
-            sb.Append(" MP) · ");
-            sb.Append(side.Millis.ToString("F0", ci));
-            sb.Append(" ms · ");
-            sb.Append((pixels > 0 ? side.Millis * 1000000.0 / pixels : 0.0).ToString("F0", ci));
+            sb.Append(" MP");
+            sb.Append(separator);
+            sb.Append(millis.ToString("F0", ci));
+            sb.Append(" ms");
+            sb.Append(separator);
+            sb.Append((pixels > 0 ? millis * 1000000.0 / pixels : 0.0).ToString("F0", ci));
             sb.Append(" ns/px");
+            return sb.ToString();
+        }
+
+        string StatusText(Side side, double asked, double used, bool clamped)
+        {
+            CultureInfo ci = CultureInfo.InvariantCulture;
+            StringBuilder sb = new StringBuilder(MetricsRow(side.Buffer, side.Millis, " · ", ci));
 
             if (clamped)
             {
@@ -1013,11 +1074,12 @@ namespace Archivist.Editor
             sb.Append(" · layers ");
             sb.Append(_layers.ToString());
 
-            Rect2 bounds = island.LandBounds;
-            if (bounds.IsEmpty || bounds.Width <= 0.0 || bounds.Height <= 0.0)
+            // Same fallback the interactive overview takes, from the same place (§11.0).
+            bool fellBack;
+            Rect2 bounds = DebugModel.SafeExtent(island.LandBounds, island.Params.DomainMetres,
+                                                 out fellBack);
+            if (fellBack)
             {
-                double half = island.Params.DomainMetres * 0.5;
-                bounds = new Rect2(-half, -half, half, half);
                 sb.Append("\n(LandBounds empty — swept over the whole domain instead)");
             }
 
@@ -1036,9 +1098,8 @@ namespace Archivist.Editor
                     }
 
                     bool clamped;
-                    double used = FitResolution(bounds.Width, bounds.Height, asked, out clamped);
-                    RenderRequest req = new RenderRequest(bounds, 0.0, used,
-                                                          RenderTuning.SheetPxPerPaperMm, _layers);
+                    double used;
+                    RenderRequest req = OverviewRequest(bounds, asked, out used, out clamped);
 
                     sb.Append("\n  island  ");
                     sb.Append(asked.ToString("F3", ci));
@@ -1060,7 +1121,6 @@ namespace Archivist.Editor
                     }
                     else
                     {
-                        double denominator = sheet.Survey.Scale.Denominator;
                         for (int i = 0; i < SheetLadder.Length; i++)
                         {
                             double askedPpmm = SheetLadder[i];
@@ -1073,23 +1133,14 @@ namespace Archivist.Editor
                                 break;
                             }
 
-                            double askedPxPerMetre = askedPpmm * 1000.0 / denominator;
                             bool clamped;
-                            double usedPxPerMetre = FitResolution(frame.Width, frame.Height,
-                                                                  askedPxPerMetre, out clamped);
-                            double usedPpmm = askedPpmm
-                                            * (askedPxPerMetre > 0.0 ? usedPxPerMetre / askedPxPerMetre : 1.0);
-
-                            RenderRequest derived = RenderRequest.ForSheet(sheet, usedPpmm, _layers);
-                            RenderRequest req = new RenderRequest(frame, derived.RotationDeg,
-                                                                  derived.PixelsPerMetre,
-                                                                  derived.PixelsPerPaperMm,
-                                                                  derived.Layers);
+                            double usedPpmm;
+                            RenderRequest req = SheetRequest(sheet, askedPpmm, out usedPpmm, out clamped);
 
                             sb.Append("\n    sheet  ");
                             sb.Append(askedPpmm.ToString("F2", ci));
                             sb.Append(" px/mm (");
-                            sb.Append(derived.PixelsPerMetre.ToString("F3", ci));
+                            sb.Append(req.PixelsPerMetre.ToString("F3", ci));
                             sb.Append(" px/m)  ");
                             sb.Append(SweepRow(island, req, clamped, usedPpmm, ci,
                                                folder, SheetFileName(island, sheet, usedPpmm)));
@@ -1121,33 +1172,15 @@ namespace Archivist.Editor
         static string SweepRow(GenIsland island, RenderRequest req, bool clamped, double used,
                                CultureInfo ci, string folder, string fileName)
         {
-            ImageBuffer buf;
             double millis;
-            try
+            string error;
+            ImageBuffer buf = RenderTimed(island, req, out millis, out error);
+            if (buf == null)
             {
-                Stopwatch sw = Stopwatch.StartNew();
-                buf = IslandRenderer.Render(island, req);
-                sw.Stop();
-                millis = sw.Elapsed.TotalMilliseconds;
-            }
-            catch (Exception e)
-            {
-                UnityEngine.Debug.LogException(e);
-                return "render failed — " + e.GetType().Name + ": " + e.Message;
+                return "render failed — " + error;
             }
 
-            long pixels = (long)buf.Width * buf.Height;
-            StringBuilder row = new StringBuilder();
-            row.Append(buf.Width.ToString(ci));
-            row.Append(" × ");
-            row.Append(buf.Height.ToString(ci));
-            row.Append(" px  ");
-            row.Append((pixels / 1000000.0).ToString("F2", ci));
-            row.Append(" MP  ");
-            row.Append(millis.ToString("F0", ci));
-            row.Append(" ms  ");
-            row.Append((pixels > 0 ? millis * 1000000.0 / pixels : 0.0).ToString("F0", ci));
-            row.Append(" ns/px");
+            StringBuilder row = new StringBuilder(MetricsRow(buf, millis, "  ", ci));
 
             if (clamped)
             {

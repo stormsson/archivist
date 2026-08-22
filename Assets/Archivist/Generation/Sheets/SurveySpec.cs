@@ -36,10 +36,22 @@ namespace Archivist.Generation.Sheets
         public readonly V2 CentreGround;
         public readonly double RotationDeg;       // == Survey.RotationDeg
 
+        /// <summary>
+        /// POC-03 spec §2.4 — false for every survey sheet, true for a detail sheet.
+        ///
+        /// <para>Detail sheets file under the same given order as everything else (P2.7) but
+        /// form their own numbered run <c>1..M</c>, independent of any survey run, so a gap in
+        /// each stays unambiguous (R2.10b). With POIs given their own office (the project
+        /// owner's deviation from spec §3) that run is a whole survey rather than a sub-series,
+        /// and A4's existing per-survey contiguity check covers it unchanged.</para>
+        /// </summary>
+        public readonly bool IsDetail;
+
         public Sheet(SurveySpec survey, int number, V2 centreGround)
         {
             Survey = survey; Number = number; CentreGround = centreGround;
             RotationDeg = survey.RotationDeg;
+            IsDetail = false;
         }
 
         /// <summary>
@@ -51,6 +63,18 @@ namespace Archivist.Generation.Sheets
         {
             Survey = survey; Number = number; CentreGround = centreGround;
             RotationDeg = rotationDeg;
+            IsDetail = false;
+        }
+
+        /// <summary>
+        /// POC-03 spec §2.2/§2.4 — a detail sheet: per-sheet rotation, its own numbering run,
+        /// and <see cref="IsDetail"/> set. Only <see cref="DetailSheetCutter"/> calls this.
+        /// </summary>
+        public Sheet(SurveySpec survey, int number, V2 centreGround, double rotationDeg, bool isDetail)
+        {
+            Survey = survey; Number = number; CentreGround = centreGround;
+            RotationDeg = rotationDeg;
+            IsDetail = isDetail;
         }
 
         /// <summary>The sheet rect in FRAME space (axis-aligned there, §10.2 step 2).</summary>
@@ -71,6 +95,27 @@ namespace Archivist.Generation.Sheets
             var outp = new V2[4];
             for (int i = 0; i < 4; i++) outp[i] = CentreGround + local[i].RotateDeg(RotationDeg);
             return outp;
+        }
+
+        /// <summary>
+        /// Exact point-in-sheet test: is this ground point inside the sheet's rotated rect?
+        ///
+        /// <para>Point-in-rotated-rect is awkward in ground space, so the point is rotated by
+        /// <c>-RotationDeg</c> into FRAME space — the same transform <see cref="FrameRect"/>
+        /// applies to the centre — where the sheet is axis-aligned and the test is a plain
+        /// <see cref="Rect2.Contains"/>.</para>
+        ///
+        /// <para>This exists because <see cref="GroundBounds"/> is the AABB *of* the rotated
+        /// rect, so it strictly over-counts: for any rotation that is not a multiple of 90°
+        /// the AABB includes four corner wedges that the sheet does not cover, and a point
+        /// there passes an AABB test while lying off the sheet. Callers asking "does this
+        /// sheet cover that point" must use this; <see cref="GroundBounds"/> is only for
+        /// snapping a contouring area to the lattice, where over-covering is harmless.</para>
+        /// </summary>
+        public bool Contains(V2 groundPoint)
+        {
+            V2 f = groundPoint.RotateDeg(-RotationDeg);
+            return FrameRect.Contains(f);
         }
 
         /// <summary>Ground-space AABB of the rotated rect — what gets snapped to the lattice for contouring.</summary>

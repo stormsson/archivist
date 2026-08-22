@@ -96,7 +96,12 @@ namespace Archivist.Editor
         {
             SurveySpec spec = sheet.Survey;
             string who = spec.IsWholeIsland ? "whole-island" : Sanitise(DebugModel.OfficeName(spec.Office));
-            return string.Format(Ci, "sheet-{0}-{1:D3}.svg", who, sheet.Number);
+
+            // POC-03 §2.4: the detail run is numbered independently, so its files are named
+            // "detail-...-D001" and cannot collide with a survey sheet of the same number.
+            return sheet.IsDetail
+                ? string.Format(Ci, "detail-{0}-D{1:D3}.svg", who, sheet.Number)
+                : string.Format(Ci, "sheet-{0}-{1:D3}.svg", who, sheet.Number);
         }
 
         static string Sanitise(string s)
@@ -175,12 +180,12 @@ namespace Archivist.Editor
 
         static string BuildIslandSvg(DebugModel model)
         {
-            Rect2 extent = model.Island.LandBounds;
-            if (extent.IsEmpty || extent.Width <= 0.0)
-            {
-                double half = model.Island.Params.DomainMetres * 0.5;
-                extent = new Rect2(-half, -half, half, half);
-            }
+            // The fifth and last copy of the empty-land-bounds fallback, now pointed at the one
+            // implementation. This copy tested IsEmpty and Width but not Height, so a bbox
+            // degenerate on the y axis alone slipped through and produced a zero-height SVG;
+            // DebugModel.SafeExtent tests all three.
+            Rect2 extent = DebugModel.SafeExtent(model.Island.LandBounds,
+                                                 model.Island.Params.DomainMetres);
 
             extent = extent.Expanded(Math.Max(200.0, extent.Diagonal * 0.03));
 
@@ -240,8 +245,8 @@ namespace Archivist.Editor
 
             sb.Append("</g></g>\n");
 
-            double markR = stroke * 4.0;
-            double fontSize = stroke * 10.0;
+            double markR = stroke * MarkSizes.SvgStrokeMultiple;
+            double fontSize = stroke * FeatureLabels.SvgStrokeMultiple;
 
             sb.Append("<g id=\"peaks\">\n");
             for (int i = 0; i < f.Peaks.Count; i++)
@@ -250,13 +255,7 @@ namespace Archivist.Editor
                 V2 q = proj(pk.Position);
                 sb.Append("<circle cx=\"").Append(Num(q.X)).Append("\" cy=\"").Append(Num(q.Y))
                   .Append("\" r=\"").Append(Num(markR)).Append("\" fill=\"#000000\"/>\n");
-                string label = pk.SpotHeightM.ToString(Ci);
-                if (!string.IsNullOrEmpty(pk.Name))
-                {
-                    label = pk.Name + " " + label;
-                }
-
-                AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, label);
+                AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, FeatureLabels.PeakText(pk));
             }
 
             sb.Append("</g>\n");
@@ -363,44 +362,29 @@ namespace Archivist.Editor
               .Append("\" stroke-linejoin=\"round\">\n");
 
             Rect2 ground = sheet.GroundBounds;
-            int lod = Contours.LodForScale(spec.Scale.Denominator);
 
-            // §8.3 — draw or omit. Same single decision point as Pane 2.
-            if (FeatureMatrix.Draws(office, FeatureClass.Grid))
+            // §8.3 — draw or omit. Same single decision point as Pane 2, and the same gather.
+            // What differs here is the ORDER: this backend emits soundings last, after the marks,
+            // where the panes put them first. That is a real per-backend difference, so the gather
+            // is shared and the emission below is not.
+            SheetGeometry geo = SheetContent.Gather(model, ground,
+                                                    Contours.LodForScale(spec.Scale.Denominator),
+                                                    spec.Scale,
+                                                    cls => FeatureMatrix.Draws(office, cls));
+
+            for (int i = 0; i < geo.Grid.Count; i++)
             {
-                try
-                {
-                    List<Polyline> grid = GarrisonGrid.ForRect(ground, spec.Scale);
-                    if (grid != null)
-                    {
-                        for (int i = 0; i < grid.Count; i++)
-                        {
-                            AppendPath(sb, grid[i].Points, grid[i].Closed, proj);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    UnityEngine.Debug.LogWarning("[Archivist] grid export failed: " + e.Message);
-                }
+                AppendPath(sb, geo.Grid[i].Points, geo.Grid[i].Closed, proj);
             }
 
-            if (FeatureMatrix.Draws(office, FeatureClass.Contour))
+            for (int i = 0; i < geo.Contours.Count; i++)
             {
-                List<Polyline> contours = model.ContoursFor(ground, lod, model.ContourLevels);
-                for (int i = 0; i < contours.Count; i++)
-                {
-                    AppendPath(sb, contours[i].Points, contours[i].Closed, proj);
-                }
+                AppendPath(sb, geo.Contours[i].Points, geo.Contours[i].Closed, proj);
             }
 
-            if (FeatureMatrix.Draws(office, FeatureClass.Coast))
+            for (int i = 0; i < geo.Coast.Count; i++)
             {
-                List<Polyline> coast = model.CoastFor(ground, lod);
-                for (int i = 0; i < coast.Count; i++)
-                {
-                    AppendPath(sb, coast[i].Points, coast[i].Closed, proj);
-                }
+                AppendPath(sb, geo.Coast[i].Points, geo.Coast[i].Closed, proj);
             }
 
             IslandFeatures f = model.Island.Features;
@@ -419,8 +403,8 @@ namespace Archivist.Editor
 
             sb.Append("</g>\n");
 
-            double markR = SheetStrokeMm * 4.0;
-            double fontSize = SheetStrokeMm * 10.0;
+            double markR = SheetStrokeMm * MarkSizes.SvgStrokeMultiple;
+            double fontSize = SheetStrokeMm * FeatureLabels.SvgStrokeMultiple;
 
             if (FeatureMatrix.Draws(office, FeatureClass.Peak))
             {
@@ -435,13 +419,7 @@ namespace Archivist.Editor
                     V2 q = proj(pk.Position);
                     sb.Append("<circle cx=\"").Append(Num(q.X)).Append("\" cy=\"").Append(Num(q.Y))
                       .Append("\" r=\"").Append(Num(markR)).Append("\" fill=\"#000000\"/>\n");
-                    string label = pk.SpotHeightM.ToString(Ci);
-                    if (!string.IsNullOrEmpty(pk.Name))
-                    {
-                        label = pk.Name + " " + label;
-                    }
-
-                    AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, label);
+                    AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, FeatureLabels.PeakText(pk));
                 }
             }
 
@@ -463,24 +441,35 @@ namespace Archivist.Editor
                 }
             }
 
-            if (FeatureMatrix.Draws(office, FeatureClass.Sounding))
+            // POC-03 — POIs, drawn only by the Antiquarian office. A diamond, matching the
+            // debug panes, so an exported detail sheet reads the same as the screen.
+            if (FeatureMatrix.Draws(office, FeatureClass.Poi))
             {
-                try
+                for (int i = 0; i < f.Pois.Count; i++)
                 {
-                    List<Sounding> soundings = Soundings.ForRect(model.Island.Field, ground);
-                    if (soundings != null)
+                    Poi poi = f.Pois[i];
+                    if (!DebugModel.SheetContains(sheet, poi.Position))
                     {
-                        for (int i = 0; i < soundings.Count; i++)
-                        {
-                            V2 q = proj(soundings[i].Position);
-                            AppendText(sb, q.X, q.Y, fontSize, soundings[i].DepthM.ToString(Ci));
-                        }
+                        continue;
                     }
+
+                    V2 q = proj(poi.Position);
+                    sb.Append("<polygon points=\"")
+                      .Append(Num(q.X)).Append(',').Append(Num(q.Y - markR)).Append(' ')
+                      .Append(Num(q.X + markR)).Append(',').Append(Num(q.Y)).Append(' ')
+                      .Append(Num(q.X)).Append(',').Append(Num(q.Y + markR)).Append(' ')
+                      .Append(Num(q.X - markR)).Append(',').Append(Num(q.Y))
+                      .Append("\" fill=\"none\" stroke=\"#000000\" stroke-width=\"")
+                      .Append(Num(SheetStrokeMm)).Append("\"/>\n");
+                    AppendText(sb, q.X + markR * 1.6, q.Y - markR, fontSize, poi.Kind.Label());
                 }
-                catch (Exception e)
-                {
-                    UnityEngine.Debug.LogWarning("[Archivist] sounding export failed: " + e.Message);
-                }
+            }
+
+            // Soundings last — see the note on the gather above.
+            for (int i = 0; i < geo.Soundings.Count; i++)
+            {
+                V2 q = proj(geo.Soundings[i].Position);
+                AppendText(sb, q.X, q.Y, fontSize, FeatureLabels.DepthText(geo.Soundings[i]));
             }
 
             sb.Append("</g>\n");
@@ -573,6 +562,8 @@ namespace Archivist.Editor
                   .Append(stats.SheetsPerOffice[(int)Office.LandSurvey].ToString(Ci))
                   .Append(", \"garrison\": ")
                   .Append(stats.SheetsPerOffice[(int)Office.Garrison].ToString(Ci))
+                  .Append(", \"antiquarian\": ")
+                  .Append(stats.SheetsPerOffice[(int)Office.Antiquarian].ToString(Ci))
                   .Append(", \"wholeIsland\": ")
                   .Append(stats.WholeIslandSheets.ToString(Ci)).Append(" },\n");
                 sb.Append("    \"wholeIslandScale\": \"").Append(Json(stats.WholeIslandScale)).Append("\",\n");
@@ -589,7 +580,10 @@ namespace Archivist.Editor
                   .Append(Num(stats.ThinSheetPct[(int)Office.Hydrographic]))
                   .Append(", \"landSurvey\": ").Append(Num(stats.ThinSheetPct[(int)Office.LandSurvey]))
                   .Append(", \"garrison\": ").Append(Num(stats.ThinSheetPct[(int)Office.Garrison]))
-                  .Append(" }\n");
+                  .Append(", \"antiquarian\": ").Append(Num(stats.ThinSheetPct[(int)Office.Antiquarian]))
+                  .Append(" },\n");
+                sb.Append("    \"poiCount\": ")
+                  .Append(model.Island.Features.Pois.Count.ToString(Ci)).Append("\n");
                 sb.Append("  },\n");
             }
 
@@ -621,7 +615,7 @@ namespace Archivist.Editor
                   .Append(", \"heightM\": ").Append(Num(spec.SheetGroundHeight)).Append(" },\n");
                 sb.Append("      \"drawnClasses\": [");
                 bool first = true;
-                for (int c = 0; c < 7; c++)
+                for (int c = 0; c < FeatureClasses.Count; c++)
                 {
                     FeatureClass cls = (FeatureClass)c;
                     if (!FeatureMatrix.Draws(spec.Office, cls))

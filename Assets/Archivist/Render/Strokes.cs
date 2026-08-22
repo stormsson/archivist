@@ -37,34 +37,21 @@ namespace Archivist.Render
         //
         // Art direction is UNDEFINED for POC-02 — §6.4 calls even the fill palette a
         // placeholder "to be replaced wholesale". These are placeholders too. RenderTuning.cs
-        // holds no colours and may not be edited, so the constants live here.
+        // holds no colours and may not be edited, so the colour constants live in source.
         //
-        // Coast and river ink are derived from the palette where that is sensible: a darkened
-        // deep-sea colour for the coast, the shallow colour for rivers, so the overlay tracks
-        // any future re-tint of the fill (Palette.ForIsland is the seam for seed tints). The
-        // band indices are Bands' own — 0..3 sea, 4..11 land — and the lookup is guarded on
-        // Bands.Count, so a shorter palette falls back to the constants below rather than
-        // throwing. Marks and soundings are NOT palette-derived: they must read as ink over
-        // whatever band they land on.
-
-        /// <summary>Very dark blue-black — a survey pen on water.</summary>
-        static readonly Rgba CoastInkFallback = Rgba.FromHex("0c1e2f");
-
-        /// <summary>§6.4's `shallow`, so a river reads as water where it crosses land.</summary>
-        static readonly Rgba RiverInkFallback = Rgba.FromHex("3f86ad");
+        // The PALETTE-DERIVED ink — coast and river — is NOT here: it lives in Ink.cs, because
+        // FieldCoast draws the same coastline whenever the fill is on and the two paths must
+        // use one derivation or an island renders in two different inks depending on the layer
+        // mask. Ask Ink for it; never re-derive it locally.
+        //
+        // Marks and soundings ARE here, because they are not palette-derived — they must read
+        // as ink over whatever band they land on — and nothing but this file draws them.
 
         /// <summary>Brown-black drafting ink for the discrete marks.</summary>
         static readonly Rgba MarkInk = Rgba.FromHex("2e2318");
 
         /// <summary>Soundings sit on the dark sea bands, so their dot is light, not dark.</summary>
         static readonly Rgba SoundingInk = Rgba.FromHex("dfeaf1");
-
-        /// <summary>Multiplier taking the deep-sea colour down to a coastline pen.</summary>
-        const double CoastInkDarken = 0.55;
-
-        /// <summary>§6.3 band indices, matching <see cref="Bands"/> and <see cref="Palette"/>.</summary>
-        const int DeepBandIndex = 0;
-        const int ShallowBandIndex = 2;
 
         // ------------------------------------------------------------- geometry
         //
@@ -157,8 +144,10 @@ namespace Archivist.Render
             Rect2 groundRect = QueryRect(req, gi, buf, widest);
             if (groundRect.IsEmpty) return;
 
-            Rgba coastInk = CoastInk(palette);
-            Rgba riverInk = RiverInk(palette);
+            // Ink.cs owns both derivations, so this fallback coast is the same colour as the
+            // FieldCoast one IslandRenderer draws when the fill is on (§7).
+            Rgba coastInk = Ink.CoastInk(palette);
+            Rgba riverInk = Ink.RiverInk(palette);
 
             IslandFeatures features = island.Features;
 
@@ -261,33 +250,7 @@ namespace Archivist.Render
             return r.Expanded(marginPx / req.PixelsPerMetre);
         }
 
-        // ------------------------------------------------------------- ink rules
-
-        static Rgba CoastInk(Rgba[] palette)
-        {
-            if (palette == null || palette.Length < Bands.Count) return CoastInkFallback;
-            return Darken(palette[DeepBandIndex], CoastInkDarken);
-        }
-
-        static Rgba RiverInk(Rgba[] palette)
-        {
-            if (palette == null || palette.Length < Bands.Count) return RiverInkFallback;
-            return palette[ShallowBandIndex];
-        }
-
-        static Rgba Darken(Rgba c, double factor)
-        {
-            return new Rgba(ScaleChannel(c.R, factor), ScaleChannel(c.G, factor),
-                            ScaleChannel(c.B, factor), c.A);
-        }
-
-        static byte ScaleChannel(byte v, double factor)
-        {
-            double s = v * factor + 0.5;
-            if (s <= 0.0) return 0;
-            if (s >= 255.0) return 255;
-            return (byte)s;
-        }
+        // --------------------------------------------------------------- widths
 
         static double HalfWidthPx(double widthMm, double pixelsPerPaperMm)
         {

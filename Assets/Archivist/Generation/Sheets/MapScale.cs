@@ -14,12 +14,28 @@ namespace Archivist.Generation.Sheets
         public static MapScale Coastal      { get { return new MapScale(Tuning.CoastalScaleDenominator); } }
 
         /// <summary>
+        /// POC-03 spec §2.1. The detail-sheet scale, and <b>the sweep knob</b> — see
+        /// <see cref="Tuning.PoiScaleDenominator"/>. §2.1 gives 1:1250 and 1:2500 and says
+        /// explicitly not to pick one from the table, because open question 1 says the whole
+        /// design rests on this number and it can only be measured (C7). Shipped as a constant
+        /// so the sweep is a one-line change.
+        /// </summary>
+        public static MapScale PoiDetail { get { return new MapScale(Tuning.PoiScaleDenominator); } }
+
+        /// <summary>
         /// Scale per office (§8.1 as amended by F1). Nothing in R2.2 ties surveys to a
         /// shared scale — that was an implementation default, not a requirement.
+        /// <para>POC-03's Antiquarian office works at its own, much larger scale: it maps one
+        /// thing closely rather than tiling ground.</para>
         /// </summary>
         public static MapScale ForOffice(Office office)
         {
-            return office == Office.Hydrographic ? Coastal : Detail;
+            switch (office)
+            {
+                case Office.Hydrographic: return Coastal;
+                case Office.Antiquarian:  return PoiDetail;
+                default:                  return Detail;
+            }
         }
         public static MapScale WholeIsland  { get { return new MapScale(25000); } }
         public static MapScale WholeIslandFallback { get { return new MapScale(50000); } }

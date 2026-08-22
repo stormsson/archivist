@@ -3,7 +3,11 @@ using Archivist.Generation.Geometry;
 
 namespace Archivist.Generation.Features
 {
-    /// <summary>§7. Grid and Sounding are field-derived; Peak/River/Settlement are discrete (§3.1).</summary>
+    /// <summary>
+    /// §7. Grid and Sounding are field-derived; Peak/River/Settlement/Poi are discrete (§3.1).
+    /// <para>Poi is POC-03's addition (spec §1.1): ONE class covers both families — ruins and
+    /// natural oddities — so the §8.3 matrix gains one column rather than two.</para>
+    /// </summary>
     public enum FeatureClass
     {
         Coast = 0,
@@ -12,7 +16,16 @@ namespace Archivist.Generation.Features
         River = 3,
         Settlement = 4,
         Grid = 5,
-        Sounding = 6
+        Sounding = 6,
+        Poi = 7
+    }
+
+    /// <summary>Helpers over <see cref="FeatureClass"/>, so nothing has to hard-code a count.</summary>
+    public static class FeatureClasses
+    {
+        /// <summary>Number of members of <see cref="FeatureClass"/>. Kept next to the enum so
+        /// a UI or export that walks every class cannot silently stop one short.</summary>
+        public const int Count = 8;
     }
 
     public readonly struct FeatureId
@@ -70,13 +83,21 @@ namespace Archivist.Generation.Features
     /// <summary>Generated once per island, in a deterministic order, with stable ids (§3.1).</summary>
     public sealed class IslandFeatures
     {
-        public IslandFeatures(IReadOnlyList<Peak> peaks, IReadOnlyList<Settlement> settlements, IReadOnlyList<River> rivers)
+        static readonly Poi[] NoPois = new Poi[0];
+
+        public IslandFeatures(IReadOnlyList<Peak> peaks, IReadOnlyList<Settlement> settlements,
+                              IReadOnlyList<River> rivers, IReadOnlyList<Poi> pois)
         {
             Peaks = peaks; Settlements = settlements; Rivers = rivers;
+            Pois = pois ?? NoPois;
         }
 
         public IReadOnlyList<Peak> Peaks { get; private set; }
         public IReadOnlyList<Settlement> Settlements { get; private set; }
         public IReadOnlyList<River> Rivers { get; private set; }
+
+        /// <summary>POC-03 P1.1. Generated AFTER peaks, settlements and rivers (spec §1.3),
+        /// because POI siting reads them and nothing reads POIs.</summary>
+        public IReadOnlyList<Poi> Pois { get; private set; }
     }
 }

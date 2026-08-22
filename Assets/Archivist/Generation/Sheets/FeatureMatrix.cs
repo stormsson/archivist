@@ -24,55 +24,89 @@ namespace Archivist.Generation.Sheets
     /// </summary>
     public static class FeatureMatrix
     {
-        const int OfficeCount = 3;   // Office.Hydrographic .. Office.Garrison
-        const int ClassCount = 7;    // FeatureClass.Coast .. FeatureClass.Sounding
+        const int OfficeCount = Offices.Count;          // Hydrographic .. Antiquarian
+        const int ClassCount = FeatureClasses.Count;    // FeatureClass.Coast .. FeatureClass.Poi
 
         /// <summary>
         /// §8.3, transcribed exactly. Row = <see cref="Office"/>, column = <see cref="FeatureClass"/>,
         /// both indexed by their enum value so the table cannot drift from the enums.
+        ///
+        /// <para>
+        /// THIS IS THE ONLY COPY. <see cref="Drawn"/>, <see cref="Serving"/> and
+        /// <see cref="Placeability"/> are all derived from it once, at type initialisation.
+        /// </para>
+        ///
+        /// <para>
+        /// POC-03, on the Antiquarian row. It draws its POI <b>and its surroundings</b>, which
+        /// is the whole point of the office: a 250 mm sheet showing only its own POI would
+        /// share no drawn class with any other office and the §8.3 shared-class invariant —
+        /// the thing that makes sheets cross-referenceable, measured by A6 — would collapse
+        /// exactly where detail sheets need it most. No Grid (that is Garrison's signature)
+        /// and no Sounding (that is Hydrographic's), so the row is still distinguishable at a
+        /// glance.
+        /// </para>
         /// </summary>
         static readonly bool[,] Table = new bool[OfficeCount, ClassCount]
         {
-            //                  Coast  Contour  Peak   River  Settle  Grid   Sound
-            /* Hydrographic */ { true,  false,  false, false, true,   false, true  },
-            /* LandSurvey   */ { true,  true,   true,  true,  true,   false, false },
-            /* Garrison     */ { true,  false,  true,  false, false,  true,  false },
+            //                  Coast  Contour  Peak   River  Settle  Grid   Sound  Poi
+            /* Hydrographic */ { true,  false,  false, false, true,   false, true,  false },
+            /* LandSurvey   */ { true,  true,   true,  true,  true,   false, false, false },
+            /* Garrison     */ { true,  false,  true,  false, false,  true,  false, false },
+            /* Antiquarian  */ { true,  true,   true,  true,  true,   false, false, true  },
         };
 
         static readonly FeatureClass[] NoClasses = new FeatureClass[0];
 
-        // Drawn sets — §8.3, in FeatureClass enum order.
-        static readonly FeatureClass[] DrawnHydrographic =
-        {
-            FeatureClass.Coast, FeatureClass.Settlement, FeatureClass.Sounding
-        };
+        const int CoastBit = 1 << (int)FeatureClass.Coast;
+        const int PoiBit   = 1 << (int)FeatureClass.Poi;
 
-        static readonly FeatureClass[] DrawnLandSurvey =
-        {
-            FeatureClass.Coast, FeatureClass.Contour, FeatureClass.Peak,
-            FeatureClass.River, FeatureClass.Settlement
-        };
+        /// <summary>
+        /// §8.3 drawn sets, DERIVED from <see cref="Table"/> row by row, in FeatureClass enum
+        /// order. These used to be hand-written literals beside the table; four structures
+        /// that all had to agree, with nothing checking that they did.
+        /// </summary>
+        static readonly FeatureClass[][] DrawnByOffice;
 
-        static readonly FeatureClass[] DrawnGarrison =
-        {
-            FeatureClass.Coast, FeatureClass.Peak, FeatureClass.Grid
-        };
+        /// <summary>D1 / §7.4 serving sets: <c>Drawn(office) \ { Coast }</c>, same order.</summary>
+        static readonly FeatureClass[][] ServingByOffice;
 
-        // Serving sets — D1: Drawn \ { Coast }, same order.
-        static readonly FeatureClass[] ServingHydrographic =
-        {
-            FeatureClass.Settlement, FeatureClass.Sounding
-        };
+        /// <summary>
+        /// POC-03 spec §2.3, the placeability floor: <c>Serving(Antiquarian) \ { Poi }</c>.
+        /// See <see cref="Placeability"/> — this set is the thing open question 2 tightens.
+        /// </summary>
+        static readonly FeatureClass[] PlaceabilityAntiquarian;
 
-        static readonly FeatureClass[] ServingLandSurvey =
+        static FeatureMatrix()
         {
-            FeatureClass.Contour, FeatureClass.Peak, FeatureClass.River, FeatureClass.Settlement
-        };
+            DrawnByOffice = new FeatureClass[OfficeCount][];
+            ServingByOffice = new FeatureClass[OfficeCount][];
 
-        static readonly FeatureClass[] ServingGarrison =
+            for (int o = 0; o < OfficeCount; o++)
+            {
+                DrawnByOffice[o] = Row(o, 0);
+                ServingByOffice[o] = Row(o, CoastBit);
+            }
+
+            PlaceabilityAntiquarian = Row((int)Office.Antiquarian, CoastBit | PoiBit);
+        }
+
+        /// <summary>
+        /// One row of <see cref="Table"/> as an array, ascending by <see cref="FeatureClass"/>
+        /// value, with the classes named in <paramref name="excludeBits"/> withheld. The walk
+        /// is over the enum's integer range, never over a set or a dictionary — §4.1 forbids
+        /// set iteration order from driving generation, and these arrays drive both the cull
+        /// and A6.
+        /// </summary>
+        static FeatureClass[] Row(int office, int excludeBits)
         {
-            FeatureClass.Peak, FeatureClass.Grid
-        };
+            var classes = new List<FeatureClass>(ClassCount);
+            for (int c = 0; c < ClassCount; c++)
+            {
+                if ((excludeBits & (1 << c)) != 0) continue;
+                if (Table[office, c]) classes.Add((FeatureClass)c);
+            }
+            return classes.ToArray();
+        }
 
         /// <summary>§8.3. True if <paramref name="office"/> draws <paramref name="cls"/> on its sheets.</summary>
         public static bool Draws(Office office, FeatureClass cls)
@@ -89,13 +123,9 @@ namespace Archivist.Generation.Sheets
         /// </summary>
         public static IReadOnlyList<FeatureClass> Drawn(Office office)
         {
-            switch (office)
-            {
-                case Office.Hydrographic: return DrawnHydrographic;
-                case Office.LandSurvey:   return DrawnLandSurvey;
-                case Office.Garrison:     return DrawnGarrison;
-                default:                  return NoClasses;
-            }
+            int o = (int)office;
+            if (o < 0 || o >= OfficeCount) return NoClasses;
+            return DrawnByOffice[o];
         }
 
         /// <summary>
@@ -106,12 +136,35 @@ namespace Archivist.Generation.Sheets
         /// </summary>
         public static IReadOnlyList<FeatureClass> Serving(Office office)
         {
+            int o = (int)office;
+            if (o < 0 || o >= OfficeCount) return NoClasses;
+            return ServingByOffice[o];
+        }
+
+        /// <summary>
+        /// <b>POC-03 spec §2.3 — the placeability floor (P2.4), and the ONE LINE open question 2
+        /// tightens.</b>
+        ///
+        /// <para>A detail sheet must contain at least one drawn feature <i>besides its own
+        /// POI</i>: a 300 m square of bare hillside is not a puzzle, it is a dead end, because
+        /// every hillside looks alike. The rule is the D1 service rule applied to a new purpose,
+        /// so it reuses that machinery rather than growing a second one — this method returns
+        /// the class set, and <see cref="Features.ServiceRule.ServedByAny"/> answers presence
+        /// over it on the same 64 m lattice.</para>
+        ///
+        /// <para>Today that set is <c>Serving(office) \ { Poi }</c> — <i>any</i> class the
+        /// office draws, other than the POI itself. Open question 2 is live: "one other feature"
+        /// may be too weak, because one contour looks like any other. If sheets prove
+        /// unplaceable at the table, tighten this to the LOCALLY DISTINCTIVE classes — coast,
+        /// river, lake shore, settlement — by returning a narrower array here. Nothing else
+        /// changes; the cutter reads whatever this returns.</para>
+        /// </summary>
+        public static IReadOnlyList<FeatureClass> Placeability(Office office)
+        {
             switch (office)
             {
-                case Office.Hydrographic: return ServingHydrographic;
-                case Office.LandSurvey:   return ServingLandSurvey;
-                case Office.Garrison:     return ServingGarrison;
-                default:                  return NoClasses;
+                case Office.Antiquarian: return PlaceabilityAntiquarian;
+                default:                 return NoClasses;
             }
         }
 

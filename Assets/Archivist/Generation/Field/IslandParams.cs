@@ -69,6 +69,28 @@ namespace Archivist.Generation.Field
             }
         }
 
+        /// <summary>
+        /// POC-03 P1.4 — POI count range, inclusive-exclusive upper, drawn from
+        /// <c>Streams.For(seed, "poi")</c> (spec §1.3 step 4). Values in
+        /// <see cref="Tuning"/>; this switch is the per-character recipe, exactly as
+        /// <see cref="SettlementRangeFor"/> and <see cref="PeakCapFor"/> are.
+        /// <para>The atoll minimum is 0 on purpose: "an island with no POIs at all is a
+        /// legitimate outcome" (P1.4), and an atoll has neither peaks nor high ground for most
+        /// of the table.</para>
+        /// </summary>
+        public static void PoiRangeFor(IslandCharacter c, out int minInc, out int maxExc)
+        {
+            switch (c)
+            {
+                case IslandCharacter.Mountainous:
+                    minInc = Tuning.PoiCountMountainousMin; maxExc = Tuning.PoiCountMountainousMax; break;
+                case IslandCharacter.Fjorded:
+                    minInc = Tuning.PoiCountFjordedMin; maxExc = Tuning.PoiCountFjordedMax; break;
+                default:
+                    minInc = Tuning.PoiCountAtollMin; maxExc = Tuning.PoiCountAtollMax; break;
+            }
+        }
+
         /// <summary>Derives the full parameter set from a seed. The only entry point (R1.1).</summary>
         public static IslandParams FromSeed(ulong islandSeed, IslandCharacter? forced = null)
         {

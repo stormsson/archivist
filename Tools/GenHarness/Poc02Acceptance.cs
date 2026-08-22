@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using Archivist.Generation;
 using Archivist.Generation.Determinism;
@@ -9,6 +8,7 @@ using Archivist.Generation.Field;
 using Archivist.Generation.Geometry;
 using Archivist.Generation.Sheets;
 using Archivist.Render;
+using static Archivist.Harness.Report;
 
 namespace Archivist.Harness
 {
@@ -22,11 +22,6 @@ namespace Archivist.Harness
     /// </summary>
     public static class Poc02Acceptance
     {
-        /// <summary>Same collection seed as the POC-01 harness, so the two suites talk about the same islands.</summary>
-        const ulong Collection = 8412UL;
-
-        static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
-
         /// <summary>A render this suite refuses to attempt. A safety valve on B5's ladder, not a budget.</summary>
         const long MaxSweepPixels = 64L * 1024L * 1024L;
 
@@ -34,18 +29,6 @@ namespace Archivist.Harness
         /// iteration order driving output, and it would make these reports non-reproducible.</summary>
         static readonly IslandCharacter[] Characters =
             { IslandCharacter.Mountainous, IslandCharacter.Fjorded, IslandCharacter.Atoll };
-
-        public static bool Failed;
-
-        static void Pass(string id, string msg) { Console.WriteLine("  PASS  " + id + "  " + msg); }
-        static void Fail(string id, string msg) { Console.WriteLine("  FAIL  " + id + "  " + msg); Failed = true; }
-        static void Info(string msg)            { Console.WriteLine("        " + msg); }
-        static void Metric(string id, string msg) { Console.WriteLine("  ----  " + id + "  " + msg); }
-
-        static string F0(double d) { return d.ToString("F0", Inv); }
-        static string F1(double d) { return d.ToString("F1", Inv); }
-        static string F2(double d) { return d.ToString("F2", Inv); }
-        static string F3(double d) { return d.ToString("F3", Inv); }
 
         // ================================================================== B2
         /// <summary>
@@ -380,17 +363,31 @@ namespace Archivist.Harness
         static void ReportRender(string id, string label, Island isl, RenderRequest req)
         {
             long pixels = (long)req.Width * req.Height;
-            if (pixels > MaxSweepPixels)
-            {
-                Metric(id, label + ": " + req.Width + "x" + req.Height + " px exceeds the "
-                           + MaxSweepPixels.ToString(Inv) + " pixel ceiling; skipped");
-                return;
-            }
+            if (OverPixelCeiling(id, label, req, pixels)) return;
 
             double ms = MedianRenderMs(isl, req, 3);
-            double mpx = pixels / 1000000.0;
-            Metric(id, label + ": " + req.Width + "x" + req.Height + " px = " + F3(mpx) + " Mpx,  "
-                       + F1(ms) + " ms,  " + F0(ms * 1000000.0 / pixels) + " ns/px");
+            Metric(id, RenderLine(label, req.Width, req.Height, pixels, ms));
+        }
+
+        /// <summary>
+        /// B4's and B5's shared refusal to attempt an absurd render, and the one place the
+        /// wording of that refusal lives. Both ladders climb until something gets too big, so
+        /// both need it; two copies meant two chances to disagree about the ceiling.
+        /// </summary>
+        static bool OverPixelCeiling(string id, string label, RenderRequest req, long pixels)
+        {
+            if (pixels <= MaxSweepPixels) return false;
+            Metric(id, label + ": " + req.Width + "x" + req.Height + " px exceeds the "
+                       + MaxSweepPixels.ToString(Inv) + " pixel ceiling; skipped");
+            return true;
+        }
+
+        /// <summary>The common head of every render metric line: geometry, megapixels, elapsed,
+        /// and cost per pixel. B5 appends its file size and name to this.</summary>
+        static string RenderLine(string label, int w, int h, long pixels, double ms)
+        {
+            return label + ": " + w + "x" + h + " px = " + F3(pixels / 1000000.0) + " Mpx,  "
+                   + F1(ms) + " ms,  " + F0(ms * 1000000.0 / pixels) + " ns/px";
         }
 
         // ================================================================== B5
@@ -461,12 +458,7 @@ namespace Archivist.Harness
         static long SweepOne(string label, Island isl, RenderRequest req, string dir, string fileName)
         {
             long pixels = (long)req.Width * req.Height;
-            if (pixels > MaxSweepPixels)
-            {
-                Metric("B5", label + ": " + req.Width + "x" + req.Height + " px exceeds the "
-                             + MaxSweepPixels.ToString(Inv) + " pixel ceiling; skipped");
-                return 0;
-            }
+            if (OverPixelCeiling("B5", label, req, pixels)) return 0;
 
             Stopwatch sw = new Stopwatch();
             sw.Restart();
@@ -486,58 +478,9 @@ namespace Archivist.Harness
                 Fail("B5", "PngWriter.Write failed for " + fileName + ": " + ex.Message);
             }
 
-            Metric("B5", label + ": " + buf.Width + "x" + buf.Height + " px = "
-                         + F3(pixels / 1000000.0) + " Mpx,  " + F1(ms) + " ms,  "
-                         + F0(ms * 1000000.0 / pixels) + " ns/px,  " + F1(bytes / 1048576.0) + " MB  -> " + fileName);
+            Metric("B5", RenderLine(label, buf.Width, buf.Height, pixels, ms)
+                         + ",  " + F1(bytes / 1048576.0) + " MB  -> " + fileName);
             return bytes;
-        }
-
-        // ================================================================== describe
-        /// <summary>
-        /// Not an acceptance check — the thing you read when a render looks wrong and you need to
-        /// know why. Normalisation (§6.2) and peak count together explain most surprises: an island
-        /// with no peaks falls back to the character maximum and its whole ramp shifts.
-        /// </summary>
-        public static void Describe(ulong collectionSeed, int index)
-        {
-            Island isl = Island.FromSeed(Streams.IslandSeed(collectionSeed, index));
-            RenderRequest overview = RenderRequest.ForIsland(isl, RenderTuning.IslandPreviewPxPerMetre);
-
-            double norm = IslandRenderer.Normalisation(isl);
-            int peaks = isl.Features != null ? isl.Features.Peaks.Count : 0;
-            double top = peaks > 0 ? isl.Features.Peaks[0].SpotHeightM : 0.0;
-
-            Console.WriteLine();
-            Console.WriteLine("island " + index + "  " + isl.Name + "  " + isl.Params.Character
-                              + "  seed " + isl.Seed.ToString("X16"));
-            Console.WriteLine("  land bbox " + F0(isl.LandBounds.Width) + " x " + F0(isl.LandBounds.Height)
-                              + " m   centre " + P(isl.LandBounds.Centre));
-            Console.WriteLine("  peaks " + peaks
-                              + (peaks > 0 ? "  highest " + F1(top) + " m" : "  (none — normalisation falls back to the character maximum, §6.2)"));
-            Console.WriteLine("  normalisation used " + F1(norm) + " m"
-                              + "   character max " + F1(IslandParams.MaxElevationFor(isl.Params.Character)) + " m");
-            Console.WriteLine("  overview at " + F2(RenderTuning.IslandPreviewPxPerMetre) + " px/m -> "
-                              + overview.Width + " x " + overview.Height + " px  ("
-                              + F3((long)overview.Width * overview.Height / 1000000.0) + " Mpx)");
-
-            Sheet sheet;
-            if (PickSheet(isl, out sheet))
-            {
-                RenderRequest req = RenderRequest.ForSheet(sheet, RenderTuning.SheetPxPerPaperMm);
-                Console.WriteLine("  sheet " + sheet.Survey.Office + " #" + sheet.Number
-                                  + " 1:" + sheet.Survey.Scale.Denominator
-                                  + " rot " + F1(sheet.RotationDeg) + " deg at "
-                                  + F2(RenderTuning.SheetPxPerPaperMm) + " px/mm -> "
-                                  + req.Width + " x " + req.Height + " px  ("
-                                  + F3(req.PixelsPerMetre) + " px/m)");
-                Console.WriteLine("    sheet frame-rect centre " + P(sheet.FrameRect.Centre)
-                                  + "   request area centre " + P(req.Area.Centre));
-                NoteSheetPlacement("desc", sheet, req);
-            }
-            else
-            {
-                Console.WriteLine("  no sheets");
-            }
         }
 
         // ================================================================== helpers
@@ -562,10 +505,6 @@ namespace Archivist.Harness
             return buf.InBounds(x, y);
         }
 
-        /// <summary>V2.ToString() formats with the CURRENT culture; this machine prints decimal
-        /// commas. Every number this suite emits goes through InvariantCulture.</summary>
-        static string P(V2 v) { return "(" + F1(v.X) + ", " + F1(v.Y) + ")"; }
-
         static bool Same(Rgba a, Rgba b) { return a.R == b.R && a.G == b.G && a.B == b.B && a.A == b.A; }
 
         static bool InRange(int i, int count) { return i >= 0 && i < count; }
@@ -587,27 +526,17 @@ namespace Archivist.Harness
             return seen.Count;   // Count only — never iterated, so no set order reaches the output (§5).
         }
 
-        /// <summary>Median of n timed renders, one warm-up first. Stopwatch is legal here and only
-        /// here: §5's no-wall-clock rule binds Generation and Render, not the harness.</summary>
+        /// <summary>Median of n timed renders, warm-up first — the warm-up pays for the JIT and
+        /// the noise table so it does not land in the first sample. The loop itself is
+        /// <see cref="Timing.MedianMs"/>, shared with A8.</summary>
         static double MedianRenderMs(Island isl, RenderRequest req, int reps)
         {
-            IslandRenderer.Render(isl, req);            // warm the noise table and the JIT
-            List<double> times = new List<double>();
-            Stopwatch sw = new Stopwatch();
-            for (int i = 0; i < reps; i++)
-            {
-                sw.Restart();
-                IslandRenderer.Render(isl, req);
-                sw.Stop();
-                times.Add(sw.Elapsed.TotalMilliseconds);
-            }
-            times.Sort();
-            return times[times.Count / 2];
+            return Timing.MedianMs(reps, true, i => IslandRenderer.Render(isl, req));
         }
 
         /// <summary>Prefer Land Survey (1:2500, the densest sheets), then Hydrographic, then
         /// Garrison, then the whole-island survey. Fixed order, never a dictionary walk.</summary>
-        static bool PickSheet(Island isl, out Sheet sheet)
+        internal static bool PickSheet(Island isl, out Sheet sheet)
         {
             sheet = default(Sheet);
             Office[] preference = { Office.LandSurvey, Office.Hydrographic, Office.Garrison };
@@ -657,7 +586,7 @@ namespace Archivist.Harness
         /// FRAME-space rect (GroundImage rotates it into ground), so it should equal the sheet's
         /// own frame rect. Loud, but not gated: this is the renderer's contract, not the suite's.
         /// </summary>
-        static void NoteSheetPlacement(string id, Sheet sheet, RenderRequest req)
+        internal static void NoteSheetPlacement(string id, Sheet sheet, RenderRequest req)
         {
             Rect2 frame = sheet.FrameRect;
             double d = V2.Dist(frame.Centre, req.Area.Centre);

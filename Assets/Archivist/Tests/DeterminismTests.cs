@@ -1,19 +1,31 @@
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
 using NUnit.Framework;
 using Archivist.Generation;
+using Archivist.Generation.Analysis;
 using Archivist.Generation.Determinism;
-using Archivist.Generation.Features;
-using Archivist.Generation.Geometry;
-using Archivist.Generation.Sheets;
 
 namespace Archivist.Tests
 {
+    /// <summary>
+    /// The seeds this assembly tests against.
+    ///
+    /// <para>The literal <c>8412</c> was written out about a dozen times across the harness and
+    /// these tests — sometimes named <c>Collection</c>, more often bare. That is how the seed
+    /// COUNTS in the numbering and contour-seam checks drifted apart without anyone noticing:
+    /// nothing tied the copies together, so nothing flagged it when they stopped agreeing.</para>
+    ///
+    /// <para>There are exactly two homes for it, one each side of the assembly boundary: this
+    /// one, and <c>Archivist.Harness.Report.Collection</c> for the headless harness. The two
+    /// must hold the same value or the two suites stop talking about the same islands.</para>
+    /// </summary>
+    internal static class TestSeeds
+    {
+        public const ulong Collection = 8412UL;
+    }
+
     /// <summary>A2, §13.2. Same seed -> identical island, across runs and unrelated code changes.</summary>
     public class DeterminismTests
     {
-        const ulong Collection = 8412UL;
+        const ulong Collection = TestSeeds.Collection;
 
         [Test]
         public void SameSeedGeneratesIdenticalIsland()
@@ -63,25 +75,25 @@ namespace Archivist.Tests
             }
         }
 
+        /// <summary>
+        /// A2's island digest. Delegates to <see cref="IslandDigest"/> so this test and the
+        /// headless harness assert the SAME property.
+        ///
+        /// <para>They did not, until now. This method used to roll its own digest covering only
+        /// character, name, coastline vertices, peak spot heights, settlement names, and each
+        /// survey's rotation and sheet count. It was blind to peak and settlement POSITIONS, to
+        /// scale, to year, and to where any sheet actually sits — so a change that moved every
+        /// village on the island left this test green while the harness's A2 went red. "A2 passes"
+        /// meant two different things depending on which A2 you ran.</para>
+        ///
+        /// <para><see cref="IslandDigest"/> is the harness's richer version, moved into the
+        /// Generation assembly where both callers can see it. Do not re-roll a local digest here;
+        /// widening the field set is a deliberate re-anchoring of the published hash, not a
+        /// refactor.</para>
+        /// </summary>
         internal static ulong HashOf(Island isl)
         {
-            CultureInfo inv = CultureInfo.InvariantCulture;
-            StringBuilder sb = new StringBuilder();
-            sb.Append(isl.Params.Character).Append('|').Append(isl.Name).Append('|');
-            for (int i = 0; i < isl.Coastline.Count; i++)
-            {
-                Polyline p = isl.Coastline[i];
-                for (int v = 0; v < p.Count; v++)
-                    sb.Append(p[v].X.ToString("F6", inv)).Append(',').Append(p[v].Y.ToString("F6", inv)).Append(';');
-            }
-            for (int i = 0; i < isl.Features.Peaks.Count; i++)
-                sb.Append(isl.Features.Peaks[i].SpotHeightM).Append(';');
-            for (int i = 0; i < isl.Features.Settlements.Count; i++)
-                sb.Append(isl.Features.Settlements[i].Name).Append(';');
-            for (int i = 0; i < isl.Surveys.Count; i++)
-                sb.Append(isl.Surveys[i].Spec.RotationDeg.ToString("F1", inv)).Append(':')
-                  .Append(isl.Surveys[i].SheetCount).Append(';');
-            return Hash.Fnv1a64(sb.ToString());
+            return IslandDigest.Hash(isl);
         }
     }
 }

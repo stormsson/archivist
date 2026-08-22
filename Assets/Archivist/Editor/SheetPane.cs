@@ -261,7 +261,7 @@ namespace Archivist.Editor
                                          SheetCountOf(spec));
 
             List<string> drawn = new List<string>();
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < FeatureClasses.Count; i++)
             {
                 FeatureClass cls = (FeatureClass)i;
                 if (FeatureMatrix.Draws(spec.Office, cls))
@@ -314,7 +314,7 @@ namespace Archivist.Editor
             else
             {
                 Rect avail = _scroll.contentRect;
-                if (float.IsNaN(avail.width) || avail.width < 40.0f || avail.height < 40.0f)
+                if (!VectorDraw.Settled(avail, 40.0f))
                 {
                     return false;
                 }
@@ -354,7 +354,7 @@ namespace Archivist.Editor
         Rect MapRect()
         {
             Rect r = _mapArea.contentRect;
-            if (float.IsNaN(r.width) || r.width <= 0.0f || r.height <= 0.0f)
+            if (!VectorDraw.Settled(r))
             {
                 // Layout has not settled yet; use the size we just asked for.
                 return new Rect(0.0f, 0.0f, Mathf.Max(1.0f, _mapW), Mathf.Max(1.0f, _mapH));
@@ -377,57 +377,28 @@ namespace Archivist.Editor
             }
 
             _cacheKey = key;
-            _coast = new List<Polyline>();
-            _contours = new List<Polyline>();
-            _grid = new List<Polyline>();
-            _soundings = new List<Sounding>();
-
-            Rect2 ground = sheet.GroundBounds;
-            int lod = Contours.LodForScale(spec.Scale.Denominator);
-            Office office = spec.Office;
 
             // §8.3 — this is the whole point of the POC. Draw or omit; nothing in between.
-            if (FeatureMatrix.Draws(office, FeatureClass.Coast))
-            {
-                _coast = _model.CoastFor(ground, lod);
-            }
+            SheetGeometry g = SheetContent.Gather(_model, sheet.GroundBounds,
+                                                  Contours.LodForScale(spec.Scale.Denominator),
+                                                  spec.Scale, Gate(spec.Office));
+            _coast = g.Coast;
+            _contours = g.Contours;
+            _grid = g.Grid;
+            _soundings = g.Soundings;
+        }
 
-            if (FeatureMatrix.Draws(office, FeatureClass.Contour))
-            {
-                _contours = _model.ContoursFor(ground, lod, _model.ContourLevels);
-            }
+        /// <summary>The §8.3 matrix as a predicate — the one decision point for what this sheet shows.</summary>
+        static Func<FeatureClass, bool> Gate(Office office)
+        {
+            return cls => FeatureMatrix.Draws(office, cls);
+        }
 
-            if (FeatureMatrix.Draws(office, FeatureClass.Grid))
-            {
-                try
-                {
-                    List<Polyline> g = GarrisonGrid.ForRect(ground, spec.Scale);
-                    if (g != null)
-                    {
-                        _grid = g;
-                    }
-                }
-                catch (Exception e)
-                {
-                    UnityEngine.Debug.LogWarning("[Archivist] garrison grid failed: " + e.Message);
-                }
-            }
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Sounding))
-            {
-                try
-                {
-                    List<Sounding> s = Soundings.ForRect(_model.Island.Field, ground);
-                    if (s != null)
-                    {
-                        _soundings = s;
-                    }
-                }
-                catch (Exception e)
-                {
-                    UnityEngine.Debug.LogWarning("[Archivist] soundings failed: " + e.Message);
-                }
-            }
+        /// <summary>The point features this sheet draws and letters.</summary>
+        FeatureMarks Marks()
+        {
+            IslandFeatures f = _model.Island.Features;
+            return new FeatureMarks(_soundings, f.Peaks, f.Settlements, f.Pois);
         }
 
         // ------------------------------------------------------------------ text
@@ -436,58 +407,8 @@ namespace Archivist.Editor
         {
             _text.Begin();
             Office office = spec.Office;
-            IslandFeatures f = _model.Island.Features;
 
-            if (FeatureMatrix.Draws(office, FeatureClass.Peak))
-            {
-                for (int i = 0; i < f.Peaks.Count; i++)
-                {
-                    Peak p = f.Peaks[i];
-                    Vector2 v = _view.ToView(p.Position);
-                    if (!map.Contains(v))
-                    {
-                        continue;
-                    }
-
-                    string label = p.SpotHeightM.ToString(CultureInfo.InvariantCulture);
-                    if (!string.IsNullOrEmpty(p.Name))
-                    {
-                        label = p.Name + " " + label;
-                    }
-
-                    _text.Add(label, new Vector2(v.x + 6.0f, v.y - 7.0f), 10.0f, VectorDraw.Ink);
-                }
-            }
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Settlement))
-            {
-                for (int i = 0; i < f.Settlements.Count; i++)
-                {
-                    Settlement s = f.Settlements[i];
-                    Vector2 v = _view.ToView(s.Position);
-                    if (!map.Contains(v))
-                    {
-                        continue;
-                    }
-
-                    _text.Add(s.Name, new Vector2(v.x + 6.0f, v.y - 7.0f), 10.0f, VectorDraw.Ink);
-                }
-            }
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Sounding))
-            {
-                for (int i = 0; i < _soundings.Count; i++)
-                {
-                    Vector2 v = _view.ToView(_soundings[i].Position);
-                    if (!map.Contains(v))
-                    {
-                        continue;
-                    }
-
-                    _text.Add(_soundings[i].DepthM.ToString(CultureInfo.InvariantCulture),
-                              new Vector2(v.x + 3.0f, v.y - 6.0f), 9.0f, VectorDraw.Ink);
-                }
-            }
+            FeatureLabels.Add(_text, Marks(), _view, Gate(office), v => map.Contains(v));
 
             if (FeatureMatrix.Draws(office, FeatureClass.Grid))
             {
@@ -544,87 +465,12 @@ namespace Archivist.Editor
             Office office = sheet.Survey.Office;
             Rect map = MapRect();
             Painter2D p = ctx.painter2D;
-
-            // §8.2 — one line style for everything on the sheet.
-            VectorDraw.BeginInk(p);
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Grid))
-            {
-                VectorDraw.Lines(p, _grid, _view, map);
-            }
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Contour))
-            {
-                VectorDraw.Lines(p, _contours, _view, map);
-            }
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Coast))
-            {
-                VectorDraw.Lines(p, _coast, _view, map);
-            }
-
             IslandFeatures f = _model.Island.Features;
 
-            if (FeatureMatrix.Draws(office, FeatureClass.River))
-            {
-                p.BeginPath();
-                bool any = false;
-                for (int i = 0; i < f.Rivers.Count; i++)
-                {
-                    Polyline course = f.Rivers[i].Course;
-                    if (course != null && VectorDraw.AppendPolyline(p, course.Points, course.Closed, _view, map))
-                    {
-                        any = true;
-                    }
-                }
-
-                if (any)
-                {
-                    p.Stroke();
-                }
-            }
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Sounding) && _soundings.Count > 0)
-            {
-                p.BeginPath();
-                for (int i = 0; i < _soundings.Count; i++)
-                {
-                    Vector2 v = _view.ToView(_soundings[i].Position);
-                    if (map.Contains(v))
-                    {
-                        VectorDraw.AppendTick(p, _soundings[i].Position, 2.0f, _view);
-                    }
-                }
-
-                p.Stroke();
-            }
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Peak))
-            {
-                p.BeginPath();
-                for (int i = 0; i < f.Peaks.Count; i++)
-                {
-                    Vector2 v = _view.ToView(f.Peaks[i].Position);
-                    if (map.Contains(v))
-                    {
-                        VectorDraw.AppendTriangle(p, f.Peaks[i].Position, 4.0f, _view);
-                    }
-                }
-
-                p.Stroke();
-            }
-
-            if (FeatureMatrix.Draws(office, FeatureClass.Settlement))
-            {
-                for (int i = 0; i < f.Settlements.Count; i++)
-                {
-                    Vector2 v = _view.ToView(f.Settlements[i].Position);
-                    if (map.Contains(v))
-                    {
-                        VectorDraw.Ring(p, f.Settlements[i].Position, 3.5f, _view);
-                    }
-                }
-            }
+            // §8.2 — one line style for everything on the sheet; §8.3 decides what is on it.
+            VectorDraw.PaintFeatures(p,
+                FeatureLines.FromPolylines(_grid, _contours, _coast, VectorDraw.Courses(f.Rivers)),
+                Marks(), _view, map, MarkSizes.Sheet, Gate(office), v => map.Contains(v));
         }
     }
 }

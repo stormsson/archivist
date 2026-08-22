@@ -127,12 +127,14 @@ namespace Archivist.Generation.Features
             return iya < iyb;
         }
 
+        /// <summary>§7.1 step 3's total order: elevation desc, then
+        /// <see cref="TotalOrder.ByPosition"/>. Descending on the primary key, which is why the
+        /// comparator is written out here rather than shared whole — <see cref="PoiSiting"/>'s
+        /// primary key ascends.</summary>
         static int CompareCandidates(Candidate a, Candidate b)
         {
             if (a.Elevation != b.Elevation) return a.Elevation > b.Elevation ? -1 : 1;   // desc
-            if (a.Position.X != b.Position.X) return a.Position.X < b.Position.X ? -1 : 1;
-            if (a.Position.Y != b.Position.Y) return a.Position.Y < b.Position.Y ? -1 : 1;
-            return 0;
+            return TotalOrder.ByPosition(a.Position, b.Position);
         }
 
         readonly struct Candidate

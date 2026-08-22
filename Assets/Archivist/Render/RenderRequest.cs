@@ -54,7 +54,11 @@ namespace Archivist.Render
             // the ground origin, so its POSITION must survive. Normalising it to (0,0,W,H)
             // renders a correctly-sized, correctly-rotated rectangle of the WRONG GROUND.
             Rect2 frame = sheet.FrameRect;
-            return new RenderRequest(frame, spec.RotationDeg, pxPerMetre, pixelsPerPaperMm, layers);
+            // sheet.RotationDeg, NOT spec.RotationDeg. Since the Hydrographic coast-walk
+            // (D-H2) the survey's rotation is nominal and each sheet carries its own — and
+            // FrameRect is already computed from the per-sheet value, so taking the survey's
+            // here would rotate the sampling frame away from the rect it is meant to fill.
+            return new RenderRequest(frame, sheet.RotationDeg, pxPerMetre, pixelsPerPaperMm, layers);
         }
     }
 }

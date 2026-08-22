@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using Archivist.Generation;
+using Archivist.Generation.Analysis;
 using Archivist.Generation.Determinism;
 using Archivist.Generation.Sheets;
 
@@ -8,24 +9,24 @@ namespace Archivist.Tests
     /// <summary>A4 (§13.4) and A5 (§13.5).</summary>
     public class CutterTests
     {
+        /// <summary>
+        /// §10.4: cull first, then number. A gap must mean "missing sheet", and R2.9 is cut from
+        /// v1, so every numbered sheet must exist.
+        ///
+        /// <para>The rule is <see cref="SheetNumbering.Validate"/>, shared with the harness's A4
+        /// and with POC-03's C4 — this loop used to be a line-for-line copy of A4's, over a
+        /// different number of seeds. This call site keeps the SET form (exactly 1..N, no
+        /// duplicates, order unconstrained), which is what it always asserted; C4 asks for the
+        /// stronger positional form.</para>
+        /// </summary>
         [Test]
         public void SheetNumbersAreContiguousFromOne([Range(0, 9)] int index)
         {
-            // §10.4: cull first, then number. A gap must mean "missing sheet", and R2.9 is
-            // cut from v1, so every numbered sheet must exist.
-            Island isl = Island.FromSeed(Streams.IslandSeed(8412UL, index));
+            Island isl = Island.FromSeed(Streams.IslandSeed(TestSeeds.Collection, index));
             for (int s = 0; s < isl.Surveys.Count; s++)
             {
-                Survey sv = isl.Surveys[s];
-                bool[] seen = new bool[sv.SheetCount + 1];
-                for (int k = 0; k < sv.Sheets.Count; k++)
-                {
-                    int n = sv.Sheets[k].Number;
-                    Assert.GreaterOrEqual(n, 1);
-                    Assert.LessOrEqual(n, sv.SheetCount);
-                    Assert.IsFalse(seen[n], "duplicate sheet number " + n);
-                    seen[n] = true;
-                }
+                string why;
+                Assert.IsTrue(SheetNumbering.Validate(isl.Surveys[s], false, out why), why);
             }
         }
 
@@ -35,7 +36,7 @@ namespace Archivist.Tests
             // R2.2a: the entry point for the island, and in v1 the reference map too.
             for (int i = 0; i < 10; i++)
             {
-                Island isl = Island.FromSeed(Streams.IslandSeed(8412UL, i));
+                Island isl = Island.FromSeed(Streams.IslandSeed(TestSeeds.Collection, i));
                 Survey whole = isl.WholeIslandSurvey;
                 Assert.IsNotNull(whole, "island " + i + " has no whole-island survey");
                 Assert.AreEqual(1, whole.SheetCount);
@@ -50,7 +51,7 @@ namespace Archivist.Tests
         {
             for (int i = 0; i < 10; i++)
             {
-                Island isl = Island.FromSeed(Streams.IslandSeed(8412UL, i));
+                Island isl = Island.FromSeed(Streams.IslandSeed(TestSeeds.Collection, i));
                 Survey g = isl.SurveyFor(Office.Garrison);
                 if (g != null) Assert.AreEqual(0.0, g.Spec.RotationDeg, 1e-9, "grid discipline is what Garrison is");
             }
@@ -60,7 +61,7 @@ namespace Archivist.Tests
         public void ServingSetExcludesCoast()
         {
             // D1: the coastline is island-scale, so it can never be what makes a sheet worth cutting.
-            foreach (Office o in new[] { Office.Hydrographic, Office.LandSurvey, Office.Garrison })
+            foreach (Office o in Offices.All)
             {
                 var serving = FeatureMatrix.Serving(o);
                 CollectionAssert.DoesNotContain(serving, Archivist.Generation.Features.FeatureClass.Coast);
