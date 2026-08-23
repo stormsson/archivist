@@ -76,7 +76,8 @@ namespace Archivist.Building.Interaction
                 Refresh();   // CanInteract can change while aimed, e.g. a crate starts working
             }
 
-            if (current != null && current.CanInteract(this) && interactAction.WasPressedThisFrame())
+            if (current != null && current.CanInteract(this).Available
+                && interactAction.WasPressedThisFrame())
                 current.Interact(this);
         }
 
@@ -97,11 +98,21 @@ namespace Archivist.Building.Interaction
             // often a child of the thing that owns the interaction.
             Interactable found = hit.collider.GetComponentInParent<Interactable>();
 
+            // The refusal now carries the interactable's own words. "REFUSING" alone named the
+            // third of the three failures this flag exists to separate but not which refusal
+            // it was, which is the half that costs the time.
             Probed(found == null
                 ? $"{hit.distance:0.00} m: {hit.collider.name} — no Interactable"
-                : $"{hit.distance:0.00} m: {found.name} — {(found.CanInteract(this) ? "available" : "REFUSING")}");
+                : $"{hit.distance:0.00} m: {found.name} — {Describe(found.CanInteract(this))}");
 
             return found;
+        }
+
+        /// <summary>Upper case on the refusal so it is findable in a full console.</summary>
+        static string Describe(InteractionState state)
+        {
+            if (state.Available) return "available";
+            return string.IsNullOrEmpty(state.Reason) ? "REFUSING" : "REFUSING — " + state.Reason;
         }
 
         /// <summary>Logs only when the answer changes; every frame would bury the change.</summary>
@@ -116,8 +127,14 @@ namespace Archivist.Building.Interaction
         {
             if (prompt == null) return;
 
-            if (current == null) prompt.Hide();
-            else prompt.Show(current.Label, bindingHint, current.CanInteract(this));
+            if (current == null)
+            {
+                prompt.Hide();
+                return;
+            }
+
+            InteractionState state = current.CanInteract(this);
+            prompt.Show(current.Label, bindingHint, state.Available, state.Reason);
         }
 
         void OnDisable()

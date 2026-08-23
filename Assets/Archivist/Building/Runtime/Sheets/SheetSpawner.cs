@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Archivist.Building.Handling;
+using Archivist.Building.Table;
 
 namespace Archivist.Building.Sheets
 {
@@ -100,6 +101,14 @@ namespace Archivist.Building.Sheets
                 // living in a preview scene, and neither is paper on this floor.
                 if (!view.gameObject.scene.IsValid()) continue;
 
+                // Board slabs are not paper on this floor (C5.4). A SheetView on the
+                // cartography board is the same component doing a different job, and every
+                // caller here would get it wrong: Awake() would destroy it, Place() would
+                // count it into the floor pile height, ClearAll() would take the board with
+                // the floor. See BoardSheet's class comment for why the test is a marker
+                // component and not the Table layer.
+                if (view.GetComponent<BoardSheet>() != null) continue;
+
                 found.Add(view);
             }
             return found.ToArray();
@@ -187,6 +196,14 @@ namespace Archivist.Building.Sheets
         public void RestingPose(Vector3 point, float yaw, out Vector3 position, out Quaternion rotation)
         {
             float y = floorY + liftOff;
+
+            // Transforms moved by script are not visible to a query until physics is told
+            // about them: Physics.autoSyncTransforms is off by default, so a collider that was
+            // positioned this frame is still queried where it used to be. In play mode the
+            // next FixedUpdate hides that; in edit mode there is no next FixedUpdate, and the
+            // probe silently finds nothing at all — which reads as "the floor is clear" and
+            // puts one thing straight through another.
+            Physics.SyncTransforms();
 
             int layer = LayerMask.NameToLayer(sheetLayer);
             if (layer >= 0)

@@ -272,6 +272,56 @@ namespace Archivist.Generation.Sheets
         }
 
         /// <summary>
+        /// The dispatch: which cutter serves which office. Three coverage shapes, and this is
+        /// the only place that knows which office has which.
+        ///
+        /// <para>Hydrographic walks the shore with per-sheet rotation (D-H2); Land Survey and
+        /// Garrison keep the single-rotation lattice R2.4 requires of them; Antiquarian cuts
+        /// one small sheet per qualifying POI and neither walks nor tiles (POC-03 §2).</para>
+        ///
+        /// <para><b>Why it is here and not in <see cref="Island"/>.</b> It used to be an
+        /// <c>if/else</c> chain inside that class's private cutting pass, which put the
+        /// knowledge somewhere nothing else could reach: cutting one more survey of an
+        /// existing island meant copying the chain, and a copy is a second place to forget an
+        /// office. Planning is already separate (<see cref="PlanSurvey"/>) for the same
+        /// reason.</para>
+        ///
+        /// <para><b>Every office is listed, and the default throws.</b> A fifth office added
+        /// to the enum without a line here would otherwise fall through to the lattice cutter
+        /// and ship a plausible survey cut by the wrong rule — the symptom would be a sheet
+        /// count that looks reasonable, which is the kind nobody finds. C# cannot check an
+        /// enum switch for exhaustiveness, so a throw is the loudest available substitute.</para>
+        /// </summary>
+        /// <param name="pois">
+        /// Read only by the Antiquarian office, which cuts one detail sheet per qualifying
+        /// POI. Accepted unconditionally so the dispatch has one signature rather than one
+        /// per coverage shape; the tiling offices ignore it.
+        /// </param>
+        public static Survey CutFor(IHeightField field, IReadOnlyList<Polyline> coast,
+                                    ServiceRule service, IReadOnlyList<Poi> pois,
+                                    Rect2 landBounds, SurveySpec spec)
+        {
+            switch (spec.Office)
+            {
+                case Office.Antiquarian:
+                    return DetailSheetCutter.Cut(pois, service, spec);
+
+                case Office.Hydrographic:
+                    return CoastWalkCutter.Cut(field, coast, service, landBounds, spec);
+
+                case Office.LandSurvey:
+                case Office.Garrison:
+                    return Cut(field, coast, service, landBounds, spec);
+
+                default:
+                    throw new ArgumentOutOfRangeException(
+                        "spec", spec.Office,
+                        "No cutter for this office. Adding an office means adding it here, and " +
+                        "to FeatureMatrix.Table, MapScale.ForOffice, RotationFor and Keeps.");
+            }
+        }
+
+        /// <summary>
         /// §10.2 — the cutting algorithm, in this exact order:
         /// <list type="number">
         /// <item>rotation theta (already fixed on <paramref name="spec"/>, §10.1);</item>

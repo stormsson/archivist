@@ -1,11 +1,10 @@
 using System;
 using UnityEngine;
-using Archivist.Building.Sheets;
 
 namespace Archivist.Building.Handling
 {
     /// <summary>
-    /// A sheet falling out of the hands and settling on the floor.
+    /// A carried thing falling out of the hands and settling on the floor.
     ///
     /// <para><b>Scripted, not a Rigidbody.</b> Paper does not fall the way a rigid body falls
     /// — it reaches a slow terminal speed almost immediately and then rocks and slides on the
@@ -19,19 +18,25 @@ namespace Archivist.Building.Handling
     /// them in real paper: it slides in the direction it is tipping. The swing fades to
     /// nothing as the sheet nears the floor, so it arrives flat and settled rather than
     /// snapping straight at the last moment.</para>
+    ///
+    /// <para><b>Was <c>SheetFall</c>, and is deliberately no longer.</b> A binder falls by the
+    /// same rules and for the same reason — the resting place must be decided at release —
+    /// and it is not paper. The sway and tilt are still tuned for paper; a heavier item that
+    /// wants to drop like a book turns them down through <see cref="HandlingOptions"/> rather
+    /// than growing a second falling component here.</para>
     /// </summary>
-    public sealed class SheetFall : MonoBehaviour
+    public sealed class ItemFall : MonoBehaviour
     {
-        SheetView view;
-        Action<SheetView> onLanded;
+        ICarryable item;
+        Action<ICarryable> onLanded;
 
         Vector3 restPosition;
         Quaternion restRotation;
         Quaternion startRotation;
         float startY;
 
-        Vector3 rockAxis;    // horizontal; the sheet tips about this
-        Vector3 driftAxis;   // horizontal, perpendicular; the sheet slides along this
+        Vector3 rockAxis;    // horizontal; the item tips about this
+        Vector3 driftAxis;   // horizontal, perpendicular; the item slides along this
 
         float terminalSpeed;
         float swayMetres;
@@ -42,11 +47,11 @@ namespace Archivist.Building.Handling
         float velocity;
         float elapsed;
 
-        public void Begin(SheetView sheet, Vector3 rest, Quaternion restRot,
+        public void Begin(ICarryable carried, Vector3 rest, Quaternion restRot,
                           HandlingOptions options, Vector3 horizontalAxis,
-                          Action<SheetView> landed)
+                          Action<ICarryable> landed)
         {
-            view = sheet;
+            item = carried;
             onLanded = landed;
 
             restPosition = rest;
@@ -64,14 +69,14 @@ namespace Archivist.Building.Handling
             swayHz = options != null ? options.FallSwayHz : 1.2f;
             tiltDegrees = options != null ? options.FallTiltDegrees : 16f;
 
-            // Deterministic per sheet, so two dropped together do not swing in step — and so
-            // the same sheet always falls the same way, which keeps a report reproducible.
-            phase = Mathf.Abs(sheet.Id.GetHashCode() % 1000) / 1000f;
+            // Deterministic per item, so two dropped together do not swing in step — and so
+            // the same item always falls the same way, which keeps a report reproducible.
+            phase = Mathf.Abs(carried.CarrySeed % 1000) / 1000f;
         }
 
         void Update()
         {
-            if (view == null)
+            if (item == null || item.Root == null)
             {
                 Destroy(this);
                 return;
@@ -89,7 +94,7 @@ namespace Archivist.Building.Handling
             float drop = startY - restPosition.y;
             float progress = drop <= 0.0001f ? 1f : Mathf.Clamp01((startY - y) / drop);
 
-            // The swing fades out as the floor approaches, so the sheet settles instead of
+            // The swing fades out as the floor approaches, so the item settles instead of
             // being cut off mid-swing.
             float fade = 1f - progress;
             float wave = Mathf.Sin((elapsed * swayHz + phase) * Mathf.PI * 2f);
@@ -104,7 +109,7 @@ namespace Archivist.Building.Handling
 
             transform.SetPositionAndRotation(restPosition, restRotation);
 
-            if (onLanded != null) onLanded(view);
+            if (onLanded != null) onLanded(item);
             Destroy(this);
         }
     }

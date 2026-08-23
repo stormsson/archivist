@@ -61,7 +61,8 @@ and POC-05 (interaction).
 |---|---|
 | `IslandGenerator` | The scene's one source of islands. Owns the cache and the ledger as two children. |
 | `IslandCache` | Generated islands, kept so a seed is not rebuilt twice. Disposable; losing it costs time, never correctness. |
-| `SheetLedger` / `SheetLedgerStore` | Which sheets have been *issued*, per island. Component + engine-free store. Not yet persisted. |
+| `SheetLedger` / `SheetLedgerStore` | Which islands the archive has met and which of their sheets have been *issued*, in the order both happened. Component + engine-free store. Also the collection's own account of itself: holdings, counts, progress. Not yet persisted. |
+| `IslandHolding` | One island's row as a value: seed, index, name, issued / total, percent. A snapshot of the ledger, for whatever screen lists the collection. |
 | `SheetId` | A sheet's identity as a value: island, office, whole-island flag, number. Outlives every regeneration. |
 | `SheetLookup` | The walk back: `SheetId` → the `Sheet` it names, by regenerating the island. |
 | `SheetPicker` | Chooses which unissued sheets a crate delivers. Pure, off-thread. |
@@ -76,13 +77,24 @@ and POC-05 (interaction).
 | `SheetRender` | Worker-thread → main-thread carrier. Holds no engine types. |
 | `SheetSpawner` | Puts rendered sheets on the floor, and enforces that a scene never *starts* with paper on it. |
 
+### Binders — the folder the sheets arrive in
+
+The player's physical item is the **folder**, never the sheet (cartography table
+spec §13, D-C1). A crate delivers one binder, not a pile of paper.
+
+| entity | scope |
+|---|---|
+| `BinderView` | One binder: a number, an island, and a list of `SheetId`. Holds identities, never geometry or rasters. One island per binder, enforced on `Add`. |
+| `BinderSpawner` | Makes binders, owns the `Binder_n` counter, puts them on the floor. Sweeps binders at scene start for the reason `SheetSpawner` sweeps sheets. |
+
 ### Handling — carrying and placing
 
 | entity | scope |
 |---|---|
-| `PlayerHands` | What the player is carrying. One sheet for now; grows into stacks, weight, settle. |
-| `SheetPickup` | The verb attached to a sheet on the floor. Deliberately not on `SheetView`. |
-| `SheetFall` | Release → settle. Scripted, not a `Rigidbody`: the resting place is decided at release. |
+| `ICarryable` | What the hands can hold: a root, a collider, a name, and *where this comes to rest when released*. Implemented by `SheetView` and `BinderView`. |
+| `PlayerHands` | What the player is carrying — an `ICarryable`. Grows into stacks, weight, settle. |
+| `SheetPickup` / `BinderPickup` | The verb attached to a thing on the floor. Deliberately not on the view. |
+| `ItemFall` | Release → settle. Scripted, not a `Rigidbody`: the resting place is decided at release. Was `SheetFall`; a binder falls by the same rules. |
 | `HandlingOptions` | Feel values, as a ScriptableObject asset so they can be tuned in play mode. |
 
 ### Interaction
@@ -92,7 +104,8 @@ and POC-05 (interaction).
 | `IInteractable` / `Interactable` | Narrowest contract: a label, a gate, an act. |
 | `PlayerInteractor` | Aim, reach, button. One ray per frame from the eye; walls block it. |
 | `InteractionPrompt` | Draws the aim label. The POC's only screen text. |
-| `MapCrate` | Aim, press, and an island comes into existence — unseen — followed by some of its sheets on the floor. |
+| `MapCrate` | Aim, press, and an island comes into existence — unseen — followed by a **binder** of its sheets. Plus one loose sheet while `looseDebugSheet` is on, so there is something to file into a binder once that verb exists. |
+| `CartographyTable` | The verb that will open the board view. A stub, and says so. |
 | `FirstPersonController` | Walk and look. Nothing else. |
 
 ## 5. Editor tooling
@@ -103,10 +116,30 @@ and POC-05 (interaction).
 | `Editor/SheetContent`, `VectorDraw`, `FeatureLabels`, `OfficeStyle`, `SvgExport` | How the debug window draws and exports. |
 | `Building/Editor/RoomBuilder` | Builds the POC-04 room from the constants in `space/requirements.md`. Geometry as a function of the spec. |
 | `Building/Editor/SheetTestBench` | Summons a named case — `LandSurvey:7` — on demand. Drives the shipping path, not a parallel one. |
-| `Building/Editor/SheetSceneGuard` | Strips spawned sheets before a scene is written to disk. |
+| `Building/Editor/SheetSceneGuard` | Strips spawned sheets — and the binders holding them — before a scene is written to disk. |
+| `Building/Editor/GlbImporterSetup` | Points every `.glb` under `Assets/Models` at glTFast's importer. Re-run after adding a model. |
 
 ## 6. Scenes and assets
 
 - `Building/Scenes/POC04_Room.unity` — the only scene.
 - `Building/Options/HandlingOptions.asset` — the tuning asset.
+- `Models/Placeholders/*.glb` — placeholder art. Imported through glTFast; see `GlbImporterSetup`.
 - `Tools/run-acceptance.sh`, `Tools/GenHarness/` — headless generation + render checks.
+
+### Prefabs — authored assets, edited in the Inspector
+
+`RoomBuilder` builds the *room* from the numbers in `space/requirements.md`,
+because those are spec-derived and have to be cheap to rebuild. **Item prefabs
+are not built that way.** They are ordinary assets in `Building/Prefabs/`, opened
+and tuned in the editor like any other prefab — size, pivot, collider and verb
+are all things you judge by looking at them, and a generator would overwrite the
+judgement on its next run.
+
+| asset | root components |
+|---|---|
+| `PF_Binder.prefab` | `BoxCollider`, `BinderView`, `BinderPickup`, + a `Visual` child instanced from `classic_paper_envelope.glb`. Wired into `BinderSpawner.binderPrefab`. |
+| `PF_CartographyTable.prefab` | `BoxCollider`, `CartographyTable`, + a `Visual` child instanced from `wooden_table.glb`. Instanced in the scene. |
+| `PF_Archive_Room_Debug.prefab` | The room. This one *is* built by `RoomBuilder`. |
+
+Both item prefabs keep their verb in the `Interactable.label` field rather than a
+constant, so the wording is changed in the Inspector.

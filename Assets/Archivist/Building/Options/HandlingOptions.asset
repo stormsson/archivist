@@ -12,7 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bd5f1b86c452849cb9764b7fe327ec7f, type: 3}
   m_Name: HandlingOptions
   m_EditorClassIdentifier: 
-  sheetTurnDegreesPerSecond: 120
   sheetTakeSeconds: 0.28
   fallSpeed: 1.1
   fallSwayMetres: 0.08

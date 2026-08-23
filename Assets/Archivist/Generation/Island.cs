@@ -134,39 +134,62 @@ namespace Archivist.Generation
             var surveys = new List<Survey>();
             surveys.Add(SurveyCutter.CutWholeIsland(island.LandBounds, island.Seed));
 
-            PcaResult ignored;
-            double hydroDeg = Rotations.Hydrographic(island.Coastline, island.Params.ServiceRadius, out ignored);
+            // Derived once and handed to every office, not once per office: Land Survey's
+            // degenerate case falls back to hydroDeg + 90 (D2).
+            double hydroDeg = HydroRotation(island);
 
             for (int i = 0; i < Offices.All.Length; i++)
             {
                 Office office = Offices.All[i];
                 if (!CutsOffice(office)) continue;
 
-                SurveySpec spec = SurveyCutter.PlanSurvey(island.Field, island.Coastline,
-                                                          island.LandBounds, office, hydroDeg);
-
-                // Three cutters, one per coverage shape. Hydrographic walks the shore with
-                // per-sheet rotation (D-H2); Land Survey and Garrison keep the single-
-                // rotation lattice R2.4 requires of them; Antiquarian cuts one small sheet per
-                // qualifying POI and neither walks nor tiles (POC-03 §2).
-                Survey survey;
-                if (office == Office.Antiquarian)
-                {
-                    survey = DetailSheetCutter.Cut(island.Features.Pois, island.Service, spec);
-                }
-                else if (office == Office.Hydrographic)
-                {
-                    survey = CoastWalkCutter.Cut(island.Field, island.Coastline, island.Service,
-                                                 island.LandBounds, spec);
-                }
-                else
-                {
-                    survey = SurveyCutter.Cut(island.Field, island.Coastline, island.Service,
-                                              island.LandBounds, spec);
-                }
-                surveys.Add(survey);
+                surveys.Add(CutSurvey(island, office, hydroDeg));
             }
             return surveys;
+        }
+
+        /// <summary>
+        /// One office's survey of this island, cut on demand.
+        ///
+        /// <para>The same path <see cref="Generate"/> takes — plan, then dispatch to the
+        /// cutter that office's coverage shape needs — so a survey cut here is identical to
+        /// the one the island was born with, for the same island and office. That identity is
+        /// the point: it is what makes this safe to use for anything the generated set already
+        /// covers, rather than a second, drifting way to make a survey.</para>
+        ///
+        /// <para><b>Nothing is attached.</b> <see cref="Surveys"/> is fixed at generation and
+        /// stays that way — an island is a function of its seed (R1.1), and a survey appearing
+        /// on it later would make it a function of its seed plus whoever called this. The
+        /// result is the caller's to hold.</para>
+        ///
+        /// <para>The debug flags on this class are deliberately NOT consulted. They exist to
+        /// leave an office out of a whole island; asking for one by name is an explicit
+        /// request and answering it with null would be a silent refusal.</para>
+        /// </summary>
+        public Survey CutSurvey(Office office)
+        {
+            return CutSurvey(this, office, HydroRotation(this));
+        }
+
+        /// <summary>
+        /// Shared by both entry points, so the loop and the on-demand call cannot diverge.
+        /// <paramref name="hydroDeg"/> is a parameter rather than derived here because
+        /// <see cref="CutSurveys"/> needs it once for all four offices.
+        /// </summary>
+        static Survey CutSurvey(Island island, Office office, double hydroDeg)
+        {
+            SurveySpec spec = SurveyCutter.PlanSurvey(island.Field, island.Coastline,
+                                                      island.LandBounds, office, hydroDeg);
+
+            return SurveyCutter.CutFor(island.Field, island.Coastline, island.Service,
+                                       island.Features.Pois, island.LandBounds, spec);
+        }
+
+        /// <summary>The island's Hydrographic rotation (D2). Every office's plan needs it.</summary>
+        static double HydroRotation(Island island)
+        {
+            PcaResult ignored;
+            return Rotations.Hydrographic(island.Coastline, island.Params.ServiceRadius, out ignored);
         }
 
         public Survey SurveyFor(Office office)

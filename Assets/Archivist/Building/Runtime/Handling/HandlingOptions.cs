@@ -21,16 +21,16 @@ namespace Archivist.Building.Handling
     [CreateAssetMenu(menuName = "Archivist/Handling Options", fileName = "HandlingOptions")]
     public sealed class HandlingOptions : ScriptableObject
     {
+        // The sheet turn rate lives in TableOptions now, not here. Q/E turning moved out of the
+        // hands and onto the cartography table (D-C10) — the orientation chosen in hand was
+        // discarded the moment the sheet was laid on a board — and a tuning value that nothing
+        // reads is a value someone will later tune and wonder why nothing moved.
+
         /// <summary>Used when no options asset is wired, so a missing asset costs the right
         /// feel rather than the ability to carry anything.</summary>
-        public const float DefaultSheetTurnDegreesPerSecond = 120f;
-
         public const float DefaultSheetTakeSeconds = 0.28f;
 
         [Header("Carried sheet")]
-        [Tooltip("Degrees per second while Q or E is held. 120 turns a sheet fully in three seconds.")]
-        [SerializeField, Min(1f)] float sheetTurnDegreesPerSecond = DefaultSheetTurnDegreesPerSecond;
-
         [Tooltip("Seconds for a sheet to travel from the floor into the hands. Long enough " +
                  "to be read as a movement, short enough not to be waited on.")]
         [SerializeField, Min(0f)] float sheetTakeSeconds = DefaultSheetTakeSeconds;
@@ -49,7 +49,6 @@ namespace Archivist.Building.Handling
         [Tooltip("How far the sheet tips at the widest part of its swing, in degrees.")]
         [SerializeField, Min(0f)] float fallTiltDegrees = 16f;
 
-        public float SheetTurnDegreesPerSecond { get { return sheetTurnDegreesPerSecond; } }
         public float SheetTakeSeconds { get { return sheetTakeSeconds; } }
         public float FallSpeed { get { return fallSpeed; } }
         public float FallSwayMetres { get { return fallSwayMetres; } }

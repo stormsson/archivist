@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using Archivist.Building.Binders;
 using Archivist.Building.Collection;
 using Archivist.Building.Handling;
 using Archivist.Building.Interaction;
@@ -30,46 +31,72 @@ namespace Archivist.Building.Editor
     public sealed class SheetTestBench : EditorWindow
     {
         /// <summary>
-        /// The bench without the window. Handy on its own, and it is how the survival of
-        /// runtime-generated meshes across a domain reload gets checked: draw, recompile,
-        /// look again.
+        /// One opening of the crate, without the window, the keypress or play mode: a binder
+        /// of island 0's sheets and the loose debug sheet beside it.
+        ///
+        /// <para>It is how the survival of runtime-generated meshes across a domain reload
+        /// gets checked — draw, recompile, look again — and it is the only way to exercise the
+        /// delivery in edit mode, since <c>MapCrate.Open</c> is a coroutine and coroutines do
+        /// not run there. Everything it calls is the shipping path: <see cref="MapCrate.Fill"/>
+        /// off the crate, <see cref="BinderSpawner.Create"/> and <see cref="BinderSpawner.Place"/>
+        /// off the spawner. The one thing it fakes is the thread — <c>Fill</c> runs inline
+        /// here, and the room stalls for as long as an island takes.</para>
         /// </summary>
         [MenuItem("Archivist/Quick · Draw Crate")]
         public static void QuickDraw()
         {
             var generator = FindFirstObjectByType<IslandGenerator>();
             var spawner = FindFirstObjectByType<SheetSpawner>();
+            var binders = FindFirstObjectByType<BinderSpawner>();
             var crate = FindFirstObjectByType<MapCrate>();
 
-            if (generator == null || spawner == null)
+            if (generator == null || spawner == null || binders == null)
             {
-                Debug.LogError("[Quick] Open POC04_Room first.");
+                Debug.LogError("[Quick] Open POC04_Room first. Needs an IslandGenerator, a " +
+                               "SheetSpawner and a BinderSpawner.");
                 return;
             }
 
             ulong seed = generator.SeedForIndex(0);
-            Island target = generator.GetOrGenerate(seed);
-            List<Sheet> picks = SheetPicker.PickUnissued(
-                target, 5, generator.Ledger.Snapshot(seed), unchecked((int)seed));
+            generator.Ledger.Record(seed, 0);
 
-            List<SheetRender> batch = MapCrate.Render(target, picks, 1.2);
+            MapCrate.Opening opening = MapCrate.Fill(
+                generator, seed, generator.Ledger.Snapshot(seed),
+                5, true, unchecked((int)seed), 1.2);
+
+            generator.Ledger.Describe(generator.GetOrGenerate(seed));
+
             Transform anchor = crate != null ? crate.transform : spawner.transform;
 
-            for (int i = 0; i < batch.Count; i++)
+            BinderView binder = binders.Create(seed, opening.IslandName);
+            if (binder != null)
             {
-                generator.Ledger.MarkIssued(batch[i].Id);
-                spawner.Place(batch[i], i, batch.Count, anchor);
+                for (int i = 0; i < opening.Filed.Count; i++)
+                {
+                    SheetId id = opening.Filed[i];
+                    if (generator.Ledger.MarkIssued(id)) binder.Add(id);
+                }
+                binders.Place(binder, anchor);
             }
-            Debug.Log($"[Quick] {target.Name} ({seed:X16}) — {batch.Count} sheets on the floor.");
+
+            if (opening.Loose != null && generator.Ledger.MarkIssued(opening.Loose.Id))
+                spawner.Place(opening.Loose, 0, 1, anchor);
+
+            Debug.Log($"[Quick] {(binder != null ? binder.Describe() : "no binder")}" +
+                      $"{(opening.Loose != null ? $" + loose {opening.Loose.Id}" : "")}");
         }
 
         [MenuItem("Archivist/Quick · Clear Sheets")]
         public static void QuickClear()
         {
             var spawner = FindFirstObjectByType<SheetSpawner>();
-            if (spawner == null) return;
-            spawner.ClearAll();
-            Debug.Log("[Quick] Cleared.");
+            var binders = FindFirstObjectByType<BinderSpawner>();
+
+            if (spawner != null) spawner.ClearAll();
+            if (binders != null) binders.ClearAll();
+
+            Debug.Log("[Quick] Cleared the floor — sheets and binders. The ledger is untouched: " +
+                      "clearing the floor un-issues nothing.");
         }
 
         [MenuItem("Archivist/Sheet Test Bench")]
@@ -298,6 +325,13 @@ namespace Archivist.Building.Editor
         {
             ulong seed = ResolveSeed(generator);
             if (island == null || island.Seed != seed) island = generator.GetOrGenerate(seed);
+
+            // The bench reaches islands without reserving them, so the ledger would otherwise
+            // meet one for the first time through a MarkIssued — knowing its seed but neither
+            // its name nor how many sheets it has, and so unable to report progress for an
+            // island the bench has been drawing from all afternoon.
+            generator.Ledger.Record(seed, useRawSeed ? -1 : islandIndex);
+            generator.Ledger.Describe(island);
             return island;
         }
 

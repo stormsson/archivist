@@ -1,5 +1,6 @@
 using UnityEngine;
 using Archivist.Building.Collection;
+using Archivist.Building.Handling;
 using Archivist.Generation.Sheets;
 
 namespace Archivist.Building.Sheets
@@ -11,8 +12,16 @@ namespace Archivist.Building.Sheets
     ///
     /// <para>One mesh, one material, one texture. Nothing here is an asset, so this owns all
     /// three and destroys them.</para>
+    ///
+    /// <para><b>Carryable, and that is the only thing it knows about the player.</b> The hands
+    /// ask a sheet where it comes to rest rather than working it out themselves, so a sheet
+    /// answers by delegating to the <see cref="SheetSpawner"/> that owns the floor pile — the
+    /// pile is what decides, and it is not the sheet's business to know how. The spawner is
+    /// found, never stored across a load: a reference handed in at spawn time does not survive
+    /// a domain reload and comes back null with no symptom but a sheet that lands in the wrong
+    /// plane. <c>SheetPickup</c> has the same lesson written on it.</para>
     /// </summary>
-    public sealed class SheetView : MonoBehaviour
+    public sealed class SheetView : MonoBehaviour, ICarryable
     {
         /// <summary>
         /// Metres. Real paper is ~0.1 mm, which is below what depth precision can separate at
@@ -34,6 +43,53 @@ namespace Archivist.Building.Sheets
         Mesh mesh;
         Material materialInstance;
         Texture2D texture;
+
+        SheetSpawner floor;
+
+        // ---- ICarryable ------------------------------------------------------------------
+
+        public Transform Root { get { return transform; } }
+
+        public string CarryName { get { return Id.ToString(); } }
+
+        public int CarrySeed { get { return Id.GetHashCode(); } }
+
+        /// <summary>No turn. A sheet is carried face-on to be read, which is exactly how the
+        /// hold anchor is aimed; anything else would be a pose fighting the anchor's.</summary>
+        public Quaternion CarriedRotation { get { return Quaternion.identity; } }
+
+        /// <summary>Delegated to the floor pile, which is what actually decides how high a
+        /// dropped sheet sits. Without one — a sheet in a bench scene — it lands where it was
+        /// released, which is wrong by less than it is unhelpful.</summary>
+        public void RestingPose(Vector3 releasedAt, float yaw,
+                                out Vector3 position, out Quaternion rotation)
+        {
+            SheetSpawner pile = Pile;
+            if (pile != null)
+            {
+                pile.RestingPose(releasedAt, yaw, out position, out rotation);
+                return;
+            }
+
+            position = releasedAt;
+            rotation = Quaternion.Euler(0f, yaw, 0f);
+        }
+
+        public void Settled()
+        {
+            SheetSpawner pile = Pile;
+            if (pile != null) pile.Register(this);
+        }
+
+        /// <summary>Found rather than remembered — see the class comment.</summary>
+        SheetSpawner Pile
+        {
+            get
+            {
+                if (floor == null) floor = FindAnyObjectByType<SheetSpawner>();
+                return floor;
+            }
+        }
 
         public static SheetView Create(SheetRender render, Material sheetMaterial,
                                        Color paperTint, string mapTextureProperty)

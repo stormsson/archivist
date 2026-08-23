@@ -14,7 +14,13 @@ namespace Archivist.Building.Interaction
 
         public virtual string Label { get { return label; } }
 
-        public virtual bool CanInteract(PlayerInteractor by) { return isActiveAndEnabled; }
+        /// <summary>Available whenever the component is awake. Refuses wordlessly when it is
+        /// not: a disabled behaviour is not a state the player did anything to reach, so there
+        /// is nothing to tell them about it.</summary>
+        public virtual InteractionState CanInteract(PlayerInteractor by)
+        {
+            return isActiveAndEnabled ? InteractionState.Ready : InteractionState.Unavailable;
+        }
 
         public abstract void Interact(PlayerInteractor by);
 

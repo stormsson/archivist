@@ -35,11 +35,18 @@ namespace Archivist.Building.Handling
         /// <summary>
         /// S7.6: full hands make this "here, but not now" — the label dims and the act is
         /// refused. No message, no error state.
+        ///
+        /// <para><b>Refuses without a reason on purpose</b>, now that
+        /// <see cref="InteractionState"/> makes giving one possible. S7.6 asks for silence
+        /// here, and it is right to: the player is holding the paper that is stopping them, so
+        /// a caption saying so tells them what their own hands already do.</para>
         /// </summary>
-        public override bool CanInteract(PlayerInteractor by)
+        public override InteractionState CanInteract(PlayerInteractor by)
         {
             PlayerHands hands = HandsOf(by);
-            return isActiveAndEnabled && hands != null && hands.IsEmpty;
+            return isActiveAndEnabled && hands != null && hands.IsEmpty
+                ? InteractionState.Ready
+                : InteractionState.Unavailable;
         }
 
         public override void Interact(PlayerInteractor by)

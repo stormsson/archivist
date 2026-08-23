@@ -2,18 +2,27 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Archivist.Building.Binders;
 using Archivist.Building.Sheets;
 
 namespace Archivist.Building.Editor
 {
     /// <summary>
-    /// Strips spawned sheets out of a scene just before it is written to disk.
+    /// Strips spawned sheets — and the binders that hold them — out of a scene just before it
+    /// is written to disk.
     ///
     /// <para>The rule is that a scene never starts with paper on the floor: the ledger is the
     /// only record that a sheet has been issued, it starts empty on every load, and a sheet
     /// that outlived a load would be issuable twice (R2.10). <see cref="SheetSpawner"/>
     /// enforces that at startup; this stops the file ever containing one in the first place,
     /// so the working scene stays small and a diff of it stays readable.</para>
+    ///
+    /// <para><b>A binder falls under the same rule, which is why this class covers more than
+    /// its name says.</b> A binder is a list of issued <c>SheetId</c>s, so saving one saves a
+    /// claim on sheets the ledger will have forgotten — and its contents are not serialised
+    /// anyway, so what came back would be an empty folder holding a number. It is the same
+    /// rule about the same fact, so it is enforced in the same place rather than in a second
+    /// guard that could be added, removed or forgotten independently.</para>
     ///
     /// <para>Deliberately a visible hook rather than a hideFlag. Sheets used to carry
     /// <c>HideFlags.DontSaveInEditor</c>, which achieved the same thing by making them
@@ -77,7 +86,7 @@ namespace Archivist.Building.Editor
             // SheetSpawner.AllInScene, not a root walk: root enumeration cannot see objects
             // with DontSave-family hideFlags, which is precisely the leftover this has to
             // catch.
-            int removed = 0;
+            int sheetsRemoved = 0;
             SheetView[] sheets = SheetSpawner.AllInScene();
 
             for (int i = 0; i < sheets.Length; i++)
@@ -86,11 +95,24 @@ namespace Archivist.Building.Editor
                 if (sheets[i].gameObject.scene != scene) continue;
 
                 Object.DestroyImmediate(sheets[i].gameObject);
-                removed++;
+                sheetsRemoved++;
             }
 
-            if (removed > 0)
-                Debug.Log($"[SheetSceneGuard] Removed {removed} spawned sheet(s) before saving {scene.name}.");
+            int bindersRemoved = 0;
+            BinderView[] binders = BinderSpawner.AllInScene();
+
+            for (int i = 0; i < binders.Length; i++)
+            {
+                if (binders[i] == null) continue;
+                if (binders[i].gameObject.scene != scene) continue;
+
+                Object.DestroyImmediate(binders[i].gameObject);
+                bindersRemoved++;
+            }
+
+            if (sheetsRemoved > 0 || bindersRemoved > 0)
+                Debug.Log($"[SheetSceneGuard] Removed {sheetsRemoved} spawned sheet(s) and " +
+                          $"{bindersRemoved} binder(s) before saving {scene.name}.");
         }
     }
 }

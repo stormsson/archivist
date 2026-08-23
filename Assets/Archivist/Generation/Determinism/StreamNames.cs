@@ -93,6 +93,16 @@ namespace Archivist.Generation.Determinism
         /// <summary>Peak names, in feature order. [index = peak index]</summary>
         public const string NamesPeaks = "names.peaks";
 
+        /// <summary>
+        /// Sheet names (C7.7) — the words <c>SheetNames.For</c> composes for one sheet.
+        /// [index = SheetNames.StableIndex, i.e. the sheet's IDENTITY: office ordinal,
+        /// whole-island flag and number packed into one int, never a list position]
+        /// <para>Read-only with respect to the island: naming a sheet is a terminal read, run
+        /// after generation, and nothing drawn here feeds back into any feature. A2 covers it
+        /// for free — an unregistered stream leaves the island bit-identical (§4.3).</para>
+        /// </summary>
+        public const string NamesSheets = "names.sheets";
+
         // --- reserved (Render/) ----------------------------------------------------------
         /// <summary>
         /// Reserved for seed-derived palette tints (§6.4). Deliberately unused: the name is

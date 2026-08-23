@@ -38,6 +38,11 @@ namespace Archivist.Building.Collection
         /// <summary>The seed of the most recent island drawn, or 0 before the first.</summary>
         public ulong LastIslandSeed { get; private set; }
 
+        /// <summary>How many islands have been drawn from the collection (R1.2 puts no
+        /// ceiling on it). The ledger knows the same islands by seed; this is the counter that
+        /// decides which one comes next.</summary>
+        public int IslandsDrawn { get { return nextIslandIndex; } }
+
         void Awake()
         {
             // Resolved here, on the main thread, so that GetOrGenerate never has to null-check
@@ -57,12 +62,22 @@ namespace Archivist.Building.Collection
         /// Reserves the next island index and returns its seed — without generating anything.
         /// Deciding <i>which</i> island is cheap and belongs on the main thread, so the ledger
         /// can be consulted before any work starts.
+        ///
+        /// <para>The ledger is told here, at the moment of reservation, and not later when the
+        /// first sheet comes out: reserving is what makes the island one the archive has met.
+        /// An island opened and found empty — every sheet already issued — would otherwise be
+        /// missing from a list of the collection, which is the one case a player is most
+        /// likely to go looking for. It is also the only point where the island's <i>index</i>
+        /// is known; a seed on its own cannot be walked back to it.</para>
         /// </summary>
         public ulong ReserveNextIslandSeed()
         {
-            ulong seed = SeedForIndex(nextIslandIndex);
+            int index = nextIslandIndex;
+            ulong seed = SeedForIndex(index);
             nextIslandIndex++;
             LastIslandSeed = seed;
+
+            if (ledger != null) ledger.Record(seed, index);
             return seed;
         }
 

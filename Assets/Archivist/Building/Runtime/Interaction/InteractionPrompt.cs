@@ -23,11 +23,22 @@ namespace Archivist.Building.Interaction
 
         void Awake() { Hide(); }
 
-        public void Show(string verb, string bindingHint, bool canInteract)
+        /// <summary>
+        /// Draws one aimed-at object. <paramref name="reason"/> is the refusal's own words —
+        /// null when available, and null for a refusal with nothing to explain — and it is
+        /// appended to the verb rather than replacing it. Replacing it is what the old
+        /// bool-shaped contract forced interactables to do for themselves (see
+        /// <see cref="InteractionState"/>), and the verb is the half the player needs kept:
+        /// "Working…" alone does not say what is working.
+        /// </summary>
+        public void Show(string verb, string bindingHint, bool canInteract, string reason)
         {
             if (label != null)
             {
-                label.text = string.IsNullOrEmpty(bindingHint) ? verb : $"[{bindingHint}]   {verb}";
+                string line = string.IsNullOrEmpty(bindingHint) ? verb : $"[{bindingHint}]   {verb}";
+                if (!canInteract && !string.IsNullOrEmpty(reason)) line += $" — {reason}";
+
+                label.text = line;
                 label.color = canInteract ? available : unavailable;
             }
             if (group != null) group.alpha = 1f;

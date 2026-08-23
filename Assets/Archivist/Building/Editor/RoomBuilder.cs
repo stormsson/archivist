@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
+using Archivist.Building.Binders;
 using Archivist.Building.Collection;
 using Archivist.Building.Interaction;
 using Archivist.Building.Interactables;
@@ -53,6 +54,7 @@ namespace Archivist.Building.Editor
         const string SceneDir  = Root + "/Scenes";
         const string ScenePath = SceneDir + "/POC04_Room.unity";
         const string RoomPrefab = PrefabDir + "/PF_Archive_Room_Debug.prefab";
+        const string BinderPrefabPath = PrefabDir + "/PF_Binder.prefab";
         const string InputAsset = "Assets/InputSystem_Actions.inputactions";
 
         // ---- POC-05: interaction ------------------------------------------
@@ -86,18 +88,17 @@ namespace Archivist.Building.Editor
             room.name = "Archive_Room_Debug";
 
             InteractionPrompt prompt = BuildInteractionUi();
-            PlayerHands hands = BuildPlayer(prompt);
+            BuildPlayer(prompt);
 
             IslandGenerator generator;
             SheetSpawner spawner;
-            BuildGenerator(out generator, out spawner);
-            BuildMapCrate(generator, spawner);
+            BinderSpawner binders;
+            BuildGenerator(out generator, out spawner, out binders);
+            BuildMapCrate(generator, spawner, binders);
 
-            // Closed last: hands and spawner each need the other, so one of the two links
-            // cannot be made at construction time.
-            var handsSo = new SerializedObject(hands);
-            handsSo.FindProperty("spawner").objectReferenceValue = spawner;
-            handsSo.ApplyModifiedPropertiesWithoutUndo();
+            // The hands used to be closed back to the spawner here — they held it so a dropped
+            // sheet could ask it where to land. A carried thing answers that itself now
+            // (ICarryable), so the loop is gone and nothing is wired after the fact.
 
             ApplyEnvironment();
 
@@ -429,7 +430,8 @@ namespace Archivist.Building.Editor
         /// attached to anything physical. The spawner is a separate root: putting sheets on
         /// the floor is a world concern, not a collection one.</para>
         /// </summary>
-        static void BuildGenerator(out IslandGenerator generator, out SheetSpawner spawner)
+        static void BuildGenerator(out IslandGenerator generator, out SheetSpawner spawner,
+                                   out BinderSpawner binders)
         {
             var root = new GameObject("Generator");
             generator = root.AddComponent<IslandGenerator>();
@@ -455,9 +457,25 @@ namespace Archivist.Building.Editor
             so.FindProperty("paperTint").colorValue = PaperStock;
             so.FindProperty("floorY").floatValue = 0f;
             so.ApplyModifiedPropertiesWithoutUndo();
+
+            // A third root, beside the sheet spawner and for the same reason it is not part of
+            // the generator: making binders is a world concern, not a collection one. It owns
+            // the Binder_n counter, so it is one object and there is one of it.
+            binders = new GameObject("BinderSpawner").AddComponent<BinderSpawner>();
+
+            var bso = new SerializedObject(binders);
+            bso.FindProperty("binderPrefab").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<GameObject>(BinderPrefabPath);
+            bso.FindProperty("floorY").floatValue = 0f;
+            bso.ApplyModifiedPropertiesWithoutUndo();
+
+            if (bso.FindProperty("binderPrefab").objectReferenceValue == null)
+                Debug.LogWarning($"[RoomBuilder] No binder prefab at {BinderPrefabPath}; " +
+                                 "the crate will deliver nothing until one is wired.");
         }
 
-        static void BuildMapCrate(IslandGenerator generator, SheetSpawner spawner)
+        static void BuildMapCrate(IslandGenerator generator, SheetSpawner spawner,
+                                  BinderSpawner binders)
         {
             var crate = GameObject.CreatePrimitive(PrimitiveType.Cube);
             crate.name = "MapCrate";
@@ -467,7 +485,7 @@ namespace Archivist.Building.Editor
             crate.GetComponent<MeshRenderer>().sharedMaterial =
                 AssetDatabase.LoadAssetAtPath<Material>($"{MatDir}/M_Placeholder_Crate.mat");
 
-            // Sheets land beyond the crate, so opening one does not bury the player's feet.
+            // A delivery lands beyond the crate, so opening one does not bury the player's feet.
             var drop = new GameObject("DropAnchor");
             drop.transform.SetParent(crate.transform, false);
             drop.transform.position = new Vector3(CratePosition.x, 0f, CratePosition.z);
@@ -476,6 +494,7 @@ namespace Archivist.Building.Editor
             var so = new SerializedObject(mapCrate);
             so.FindProperty("label").stringValue = "Create map";
             so.FindProperty("generator").objectReferenceValue = generator;
+            so.FindProperty("binders").objectReferenceValue = binders;
             so.FindProperty("spawner").objectReferenceValue = spawner;
             so.FindProperty("dropAnchor").objectReferenceValue = drop.transform;
             so.ApplyModifiedPropertiesWithoutUndo();

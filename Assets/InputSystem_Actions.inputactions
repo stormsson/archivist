@@ -96,13 +96,13 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Turn",
-                    "type": "Value",
-                    "id": "e59f3bb0-1bf7-4245-a4d6-07674f709b21",
-                    "expectedControlType": "Axis",
+                    "name": "OpenTable",
+                    "type": "Button",
+                    "id": "1f6b2d90-4c73-4a15-b8e2-5a9d0c74e6b1",
+                    "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
-                    "initialStateCheck": true
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -482,17 +482,6 @@
                 },
                 {
                     "name": "",
-                    "id": "36e52cba-0905-478e-a818-f4bfcb9f3b9a",
-                    "path": "<Keyboard>/c",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "Keyboard&Mouse",
-                    "action": "Crouch",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
                     "id": "7cca0009-4af8-4684-88ce-1964c92e2aa4",
                     "path": "<Keyboard>/z",
                     "interactions": "",
@@ -502,6 +491,34 @@
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
+                {
+                    "name": "",
+                    "id": "3e8d5c21-9a04-4b67-8f13-2c6e7d40b985",
+                    "path": "<Keyboard>/c",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "OpenTable",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "Table",
+            "id": "7a1c0f42-3b58-4e6d-9c21-8d5f0b3e7a44",
+            "actions": [
+                {
+                    "name": "Turn",
+                    "type": "Value",
+                    "id": "e59f3bb0-1bf7-4245-a4d6-07674f709b21",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                }
+            ],
+            "bindings": [
                 {
                     "name": "1D Axis",
                     "id": "9fc85836-92d9-4fd1-8404-b1bdd79c1182",
