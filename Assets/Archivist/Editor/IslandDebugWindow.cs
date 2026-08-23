@@ -1052,7 +1052,7 @@ namespace Archivist.Editor
         TextField _seedField;
         TextField _indexField;
 
-        [MenuItem("Window/Archivist/Island Debug")]
+        [MenuItem("Archivist/Island Debug")]
         public static void Open()
         {
             IslandDebugWindow w = GetWindow<IslandDebugWindow>();
