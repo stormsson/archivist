@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Archivist.Building.Handling;
 
 namespace Archivist.Building.Sheets
 {
@@ -39,29 +40,94 @@ namespace Archivist.Building.Sheets
         public IReadOnlyList<SheetView> Spawned { get { return spawned; } }
 
         /// <summary>
+        /// <b>A scene never starts with paper on the floor.</b>
+        ///
+        /// <para>The ledger is the only record that a sheet has been issued and it does not
+        /// survive a scene load, so a sheet that did survive one would exist with nothing
+        /// recording it and could be issued a second time — R2.10 says that must be
+        /// impossible. This used to be enforced by hiding sheets from serialisation with
+        /// HideFlags.DontSaveInEditor, which cost three separate bugs: their meshes were
+        /// garbage-collected as unreferenced, FindObjectsByType stopped returning them, and
+        /// they vanished from the Hierarchy window while still being visible in the scene.
+        /// Sweeping them at startup states the same rule out loud, and leaves a sheet an
+        /// ordinary GameObject that can be selected, inspected and deleted like anything
+        /// else.</para>
+        /// </summary>
+        void Awake()
+        {
+            int stale = AllInScene().Length;
+            if (stale == 0) return;
+
+            ClearAll();
+            Debug.Log($"[SheetSpawner] Cleared {stale} sheet(s) present at scene start. " +
+                      "Issuance lives in the ledger, and the ledger starts empty.", this);
+        }
+
+        /// <summary>
+        /// Every sheet actually in the scene, found rather than remembered.
+        ///
+        /// <para><c>spawned</c> is ordinary runtime state and does not survive a domain
+        /// reload; the sheets themselves do, because they are GameObjects. Trusting the list
+        /// after a recompile means the spawner has forgotten paper that is still lying on the
+        /// floor — it clears nothing, counts nothing, and stacks new sheets into the same
+        /// plane as the old ones. Anything that must be right about what exists asks the
+        /// scene.</para>
+        ///
+        /// <para>Walks the active scene's roots rather than calling
+        /// <c>FindObjectsByType</c>: it is scoped to one scene, it includes the sheet
+        /// currently in the player's hands (a child of the camera), and it does not care what
+        /// hideFlags anything carries — a lesson learned when <c>FindObjectsByType</c>
+        /// reported, quite confidently, that there was no paper in a room full of it.</para>
+        /// </summary>
+        public static SheetView[] AllInScene()
+        {
+            var found = new List<SheetView>();
+
+            // Resources.FindObjectsOfTypeAll, and nothing else will do. It is the only lookup
+            // that returns objects carrying DontSave-family hideFlags — FindObjectsByType
+            // skips them, Scene.GetRootGameObjects skips them, and the Hierarchy window does
+            // not draw them. Sheets used to be spawned with HideFlags.DontSaveInEditor, and
+            // any left over from that era are rendered, collidable, walkable, and reachable
+            // by no ordinary API at all. This finds them so they can be destroyed.
+            SheetView[] all = Resources.FindObjectsOfTypeAll<SheetView>();
+
+            for (int i = 0; i < all.Length; i++)
+            {
+                SheetView view = all[i];
+                if (view == null) continue;
+
+                // Scene-bound only: the same call also returns prefab assets and anything
+                // living in a preview scene, and neither is paper on this floor.
+                if (!view.gameObject.scene.IsValid()) continue;
+
+                found.Add(view);
+            }
+            return found.ToArray();
+        }
+
+        /// <summary>
         /// One sheet, positioned by its index within the batch. Called once per frame by the
         /// crate rather than in a loop: each call uploads a texture, and five uploads in one
         /// frame is a visible hitch in a game whose entire tone is "calm" (T5).
         /// </summary>
         public SheetView Place(SheetRender render, int index, int total, Transform anchor)
         {
-            // Height comes from the running total, NOT from the batch index. The index
-            // restarts at zero every opening, so using it put the first sheet of every batch
-            // at exactly the same height as the first sheet of the last one — coplanar, and
-            // guaranteed to fight. The pile only ever grows upward.
-            int inPile = spawned.Count;
+            // Height comes from how much paper is already down, NOT from the batch index.
+            // The index restarts at zero every opening, so using it put the first sheet of
+            // every batch at exactly the same height as the first sheet of the last one —
+            // coplanar, and guaranteed to fight. Counted from the scene rather than the list
+            // so a reload cannot restart the pile underneath surviving sheets.
+            int inPile = AllInScene().Length;
 
             SheetView view = SheetView.Create(render, sheetMaterial, paperTint, mapTextureProperty);
 
             int layer = LayerMask.NameToLayer(sheetLayer);
             if (layer >= 0) SetLayerRecursive(view.gameObject, layer);
 
-            // A spawned sheet is NEVER written into a scene file. The ledger is the only
-            // record that a sheet has been issued, and it does not survive a scene load —
-            // so a sheet that did survive one would exist with nothing recording it, and
-            // could be issued a second time. R2.10 says that must be impossible, so the
-            // guarantee is made structural rather than left to whoever presses Ctrl-S.
-            view.gameObject.hideFlags = HideFlags.DontSaveInEditor;
+            // A sheet in the world can be taken. The spawner decides that, not the view:
+            // the same view will later sit in a rack or on the table with a different verb.
+            // Nothing is handed to it — it asks whoever aims at it.
+            view.gameObject.AddComponent<SheetPickup>();
 
             int row = index / columns;
             int col = index % columns;
@@ -89,18 +155,52 @@ namespace Archivist.Building.Sheets
         }
 
         /// <summary>
+        /// Lays a sheet flat at a point on the floor — where a carried sheet goes when it is
+        /// dropped (R4.7). Unlike <see cref="Place"/> this takes a position rather than a
+        /// slot in a batch, because the player chose it.
+        ///
+        /// <para>Height is found by looking down for paper already lying there and sitting on
+        /// top of it. That is both what should visibly happen and what keeps a dropped sheet
+        /// out of the plane of one already down — a running counter would work until a sheet
+        /// were picked up and put back, which is exactly the case this method exists for.</para>
+        /// </summary>
+        public void LayOnFloor(SheetView view, Vector3 point, float yaw)
+        {
+            if (view == null) return;
+
+            float y = floorY + liftOff;
+
+            int layer = LayerMask.NameToLayer(sheetLayer);
+            if (layer >= 0)
+            {
+                RaycastHit hit;
+                if (Physics.Raycast(point + Vector3.up * 0.6f, Vector3.down, out hit, 1.2f,
+                                    1 << layer, QueryTriggerInteraction.Ignore))
+                {
+                    y = Mathf.Max(y, hit.point.y + separation);
+                }
+            }
+
+            view.transform.SetPositionAndRotation(new Vector3(point.x, y, point.z),
+                                                  Quaternion.Euler(0f, yaw, 0f));
+
+            if (!spawned.Contains(view)) spawned.Add(view);
+        }
+
+        /// <summary>
         /// Removes every sheet this spawner has placed. Does not touch the ledger: what is
         /// on the floor and what has been issued are different facts, and clearing the floor
         /// is not un-issuing anything.
         /// </summary>
         public void ClearAll()
         {
-            for (int i = 0; i < spawned.Count; i++)
+            SheetView[] all = AllInScene();
+            for (int i = 0; i < all.Length; i++)
             {
-                if (spawned[i] == null) continue;
+                if (all[i] == null) continue;
 
-                if (Application.isPlaying) Destroy(spawned[i].gameObject);
-                else DestroyImmediate(spawned[i].gameObject);
+                if (Application.isPlaying) Destroy(all[i].gameObject);
+                else DestroyImmediate(all[i].gameObject);
             }
             spawned.Clear();
         }

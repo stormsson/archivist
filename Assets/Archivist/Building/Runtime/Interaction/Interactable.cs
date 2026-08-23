@@ -13,7 +13,8 @@ namespace Archivist.Building.Interaction
         [SerializeField] string label = "Interact";
 
         public virtual string Label { get { return label; } }
-        public virtual bool CanInteract { get { return isActiveAndEnabled; } }
+
+        public virtual bool CanInteract(PlayerInteractor by) { return isActiveAndEnabled; }
 
         public abstract void Interact(PlayerInteractor by);
 

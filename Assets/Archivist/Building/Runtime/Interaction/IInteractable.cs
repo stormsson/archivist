@@ -17,10 +17,17 @@ namespace Archivist.Building.Interaction
         string Label { get; }
 
         /// <summary>
-        /// False hides nothing — the label still shows, greyed — but the act is refused.
+        /// False hides nothing — the label still shows, dimmed — but the act is refused.
         /// A crate mid-generation and a full rack are both "here, but not now".
+        ///
+        /// <para>Takes the interactor because availability is frequently a fact about the
+        /// <i>player</i>, not the object: a sheet is takeable when hands are free, and the
+        /// sheet has no business knowing which hands those are. An interactable that stores a
+        /// reference to the player is storing something it cannot keep — the field does not
+        /// survive a domain reload or a play-mode transition, and comes back null with no
+        /// symptom except a verb that quietly refuses.</para>
         /// </summary>
-        bool CanInteract { get; }
+        bool CanInteract(PlayerInteractor by);
 
         void Interact(PlayerInteractor by);
     }

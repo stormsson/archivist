@@ -48,7 +48,7 @@ namespace Archivist.Building.Interactables
         bool busy;
 
         public override string Label { get { return busy ? busyLabel : base.Label; } }
-        public override bool CanInteract { get { return !busy && isActiveAndEnabled; } }
+        public override bool CanInteract(PlayerInteractor by) { return !busy && isActiveAndEnabled; }
 
         public override void Interact(PlayerInteractor by)
         {
@@ -142,11 +142,22 @@ namespace Archivist.Building.Interactables
             // lookup rather than another third of a second.
             Island island = generator.GetOrGenerate(islandSeed);
             List<Sheet> picks = SheetPicker.PickUnissued(island, count, issued, drawSeed);
+            return Render(island, picks, pixelsPerPaperMm);
+        }
 
-            var rendered = new List<SheetRender>(picks.Count);
-            for (int i = 0; i < picks.Count; i++)
+        /// <summary>
+        /// Rasterises an explicit list of sheets. Split out from <see cref="Draw"/> so that a
+        /// case can be reproduced by naming its sheets instead of hoping the picker chooses
+        /// them again — which is the difference between a bug you can look at and a bug you
+        /// have to wait for.
+        /// </summary>
+        public static List<SheetRender> Render(Island island, IList<Sheet> sheets,
+                                               double pixelsPerPaperMm)
+        {
+            var rendered = new List<SheetRender>(sheets.Count);
+            for (int i = 0; i < sheets.Count; i++)
             {
-                Sheet sheet = picks[i];
+                Sheet sheet = sheets[i];
                 RenderRequest request = RenderRequest.ForSheet(sheet, pixelsPerPaperMm);
                 ImageBuffer image = IslandRenderer.Render(island, request);
                 rendered.Add(new SheetRender(SheetId.Of(sheet), sheet, island.Name, image));

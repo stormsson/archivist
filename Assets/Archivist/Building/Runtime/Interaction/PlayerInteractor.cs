@@ -19,13 +19,22 @@ namespace Archivist.Building.Interaction
         [SerializeField] LayerMask blockers = ~0;
 
         [Header("Wiring")]
+        [Tooltip("Logs what the aim ray finds whenever it changes. The three failures look " +
+                 "identical from behind the screen — nothing hit, something hit that is not " +
+                 "interactable, and an interactable that is refusing — so this says which.")]
+        [SerializeField] bool logProbe;
+
         [SerializeField] Transform eye;
         [SerializeField] InputActionAsset inputActions;
         [SerializeField] InteractionPrompt prompt;
 
         InputAction interactAction;
+        /// <summary>Control scheme name in InputSystem_Actions.</summary>
+        const string KeyboardScheme = "Keyboard&Mouse";
+
         Interactable current;
-        string bindingHint = "E";
+        string bindingHint = "F";
+        string lastProbeLog;
 
         /// <summary>What the player is aimed at this frame, or null.</summary>
         public Interactable Current { get { return current; } }
@@ -44,7 +53,12 @@ namespace Archivist.Building.Interaction
             // idempotent and keeps this component independent of the order they wake in.
             interactAction.Enable();
 
-            string display = interactAction.GetBindingDisplayString();
+            // Masked to the keyboard scheme: unmasked this returns every binding on every
+            // device — "F | Y" — which is not a prompt, it is an inventory.
+            string display = interactAction.GetBindingDisplayString(
+                InputBinding.MaskByGroup(KeyboardScheme));
+
+            if (string.IsNullOrEmpty(display)) display = interactAction.GetBindingDisplayString();
             if (!string.IsNullOrEmpty(display)) bindingHint = display;
         }
 
@@ -62,7 +76,7 @@ namespace Archivist.Building.Interaction
                 Refresh();   // CanInteract can change while aimed, e.g. a crate starts working
             }
 
-            if (current != null && current.CanInteract && interactAction.WasPressedThisFrame())
+            if (current != null && current.CanInteract(this) && interactAction.WasPressedThisFrame())
                 current.Interact(this);
         }
 
@@ -73,11 +87,29 @@ namespace Archivist.Building.Interaction
             RaycastHit hit;
             bool blocked = Physics.Raycast(eye.position, eye.forward, out hit, reach,
                                            blockers, QueryTriggerInteraction.Ignore);
-            if (!blocked) return null;
+            if (!blocked)
+            {
+                Probed($"nothing within {reach} m");
+                return null;
+            }
 
             // GetComponentInParent, not GetComponent: the collider that stopped the ray is
             // often a child of the thing that owns the interaction.
-            return hit.collider.GetComponentInParent<Interactable>();
+            Interactable found = hit.collider.GetComponentInParent<Interactable>();
+
+            Probed(found == null
+                ? $"{hit.distance:0.00} m: {hit.collider.name} — no Interactable"
+                : $"{hit.distance:0.00} m: {found.name} — {(found.CanInteract(this) ? "available" : "REFUSING")}");
+
+            return found;
+        }
+
+        /// <summary>Logs only when the answer changes; every frame would bury the change.</summary>
+        void Probed(string what)
+        {
+            if (!logProbe || what == lastProbeLog) return;
+            lastProbeLog = what;
+            Debug.Log("[Probe] " + what, this);
         }
 
         void Refresh()
@@ -85,7 +117,7 @@ namespace Archivist.Building.Interaction
             if (prompt == null) return;
 
             if (current == null) prompt.Hide();
-            else prompt.Show(current.Label, bindingHint, current.CanInteract);
+            else prompt.Show(current.Label, bindingHint, current.CanInteract(this));
         }
 
         void OnDisable()

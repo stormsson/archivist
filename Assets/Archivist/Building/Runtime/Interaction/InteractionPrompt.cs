@@ -14,8 +14,12 @@ namespace Archivist.Building.Interaction
     {
         [SerializeField] CanvasGroup group;
         [SerializeField] Text label;
-        [SerializeField] Color available = new Color(0.96f, 0.95f, 0.92f, 1f);
-        [SerializeField] Color unavailable = new Color(0.62f, 0.61f, 0.58f, 1f);
+        // Far apart on purpose. The first pair differed by about a third of a stop, which
+        // is legible in a colour picker and not on a screen — a whole debugging session went
+        // into arguing about which state was showing. Available is white; unavailable is
+        // nearly black. Nobody should ever have to measure a pixel to tell these apart.
+        [SerializeField] Color available = new Color(1f, 1f, 1f, 1f);
+        [SerializeField] Color unavailable = new Color(0.16f, 0.16f, 0.15f, 1f);
 
         void Awake() { Hide(); }
 
@@ -32,6 +36,12 @@ namespace Archivist.Building.Interaction
         public void Hide()
         {
             if (group != null) group.alpha = 0f;
+
+            // Cleared, not merely faded. An invisible label still holding the last verb
+            // reads as truth to anything that inspects it later — during one debugging
+            // session it claimed the player was aiming at the crate while they were aiming
+            // at a sheet.
+            if (label != null) label.text = "";
         }
     }
 }

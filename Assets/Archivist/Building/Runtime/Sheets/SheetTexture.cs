@@ -62,6 +62,9 @@ namespace Archivist.Building.Sheets
 
             var tex = new Texture2D(paperW, paperH, TextureFormat.RGBA32, mipChain: true, linear: false);
             tex.name = name;
+            // See SheetMesh.CreateSlab: a sheet's GameObject is outside the serialized graph,
+            // so anything only it references is collected on the next reload unless flagged.
+            tex.hideFlags = HideFlags.DontSave;
             tex.wrapMode = TextureWrapMode.Clamp;
             tex.filterMode = FilterMode.Bilinear;
             tex.anisoLevel = 8;   // a sheet on the floor is never seen face-on

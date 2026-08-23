@@ -8,6 +8,7 @@ using UnityEngine.UI;
 using Archivist.Building.Collection;
 using Archivist.Building.Interaction;
 using Archivist.Building.Interactables;
+using Archivist.Building.Handling;
 using Archivist.Building.Sheets;
 
 namespace Archivist.Building.Editor
@@ -47,15 +48,30 @@ namespace Archivist.Building.Editor
         const string MatDir    = Root + "/Materials";
         const string TexDir    = Root + "/Textures";
         const string PrefabDir = Root + "/Prefabs";
+        const string OptionsDir = Root + "/Options";
+        const string HandlingOptionsPath = OptionsDir + "/HandlingOptions.asset";
         const string SceneDir  = Root + "/Scenes";
         const string ScenePath = SceneDir + "/POC04_Room.unity";
         const string RoomPrefab = PrefabDir + "/PF_Archive_Room_Debug.prefab";
         const string InputAsset = "Assets/InputSystem_Actions.inputactions";
 
         // ---- POC-05: interaction ------------------------------------------
-        const float InteractReach = 2.5f;    // 'close enough' and 'aimed at' are one test
+        // 'Close enough' and 'aimed at' are one test. 2.5 m was chosen for things at hand
+        // height and is too short for the floor: a sheet lies 1.65 m below the eye, so
+        // sqrt(2.5^2 - 1.65^2) = 1.88 m is all the forward reach that leaves, and sheets are
+        // laid out to ~2.5 m. 3.0 gives 2.50 m of floor reach. Provisional — the Sheet Test
+        // Bench exposes this as a slider because it is a feel value, not a derivation.
+        const float InteractReach = 3.0f;
         const float CrateSize     = 0.5f;
         static readonly Vector3 CratePosition = new Vector3(0f, CrateSize / 2f, 0.5f);
+
+        // ---- POC-06: the carried pose -------------------------------------
+        // Right of centre and tilted, because the left half of the view is spoken for —
+        // that is where the journal and whatever else the player holds will go. These are
+        // a starting point: the anchor is a transform in the scene and moving it is the
+        // tuning loop.
+        static readonly Vector3 HoldPosition = new Vector3(0.36f, -0.09f, 1.15f);
+        static readonly Vector3 HoldRotation = new Vector3(-77f, -12f, 5f);
 
         [MenuItem("Archivist/Build POC-04 Room")]
         public static void Build()
@@ -70,12 +86,18 @@ namespace Archivist.Building.Editor
             room.name = "Archive_Room_Debug";
 
             InteractionPrompt prompt = BuildInteractionUi();
-            BuildPlayer(prompt);
+            PlayerHands hands = BuildPlayer(prompt);
 
             IslandGenerator generator;
             SheetSpawner spawner;
             BuildGenerator(out generator, out spawner);
             BuildMapCrate(generator, spawner);
+
+            // Closed last: hands and spawner each need the other, so one of the two links
+            // cannot be made at construction time.
+            var handsSo = new SerializedObject(hands);
+            handsSo.FindProperty("spawner").objectReferenceValue = spawner;
+            handsSo.ApplyModifiedPropertiesWithoutUndo();
 
             ApplyEnvironment();
 
@@ -91,7 +113,7 @@ namespace Archivist.Building.Editor
 
         static void EnsureFolders()
         {
-            foreach (var d in new[] { MatDir, TexDir, PrefabDir, SceneDir })
+            foreach (var d in new[] { MatDir, TexDir, PrefabDir, SceneDir, OptionsDir })
                 if (!Directory.Exists(d)) Directory.CreateDirectory(d);
             AssetDatabase.Refresh();
         }
@@ -251,7 +273,7 @@ namespace Archivist.Building.Editor
 
         // --------------------------------------------------------------------
 
-        static void BuildPlayer(InteractionPrompt prompt)
+        static PlayerHands BuildPlayer(InteractionPrompt prompt)
         {
             var player = new GameObject("Player");
             player.layer = LayerMask.NameToLayer("Player");
@@ -299,6 +321,24 @@ namespace Archivist.Building.Editor
             iso.FindProperty("inputActions").objectReferenceValue = actions;
             iso.FindProperty("prompt").objectReferenceValue = prompt;
             iso.ApplyModifiedPropertiesWithoutUndo();
+
+            // The carried pose is a transform, not a constant: it is a feel question, and
+            // feel questions get answered by dragging the thing, not by editing numbers.
+            var hold = new GameObject("HoldAnchor");
+            hold.transform.SetParent(eye.transform, false);
+            hold.transform.localPosition = HoldPosition;
+            hold.transform.localRotation = Quaternion.Euler(HoldRotation);
+
+            var hands = player.AddComponent<PlayerHands>();
+            var hso = new SerializedObject(hands);
+            hso.FindProperty("holdAnchor").objectReferenceValue = hold.transform;
+            hso.FindProperty("inputActions").objectReferenceValue = actions;
+            hso.FindProperty("options").objectReferenceValue = EnsureHandlingOptions();
+            // On by default while take/drop is being chased. One checkbox to silence.
+            hso.FindProperty("logHandling").boolValue = true;
+            hso.ApplyModifiedPropertiesWithoutUndo();
+
+            return hands;
         }
 
         // --------------------------------------------------------------------
@@ -354,6 +394,20 @@ namespace Archivist.Building.Editor
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = size;
             rt.anchoredPosition = offset;
+        }
+
+        /// <summary>
+        /// Created once and never overwritten. These are feel values the project owner is
+        /// expected to change by hand, and a rebuild of the room must not undo that.
+        /// </summary>
+        static HandlingOptions EnsureHandlingOptions()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<HandlingOptions>(HandlingOptionsPath);
+            if (existing != null) return existing;
+
+            var options = ScriptableObject.CreateInstance<HandlingOptions>();
+            AssetDatabase.CreateAsset(options, HandlingOptionsPath);
+            return options;
         }
 
         static Font BuiltinFont()

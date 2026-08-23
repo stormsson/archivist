@@ -72,7 +72,14 @@ namespace Archivist.Building.Sheets
                         outward, EdgeUv, EdgeUv, EdgeUv, EdgeUv);
             }
 
-            var mesh = new Mesh { name = name };
+            // DontSave, and it is load-bearing. A sheet GameObject carries
+            // HideFlags.DontSaveInEditor so it can never be written into a scene, which also
+            // takes it out of the serialized object graph. Anything it is the only owner of
+            // therefore looks unreferenced to UnloadUnusedAssets on the next play-mode
+            // transition or domain reload, and gets collected — leaving a sheet that is
+            // positioned, parented, enabled and visible, and draws nothing at all.
+            // SheetView destroys these itself in OnDestroy, so nothing leaks.
+            var mesh = new Mesh { name = name, hideFlags = HideFlags.DontSave };
             mesh.SetVertices(verts);
             mesh.SetNormals(norms);
             mesh.SetUVs(0, uvs);

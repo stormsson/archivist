@@ -27,6 +27,10 @@ namespace Archivist.Building.Sheets
         public Office Office { get; private set; }
         public int Number { get; private set; }
 
+        /// <summary>The sheet's collider. Switched off while carried, so a sheet held in
+        /// front of the eye does not swallow every interaction ray the player casts.</summary>
+        public Collider Body { get; private set; }
+
         Mesh mesh;
         Material materialInstance;
         Texture2D texture;
@@ -52,6 +56,7 @@ namespace Archivist.Building.Sheets
 
             view.materialInstance = new Material(sheetMaterial);
             view.materialInstance.name = "M_Sheet_" + render.Id;
+            view.materialInstance.hideFlags = HideFlags.DontSave;
             view.materialInstance.SetTexture(mapTextureProperty, view.texture);
 
             root.AddComponent<MeshFilter>().sharedMesh = view.mesh;
@@ -64,15 +69,26 @@ namespace Archivist.Building.Sheets
             var box = root.AddComponent<BoxCollider>();
             box.size = new Vector3(paperW, Thickness, paperH);
             box.center = new Vector3(0f, Thickness * 0.5f, 0f);
+            view.Body = box;
 
             return view;
         }
 
         void OnDestroy()
         {
-            Destroy(mesh);
-            Destroy(materialInstance);
-            Destroy(texture);
+            // Destroy is illegal in edit mode, and a sheet is routinely destroyed there — by
+            // the test bench, by the purge, by deleting it in the Hierarchy.
+            Discard(mesh);
+            Discard(materialInstance);
+            Discard(texture);
+        }
+
+        static void Discard(Object asset)
+        {
+            if (asset == null) return;
+
+            if (Application.isPlaying) Destroy(asset);
+            else DestroyImmediate(asset);
         }
     }
 }
