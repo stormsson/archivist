@@ -33,10 +33,6 @@ namespace Archivist.Building.Handling
                  "a take that succeeds off-screen look identical from behind the camera.")]
         [SerializeField] bool logHandling;
 
-        [Header("Dropping")]
-        [Tooltip("Metres in front of the player that a dropped sheet lands.")]
-        [SerializeField] float dropDistance = 0.75f;
-
         InputAction dropAction;
         InputAction turnAction;
 
@@ -204,7 +200,11 @@ namespace Archivist.Building.Handling
             return true;
         }
 
-        /// <summary>Lays the carried sheet on the floor in front of the player. R4.7.</summary>
+        /// <summary>
+        /// Lets the carried sheet go. It falls from the hands rather than appearing on the
+        /// floor: dropping paper is a thing that takes a moment, and R4.7 makes the floor a
+        /// legitimate destination rather than a failure.
+        /// </summary>
         public bool Drop()
         {
             if (held == null) return false;
@@ -215,20 +215,53 @@ namespace Archivist.Building.Handling
 
             sheet.transform.SetParent(null, worldPositionStays: true);
 
-            Vector3 point = transform.position + transform.forward * dropDistance;
-
             // The player's turn is added to the way they are facing. There is no true mapping
             // between "up in the view" and a compass bearing, so some choice has to be made;
             // this one means a sheet lands looking the way it looked in hand.
             float yaw = transform.eulerAngles.y + heldTurn;
             heldTurn = 0f;
 
-            // Positioned before the collider comes back on: the spawner looks downward for
-            // paper already lying there, and a sheet must not find itself.
-            if (spawner != null) spawner.LayOnFloor(sheet, point, yaw);
+            // It falls from where it was held, so it lands roughly where the player was
+            // holding it — which is what letting go of something means.
+            Vector3 releasedAt = sheet.transform.position;
+
+            if (spawner == null)
+            {
+                Land(sheet);
+                return true;
+            }
+
+            Vector3 rest;
+            Quaternion restRotation;
+            spawner.RestingPose(releasedAt, yaw, out rest, out restRotation);
+
+            // Update does not tick in edit mode, so a sheet dropped there would hang in the
+            // air. The bench gets the outcome, not the fall.
+            if (!Application.isPlaying)
+            {
+                sheet.transform.SetPositionAndRotation(rest, restRotation);
+                Land(sheet);
+                return true;
+            }
+
+            // The collider stays off until it lands: a falling sheet is not something to aim
+            // at, and RestingPose looks downward for paper already lying there — a sheet must
+            // not find itself.
+            sheet.gameObject.AddComponent<SheetFall>()
+                 .Begin(sheet, rest, restRotation, options, transform.right, Land);
+
+            return true;
+        }
+
+        void Land(SheetView sheet)
+        {
+            if (sheet == null) return;
 
             if (sheet.Body != null) sheet.Body.enabled = true;
-            return true;
+            if (spawner != null) spawner.Register(sheet);
+
+            if (logHandling)
+                Debug.Log($"[Hands] {sheet.Id} settled at {sheet.transform.position}", this);
         }
     }
 }

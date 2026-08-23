@@ -168,23 +168,50 @@ namespace Archivist.Building.Sheets
         {
             if (view == null) return;
 
+            Vector3 position;
+            Quaternion rotation;
+            RestingPose(point, yaw, out position, out rotation);
+
+            view.transform.SetPositionAndRotation(position, rotation);
+            Register(view);
+        }
+
+        /// <summary>
+        /// Where a sheet released above <paramref name="point"/> comes to rest.
+        ///
+        /// <para>Decided before the sheet starts falling, not on arrival. A drifting sheet
+        /// that worked out where it landed only once it got there could land inside another
+        /// one, or fail to find the pile it was aiming at — and R5.6 leaves no room for
+        /// either. The fall is presentation; this is the fact.</para>
+        /// </summary>
+        public void RestingPose(Vector3 point, float yaw, out Vector3 position, out Quaternion rotation)
+        {
             float y = floorY + liftOff;
 
             int layer = LayerMask.NameToLayer(sheetLayer);
             if (layer >= 0)
             {
+                // Cast from just above the floor, not from the release point: paper is
+                // released at chest height and the ray would finish above the pile it is
+                // looking for.
+                var origin = new Vector3(point.x, floorY + 0.6f, point.z);
+
                 RaycastHit hit;
-                if (Physics.Raycast(point + Vector3.up * 0.6f, Vector3.down, out hit, 1.2f,
+                if (Physics.Raycast(origin, Vector3.down, out hit, 1.2f,
                                     1 << layer, QueryTriggerInteraction.Ignore))
                 {
                     y = Mathf.Max(y, hit.point.y + separation);
                 }
             }
 
-            view.transform.SetPositionAndRotation(new Vector3(point.x, y, point.z),
-                                                  Quaternion.Euler(0f, yaw, 0f));
+            position = new Vector3(point.x, y, point.z);
+            rotation = Quaternion.Euler(0f, yaw, 0f);
+        }
 
-            if (!spawned.Contains(view)) spawned.Add(view);
+        /// <summary>Counts a sheet as part of the floor. Called once it has actually landed.</summary>
+        public void Register(SheetView view)
+        {
+            if (view != null && !spawned.Contains(view)) spawned.Add(view);
         }
 
         /// <summary>

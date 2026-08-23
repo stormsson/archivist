@@ -14,3 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sheetTurnDegreesPerSecond: 120
   sheetTakeSeconds: 0.28
+  fallSpeed: 1.1
+  fallSwayMetres: 0.08
+  fallSwayHz: 1.2
+  fallTiltDegrees: 16

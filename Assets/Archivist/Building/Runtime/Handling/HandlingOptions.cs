@@ -35,7 +35,25 @@ namespace Archivist.Building.Handling
                  "to be read as a movement, short enough not to be waited on.")]
         [SerializeField, Min(0f)] float sheetTakeSeconds = DefaultSheetTakeSeconds;
 
+        [Header("Falling sheet")]
+        [Tooltip("Terminal speed in metres per second. Paper reaches this almost at once and " +
+                 "then falls at it — that IS air resistance, as far as the eye is concerned.")]
+        [SerializeField, Min(0.05f)] float fallSpeed = 1.1f;
+
+        [Tooltip("How far the sheet slides sideways at the widest part of its swing, in metres.")]
+        [SerializeField, Min(0f)] float fallSwayMetres = 0.08f;
+
+        [Tooltip("Swings per second. Slower reads as heavier paper.")]
+        [SerializeField, Min(0f)] float fallSwayHz = 1.2f;
+
+        [Tooltip("How far the sheet tips at the widest part of its swing, in degrees.")]
+        [SerializeField, Min(0f)] float fallTiltDegrees = 16f;
+
         public float SheetTurnDegreesPerSecond { get { return sheetTurnDegreesPerSecond; } }
         public float SheetTakeSeconds { get { return sheetTakeSeconds; } }
+        public float FallSpeed { get { return fallSpeed; } }
+        public float FallSwayMetres { get { return fallSwayMetres; } }
+        public float FallSwayHz { get { return fallSwayHz; } }
+        public float FallTiltDegrees { get { return fallTiltDegrees; } }
     }
 }
