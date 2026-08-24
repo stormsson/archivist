@@ -31,6 +31,14 @@ namespace Archivist.Building.Table
     /// R1.11). The island's own naming (§9) already lives there and this is the same kind of
     /// fact about the same island.</para>
     ///
+    /// <para><b>It names surveys and assemblies too, now.</b> G6.3's Groups row needs the
+    /// survey's name and year and the lowest member's code, and both are the same kind of
+    /// question this class already answers about a sheet — what is it <i>called</i>, what is it
+    /// <i>numbered</i>. <see cref="OfficeTitleFor"/> moved here out of <c>CabinetPanel</c> for
+    /// the reason it was written in the first place: it was already the one place the four
+    /// office labels are spelled, and a second caller made "one place" worth enforcing rather
+    /// than merely intending. Nothing about it changed on the way.</para>
+    ///
     /// <para><b>What was tried first, and why it was abandoned.</b> This file used to implement
     /// C7.7 literally: scan <c>island.Features</c> for the nearest <i>named feature</i> on the
     /// sheet, and fall back to the code alone when there is none. It worked, and it was still
@@ -127,9 +135,97 @@ namespace Archivist.Building.Table
                  + id.Number.ToString("D2", CultureInfo.InvariantCulture);
         }
 
+        /// <summary>
+        /// The survey a group is made of, as one line: <c>Land Survey 1894</c> — G6.3's "the
+        /// survey's name and year".
+        ///
+        /// <para>A survey has no generated name the way a sheet and an island do (§9,
+        /// <see cref="SheetNames"/>), and must not be given one here: it is identified by the
+        /// office that made it and the year it was made, which is R2.2's own definition read
+        /// back — <i>one island, one office, one year, one scale</i>. Both halves come off the
+        /// <see cref="SurveySpec"/> the caller is holding, so nothing is invented and nothing is
+        /// cached.</para>
+        ///
+        /// <para>The year is formatted with <see cref="CultureInfo.InvariantCulture"/> for the
+        /// reason <see cref="CodeFor"/> gives about digits: it is a label on a document, and a
+        /// culture with non-ASCII digits must not make the same survey read differently on two
+        /// machines. It is not grouped either — <c>1894</c>, never <c>1,894</c>.</para>
+        ///
+        /// <para>The whole-island survey (R2.2a) renders as its borrowed office plus its year,
+        /// like any other. It can never form a group (G3.4 — a survey of one has no peer), so no
+        /// Groups row will ever show it; the case is answered rather than special-cased because
+        /// a naming function that throws or returns null on a legal input is a worse trap than a
+        /// slightly odd string nobody will see.</para>
+        /// </summary>
+        public static string SurveyLabelFor(SurveySpec survey)
+        {
+            return OfficeTitleFor(survey.Office) + " "
+                 + survey.Year.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// A group's second line: the lowest member's code, then how much of the survey is in
+        /// it — <c>FN·03 — 2 of 5</c>. G6.3's "n of N" and its disambiguator, in the place an
+        /// office row puts a code.
+        ///
+        /// <para><b>The disambiguator is the member's code, not a "from 3" suffix.</b> G6.3
+        /// proposes appending the lowest member number, because one survey can hold two groups
+        /// at once — two halves assembled in different corners — and the survey name alone would
+        /// name both. The code carries that number and the office with it, in the exact form the
+        /// player is already reading on every row of the section above, so the disambiguator
+        /// doubles as a pointer to a row they can go and find. A bespoke <c>· from 3</c> would
+        /// be a second notation for a number that already has one.</para>
+        ///
+        /// <para><b><paramref name="held"/> is what the archive holds, NOT what the survey
+        /// shipped</b> — see <c>CabinetPanel</c>'s class comment, which argues the point at
+        /// length against G6.3's wording. D-C3 permits the cabinet's counts only "because the
+        /// accordion lists only <i>issued</i> sheets, so it never reveals how many the survey
+        /// actually has", and <c>LedgerSheetSource</c> repeats it. This function takes the number
+        /// rather than the survey precisely so that it cannot reach for the other one.</para>
+        /// </summary>
+        public static string GroupCodeFor(SheetId lowest, int present, int held)
+        {
+            return CodeFor(lowest) + CountJoin
+                 + present.ToString(CultureInfo.InvariantCulture) + CountOf
+                 + held.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// The four labels of C7.1, and the first half of <see cref="SurveyLabelFor"/>. A switch
+        /// over <see cref="Office"/> rather than an array indexed by <c>(int)office</c>, and
+        /// never a switch over the enum's <i>name</i>, for the reason
+        /// <see cref="PrefixFor"/> spells out: the enum is append-only, so a new office can only
+        /// arrive as an unhandled case, and it should arrive visibly. The default draws the enum
+        /// name rather than throwing — an odd word in a section header is a bug anyone can see
+        /// and nobody loses a session to.
+        /// </summary>
+        public static string OfficeTitleFor(Office office)
+        {
+            switch (office)
+            {
+                case Office.Hydrographic: return "Hydrographic";
+                case Office.LandSurvey:   return "Land Survey";
+                case Office.Garrison:     return "Garrison";
+                case Office.Antiquarian:  return "POIs";
+                default:                  return office.ToString();
+            }
+        }
+
         /// <summary>The character between prefix and number — C7.3's middle dot, as drawn in
         /// the mockups. One place, so changing the house style is one edit.</summary>
         public const string Separator = "·";
+
+        /// <summary>What joins a group's code to its count. An em dash rather than a second
+        /// middle dot: the dot already means "prefix, then number" two characters to the left,
+        /// and one line using one character for two different joins is a line the player has to
+        /// parse twice. <c>CabinetStyle.UnknownName</c> is the same dash, so the built-in font
+        /// is known to carry it.</summary>
+        public const string CountJoin = " — ";
+
+        /// <summary>The word between the two halves of "n of N". Lower case here and upper-cased
+        /// on the way to the screen by <c>CabinetStyle.Spaced</c>, like every other code line —
+        /// the small caps are a drawing decision and belong with the drawing.</summary>
+        public const string CountOf = " of ";
 
         /// <summary>What stands where the number would be on the whole-island sheet: the
         /// cartographic <b>index sheet</b> of a series. Beside <see cref="Separator"/> and for

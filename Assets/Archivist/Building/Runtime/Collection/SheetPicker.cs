@@ -12,12 +12,42 @@ namespace Archivist.Building.Collection
     {
         /// <summary>
         /// Up to <paramref name="count"/> sheets of this island that the ledger has not
-        /// already issued, drawn without replacement.
+        /// already issued, drawn without replacement — or <b>every</b> unissued sheet when
+        /// <paramref name="count"/> is zero or less.
+        ///
+        /// <para>A sentinel rather than "pass a big number", because the callers that want
+        /// everything cannot know how many that is without generating the island first, which
+        /// is the third of a second this call exists to keep off the main thread. The draw is
+        /// still made — the whole pool comes back shuffled, not in survey order — so a caller
+        /// that deals the result into shares gets a mixed folder rather than one office's
+        /// worth, which is the arrangement §4.3 describes.</para>
         ///
         /// <para>Drawing from the flattened set of every survey — rather than picking a survey
         /// and then sheets within it — is what makes a crate's contents mixed, which is the
         /// arrangement §4.3 describes: a crate carries sheets for one or two islands, and
         /// sorting them by office is the player's first act, not the generator's.</para>
+        ///
+        /// <para><b>The whole-island sheet (R2.2a) is not in the pool.</b> It is the one sheet
+        /// that is an entry point rather than a document — R6.8a makes it the board's outline
+        /// — so it is reserved for whatever hands it over deliberately, and a crate must not
+        /// be able to deal it out as one more sheet among thirty.</para>
+        ///
+        /// <para><b>Why the pool and not the crate.</b> The obvious place to drop it looks like
+        /// the far end — <c>MapCrate</c> filing, or <c>BinderSheetSource</c> listing — and both
+        /// are wrong for the same reason: the draw would still have happened, so
+        /// <c>SheetLedger.MarkIssued</c> would already have marked the sheet issued and buried
+        /// it in a binder that then refused to show it. That is losing the sheet, not reserving
+        /// it. Excluded from the pool it is never drawn, so it stays permanently unissued and
+        /// <c>MarkIssued</c> remains the single gate through which it can later be claimed.</para>
+        ///
+        /// <para>It stays in <c>Island.TotalSheets</c>, so an island sits at 30/31 until that
+        /// claim happens. That is accurate — the sheet exists and is still issuable — rather
+        /// than a denominator that quietly disagrees with the survey it counts.</para>
+        ///
+        /// <para>The flag is read off the survey rather than inferred from scale, sheet count
+        /// or office: <see cref="SurveySpec.IsWholeIsland"/> is what those would be guessing
+        /// at, and the whole-island survey borrows one of the three offices, so office alone
+        /// cannot tell them apart.</para>
         ///
         /// <para>Returns fewer than asked, or none, when the island is exhausted. That is a
         /// legitimate outcome, not an error: islands are finite even though the supply of
@@ -32,6 +62,11 @@ namespace Archivist.Building.Collection
             for (int s = 0; s < island.Surveys.Count; s++)
             {
                 Survey survey = island.Surveys[s];
+
+                // Reserved, not abolished: skipped here so it is never drawn, never issued,
+                // and still there for whatever claims it (R2.2a, R6.8a).
+                if (survey.Spec.IsWholeIsland) continue;
+
                 for (int i = 0; i < survey.Sheets.Count; i++)
                 {
                     Sheet sheet = survey.Sheets[i];
@@ -40,11 +75,13 @@ namespace Archivist.Building.Collection
                 }
             }
 
-            var picked = new List<Sheet>(Math.Min(count, pool.Count));
+            int wanted = count <= 0 ? pool.Count : count;
+
+            var picked = new List<Sheet>(Math.Min(wanted, pool.Count));
             var rng = new Random(drawSeed);
 
             // Partial Fisher-Yates: swap a random survivor to the front, take it, shrink.
-            for (int taken = 0; taken < count && pool.Count - taken > 0; taken++)
+            for (int taken = 0; taken < wanted && pool.Count - taken > 0; taken++)
             {
                 int j = taken + rng.Next(pool.Count - taken);
                 Sheet chosen = pool[j];

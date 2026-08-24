@@ -30,10 +30,20 @@ namespace Archivist.Building.Handling
         /// feel rather than the ability to carry anything.</summary>
         public const float DefaultSheetTakeSeconds = 0.28f;
 
-        [Header("Carried sheet")]
+        /// <summary>The same insurance for the placing gesture: no asset should cost the feel,
+        /// never the ability to put something down.</summary>
+        public const float DefaultBinderPlaceSeconds = 0.35f;
+
+        [Header("Into and out of the hands")]
         [Tooltip("Seconds for a sheet to travel from the floor into the hands. Long enough " +
                  "to be read as a movement, short enough not to be waited on.")]
         [SerializeField, Min(0f)] float sheetTakeSeconds = DefaultSheetTakeSeconds;
+
+        [Tooltip("Seconds for an item to travel from the hands onto a table anchor, eased. " +
+                 "The counterpart of the take: putting down rather than picking up, and a " +
+                 "shade slower, because setting something where it belongs is a more " +
+                 "deliberate movement than lifting it off a floor.")]
+        [SerializeField, Min(0.01f)] float binderPlaceSeconds = DefaultBinderPlaceSeconds;
 
         [Header("Falling sheet")]
         [Tooltip("Terminal speed in metres per second. Paper reaches this almost at once and " +
@@ -50,6 +60,7 @@ namespace Archivist.Building.Handling
         [SerializeField, Min(0f)] float fallTiltDegrees = 16f;
 
         public float SheetTakeSeconds { get { return sheetTakeSeconds; } }
+        public float BinderPlaceSeconds { get { return binderPlaceSeconds; } }
         public float FallSpeed { get { return fallSpeed; } }
         public float FallSwayMetres { get { return fallSwayMetres; } }
         public float FallSwayHz { get { return fallSwayHz; } }

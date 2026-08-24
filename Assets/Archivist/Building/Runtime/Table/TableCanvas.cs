@@ -42,6 +42,15 @@ namespace Archivist.Building.Table
     /// strings and touches nothing else — because selection is <i>decided</i> elsewhere and the
     /// header only ever reports it.</para>
     ///
+    /// <para><b>A group crosses the same seam as a sheet, by the same two events.</b> The
+    /// Groups section (G6.1) raises row gestures carrying a group id instead of a
+    /// <see cref="SheetId"/>, and they are translated here exactly as the office rows' are: a
+    /// click becomes a selection, a drop over the composition area becomes
+    /// <c>BoardInteractor.PlaceGroup</c> (G6.5). The other direction — a group dragged off the
+    /// board onto the column and parked (G6.4) — never reaches this class at all, for the reason
+    /// the refile flag paragraph below gives: it is a board gesture, and
+    /// <c>ReleaseOverCabinet</c> is how the board hears about the column.</para>
+    ///
     /// <para><b>Board or cabinet is decided by one rectangle, negatively.</b> "Over the board"
     /// is defined as <i>not</i> inside the cabinet's rect (C7.5). The positive test was tried
     /// first and abandoned: hit-testing the board would mean a physics raycast through
@@ -315,6 +324,50 @@ namespace Archivist.Building.Table
             interactor.BeginPlace(id);
         }
 
+        /// <summary>
+        /// A click on a Groups row selects the assembly (G6.1, C7.6 applied to the new section).
+        ///
+        /// <para><b>It selects a member, because that is what a selection is.</b> G1.6 makes the
+        /// group the unit of interaction by way of the clicked sheet — <c>BoardInteractor</c>
+        /// holds a <see cref="SheetId"/> and reads the group off it — so the row hands over the
+        /// first member in join order, the same sheet the row's own label names (G6.3's
+        /// "from n"). Selecting the group then follows, and <c>Q</c>/<c>E</c> and the corner
+        /// handle turn the whole assembly, which is the useful half of clicking the row.</para>
+        ///
+        /// <para>For a <b>parked</b> group this clears the board selection rather than setting
+        /// one, because <c>Select</c> refuses a sheet that is not on the table — the same answer
+        /// a click on a drawer row already gives, and for the same reason: there is no slab to
+        /// outline and nothing for the verbs to turn.</para>
+        /// </summary>
+        void OnGroupRowClicked(int groupId)
+        {
+            if (interactor == null || board == null) return;
+
+            GroupRecord group;
+            if (!board.TryGetGroup(groupId, out group)) return;
+            if (group.Members == null || group.Members.Count == 0) return;
+
+            interactor.Select(group.Members[0]);
+        }
+
+        /// <summary>
+        /// G6.5: a Groups row released over the composition area lays the whole assembly back
+        /// down under the pointer, preserving its frame rotation φ. Released inside the cabinet
+        /// it never left the drawer and nothing happens — the same silence
+        /// <see cref="OnRowDragEnded"/> keeps, and C6.6's shape of failure (R6.5).
+        ///
+        /// <para>The board/cabinet decision is <see cref="IsOverCabinet"/>'s, unchanged: one
+        /// rectangle, asked negatively, so a group and a sheet cannot disagree about where the
+        /// column ends.</para>
+        /// </summary>
+        void OnGroupDragEnded(int groupId, PointerEventData eventData)
+        {
+            if (interactor == null) return;
+            if (IsOverCabinet(eventData.position)) return;
+
+            interactor.PlaceGroup(groupId);
+        }
+
         /// <summary>The cabinet's edge, crossed. See the class comment for why this one event
         /// owns <c>ReleaseOverCabinet</c> and the row drag does not.</summary>
         void OnPointerOverCabinet(bool over)
@@ -423,6 +476,13 @@ namespace Archivist.Building.Table
             cabinet.RowClicked += OnRowClicked;
             cabinet.DragEnded += OnRowDragEnded;
             cabinet.PointerOverChanged += OnPointerOverCabinet;
+
+            // The Groups section's two halves of the same pair (G6.1). DragStarted and Dragging
+            // are deliberately left unwired on both the sheet rows and these — the ghost is the
+            // row's own and ReleaseOverCabinet is PointerOverChanged's, so a listener here would
+            // be a second writer of facts that already have one (see the class comment).
+            cabinet.GroupRowClicked += OnGroupRowClicked;
+            cabinet.GroupDragEnded += OnGroupDragEnded;
 
             canvas.enabled = false;
             raycaster.enabled = false;

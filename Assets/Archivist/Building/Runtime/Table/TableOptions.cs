@@ -39,6 +39,101 @@ namespace Archivist.Building.Table
 
         public const float DefaultSheetSeparation = 0.004f;
 
+        /// <summary>
+        /// Where the board camera starts, as a divisor of "the whole board fits" (§3.1, C5.1).
+        /// 1 is C8.13's original framing; 2 draws every sheet at twice the size.
+        ///
+        /// <para><b>C8.13 is superseded outright, both halves.</b> C8.13 said "no zoom, no pan
+        /// — the board always frames the whole board", and it existed because of absolute
+        /// seating: the mounting sheet's full extent was the player's only reference for where
+        /// a sheet belonged, so cropping it took away the one clue on screen. G1.9 removed that
+        /// reason, and G10.1 lifted the zoom half on exactly that argument while recording the
+        /// pan half as an unpaid debt — <i>"pan is the other half of this change and has not
+        /// been built"</i>. It is built now (<see cref="BoardViewport"/>), so this value is no
+        /// longer the board's framing but only where the framing <b>starts</b>: the wheel moves
+        /// it between <see cref="BoardZoomMin"/> and <see cref="BoardZoomMax"/> and a right-drag
+        /// pans, and both reset to this number on every opening because a camera is not a
+        /// player fact and does not belong in <c>BoardStore</c> (§4.2, G4.4).</para>
+        ///
+        /// <para><b>Why 2 rather than 1 as the resting view.</b> At 1 a Land Survey slab is 35%
+        /// of the viewport height on island 0 — small paper for the thing the whole activity
+        /// consists of reading — and at 2 it is 70%. The cost G10.1 named is now paid rather
+        /// than deferred: at 2 the camera shows half the board's height and width, so roughly
+        /// three quarters of the mounting sheet is off screen, and a group retrieved from the
+        /// drawer or a board restored from a save can put paper outside the view. Panning is
+        /// what reaches it.</para>
+        /// </summary>
+        public const float DefaultBoardZoom = 2f;
+
+        /// <summary>
+        /// The zoom-out stop, and it is C8.13's view exactly: at 1 the camera's half-height is
+        /// the board's half-height, so the whole mounting sheet is framed. A floor with a
+        /// meaning, rather than an arbitrary one — the composition the spec was written around
+        /// stays a place the player can always get back to, and it is also the one zoom at
+        /// which panning does nothing at all, because the view already contains the board.
+        ///
+        /// <para>Going below 1 was considered and rejected: it buys nothing but empty ground
+        /// (the sea is never drawn — R1.4) and it would make the mounting sheet a shrinking
+        /// rectangle in a field of clear colour, which is the one composition that says the
+        /// board is a small object rather than the surface the game happens on.</para>
+        /// </summary>
+        public const float DefaultBoardZoomMin = 1f;
+
+        /// <summary>
+        /// The zoom-in stop. 4, and the ceiling is the <b>raster</b>, not the geometry.
+        ///
+        /// <para>C5.5 renders one texture per sheet at <see cref="BoardPixelsPerPaperMm"/> —
+        /// 0.6 px per millimetre of paper — and it serves both the board slab and the cabinet
+        /// thumbnail, so there is no second, finer copy to zoom into. At 1:2500 that works out
+        /// at 24 texels per board unit, and on a 1080-high viewport island 0's board draws
+        /// 19.67 screen pixels per board unit at zoom 1 — so texel parity, one screen pixel per
+        /// texel, falls at zoom 1.22. Every zoom this table has ever shipped is already
+        /// magnifying. At the default 2 one texel covers 1.6 screen pixels; at 4 it covers 3.3,
+        /// which is about where paper stops reading as paper and starts reading as pixels. Past
+        /// that the player is being shown the render settings.</para>
+        ///
+        /// <para>4 also lands on a framing that means something: it puts 13.73 board units
+        /// across the viewport's height on island 0, and a Land Survey A1 slab is 12.85 units
+        /// across its short side — so at the stop, the sheet being read fills the frame (93% of
+        /// the viewport's height). The mounting sheet is then 2.4 screens wide and 4 tall, which
+        /// is about where it stops giving any spatial context at all.</para>
+        /// </summary>
+        public const float DefaultBoardZoomMax = 4f;
+
+        /// <summary>
+        /// What one wheel notch multiplies the zoom by. <b>Multiplicative, and that is the whole
+        /// point of the value.</b> A linear step is a quarter of the view at zoom 1 and a
+        /// sixteenth at zoom 4, so the same notch feels violent zoomed out and glacial zoomed
+        /// in; a constant ratio is the same apparent step everywhere.
+        ///
+        /// <para>1.15 puts the full range at about 10 notches — five either side of the default
+        /// 2 — which is one comfortable sweep of a wheel from stop to stop without being able to
+        /// cross it by accident.</para>
+        /// </summary>
+        public const float DefaultBoardZoomStep = 1.15f;
+
+        /// <summary>
+        /// How many zoom notches one raw unit of wheel travel is worth, after
+        /// <see cref="BoardInteractor"/> has bucketed the reading into notches.
+        ///
+        /// <para><b>Why a second dial rather than a smaller step.</b> The Input System does not
+        /// normalise scroll: a Windows wheel detent reports 120, a macOS one reports about 1,
+        /// and a trackpad reports a continuous stream of whatever the OS thought your fingers
+        /// did — several "notches" in a single frame. <see cref="DefaultBoardZoomStep"/> is the
+        /// ratio one notch is worth and is argued from the range (about ten notches stop to
+        /// stop); this is how much of a notch the hardware actually delivered. Folding the two
+        /// together would mean tuning the device on the field that documents the range.</para>
+        ///
+        /// <para><b>0.03 is measured, not reasoned</b> — settled with a hand on a macOS
+        /// trackpad, where the raw reading turns out to be roughly thirty units per notch's
+        /// worth of intent. That is a device fact and nothing else: on hardware that reports
+        /// one clean unit per detent this makes a detent worth three hundredths of a notch and
+        /// wants to go back up toward 1. It is on <c>TableOptions</c> precisely so it can be
+        /// dragged in play mode with the wheel in your hand, which is the only way this number
+        /// is ever settled.</para>
+        /// </summary>
+        public const float DefaultBoardWheelSensitivity = 0.03f;
+
         public const float DefaultBoardPixelsPerPaperMm = 0.6f;
 
         public const float DefaultPositionTolerance = 0.12f;
@@ -68,6 +163,33 @@ namespace Archivist.Building.Table
                  "Small enough to read as one flat map, large enough that overlapping slabs " +
                  "never z-fight.")]
         [SerializeField, Min(0f)] float sheetSeparation = DefaultSheetSeparation;
+
+        [Tooltip("Where the board camera starts, as a divisor of 'the whole board fits'. 1 is " +
+                 "C8.13's framing; 2 draws every sheet at twice the size and shows a quarter " +
+                 "of the mounting sheet. The wheel moves it between the two stops below and a " +
+                 "right-drag pans; both reset to this on every opening.")]
+        [SerializeField, Min(0.1f)] float boardZoom = DefaultBoardZoom;
+
+        [Tooltip("Zoom-out stop. 1 is C8.13's framing exactly — the whole mounting sheet in " +
+                 "view — and at 1 there is nothing to pan to, because the view already " +
+                 "contains the board.")]
+        [SerializeField, Min(0.1f)] float boardZoomMin = DefaultBoardZoomMin;
+
+        [Tooltip("Zoom-in stop. Bounded by the raster, not the geometry: one texture per sheet " +
+                 "at BoardPixelsPerPaperMm serves the slab and the thumbnail (C5.5), and past " +
+                 "about 4 the board is magnifying texels rather than showing more map.")]
+        [SerializeField, Min(0.1f)] float boardZoomMax = DefaultBoardZoomMax;
+
+        [Tooltip("What one wheel notch MULTIPLIES the zoom by. A ratio, not a step: a linear " +
+                 "step feels fast zoomed out and glacial zoomed in. 1.15 is about ten notches " +
+                 "from stop to stop.")]
+        [SerializeField, Min(1.001f)] float boardZoomStep = DefaultBoardZoomStep;
+
+        [Tooltip("How much of a notch one raw unit of wheel travel is worth. The Input System " +
+                 "does not normalise scroll — a Windows detent reports 120, a macOS one about " +
+                 "1, a trackpad a continuous stream — so this is the device dial and " +
+                 "BoardZoomStep is the range one. Lower it if the board zooms too fast.")]
+        [SerializeField, Min(0.001f)] float boardWheelSensitivity = DefaultBoardWheelSensitivity;
 
         [Header("Textures")]
         [Tooltip("Pixels per millimetre of paper for a table render. Serves the board slab " +
@@ -101,10 +223,31 @@ namespace Archivist.Building.Table
         public float BoardUnitsPerMetre { get { return boardUnitsPerMetre; } }
         public float BoardPadding { get { return boardPadding; } }
         public float SheetSeparation { get { return sheetSeparation; } }
+        public float BoardZoom { get { return boardZoom; } }
+        public float BoardZoomMin { get { return boardZoomMin; } }
+        public float BoardZoomMax { get { return boardZoomMax; } }
+        public float BoardZoomStep { get { return boardZoomStep; } }
+        public float BoardWheelSensitivity { get { return boardWheelSensitivity; } }
         public float BoardPixelsPerPaperMm { get { return boardPixelsPerPaperMm; } }
         public float PositionTolerance { get { return positionTolerance; } }
         public float RotationToleranceDeg { get { return rotationToleranceDeg; } }
         public float SettleSeconds { get { return settleSeconds; } }
         public float SheetTurnDegreesPerSecond { get { return sheetTurnDegreesPerSecond; } }
+
+        /// <summary>
+        /// The loaded <c>TableOptions</c> asset, or null.
+        ///
+        /// <para>An asset is not a scene object, so <c>FindFirstObjectByType</c> cannot see one;
+        /// but it IS loaded whenever anything on the table serialises a reference to it, which
+        /// <see cref="BoardView"/> does. So the loaded-object search finds the one the
+        /// board is already using — which is the point: two components on one table reading two
+        /// different assets would be a board that glows at one tolerance and seats at
+        /// another.</para>
+        /// </summary>
+        public static TableOptions FindLoaded()
+        {
+            TableOptions[] all = Resources.FindObjectsOfTypeAll<TableOptions>();
+            return all != null && all.Length > 0 ? all[0] : null;
+        }
     }
 }

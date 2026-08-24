@@ -1,0 +1,4 @@
+- pastel colors, relaxing, calm
+- no day/night cycle
+- slowly change from one color to another.
+- setup 5 different colors that the skybox will iterate on

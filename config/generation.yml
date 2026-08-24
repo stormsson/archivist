@@ -1,0 +1,187 @@
+# Archivist — configuration
+#
+# Every number the island generator reads, in one file. The values below are the
+# code defaults: this file as shipped changes nothing. Delete a key and it falls
+# back to its default; delete the file and the generator runs on defaults alone.
+#
+# WHO OWNS WHICH SECTIONS: everything from `domain_field` down to `detail_sheets`
+# is generation tuning, read by Archivist.Generation through Tuning. The
+# `gameplay` section at the foot of the file is read by Archivist.Building
+# through GameplayOptions, and Tuning never looks at it (G8.2) — a UI assist is
+# not part of what a seed means.
+#
+# WHAT THIS FILE IS NOT: it is not part of a save. An island is a pure function of
+# its seed AND of these numbers (R1.11), so changing one changes what every seed
+# in the archive means. Sheet identities do not move — sheet 7 stays sheet 7 —
+# but the ground under them does. Change these while a collection is being played
+# and the ledger will be describing paper that no longer exists.
+#
+# That warning is about the generation sections. Nothing under `gameplay` reaches
+# the generator, so nothing under `gameplay` can move an island.
+#
+# Generation sections mirror Tuning.cs. Keys are its property names, exactly.
+
+
+# --- domain / field ----------------------------------------------------
+domain_field:
+  DomainMetres: 16000.0
+  NominalRadiusFrac: 0.38
+  NominalRadiusJitter: 0.08   # +/- 8%
+  SeaLevel: 0.50
+  FeatureScale: 2600.0   # coastline wiggle wavelength
+  WarpAmp: 0.45
+  FbmOctaves: 5
+  FbmLacunarity: 2.0
+  FbmGain: 0.5
+  MaxDepth: 220.0
+
+# --- falloff (§5.3 recipes) --------------------------------------------
+falloff:
+  MountainousEdge0: 0.35
+  MountainousEdge1: 1.00
+  FjordedEdge0: 0.30
+  FjordedEdge1: 1.00
+  FjordedCutAmplitude: 0.18
+  FjordedCutFrequency: 6.00
+  AtollRingRadius: 0.62
+  AtollRingCore: 0.00
+  AtollRingWidth: 0.14
+
+# --- lattice / detail --------------------------------------------------
+lattice_detail:
+  BaseCell: 64.0   # LOD lattice root
+  PaperDetailMm: 0.25   # target cell on paper
+  MaxLod: 8
+  ContourStep: 50.0   # metres of elevation
+
+# --- contouring (§6.1 / §6.2) ------------------------------------------
+contouring:
+  WeldFraction: 1e-6
+  MmPerMetre: 1000.0
+  MaxPaperContourLod: 4
+
+# --- quantisation (D3 / §4.4) ------------------------------------------
+quantisation:
+  GradientStep: 20.0   # central difference h, metres
+
+# --- paper -------------------------------------------------------------
+paper:
+  SheetWidthMm: 594.0   # A1
+  SheetHeightMm: 841.0
+  SheetMarginMm: 40.0
+  OverlapFraction: 0.00
+
+# --- Hydrographic coastal strip (D-H3) ---------------------------------
+hydrographic_coastal_strip:
+  StripWidthMm: 380.0
+  StripHeightMm: 200.0
+  StripMarginMm: 15.0
+  CoastRegionRadiusMin: 0.34
+  CoastRegionRadiusMax: 0.62
+  CoastSeawardBias: 0.30
+  CoastMinLoopLength: 600.0
+  CoastMinSheetSeparation: 0.75
+
+# --- scales (§8.1, D5, F1) ---------------------------------------------
+scales:
+  DetailScaleDenominator: 2500
+  CoastalScaleDenominator: 2500
+  WholeIslandScaleDenominator: 25000
+  WholeIslandFallbackScaleDenominator: 50000
+
+# --- grid (D4 / §6.4) --------------------------------------------------
+grid:
+  GridPitchPaperMm: 40.0
+
+# --- service rule (D1 / §7.4) ------------------------------------------
+service_rule:
+  ServiceRadiusFrac: 0.25   # u = NominalRadius / 4
+  ServedThreshold: 0.50
+  SoundingDepth: -4.0
+
+# --- cull (§10.3) ------------------------------------------------------
+cull:
+  LandFractionMinLandSurvey: 0.60
+  LandFractionMinGarrison: 0.02
+  CullSampleGrid: 16   # 16x16 per rect
+
+# --- rotation (D2 / §10.1) ---------------------------------------------
+rotation:
+  PcaIsotropyThreshold: 1.15   # lambda1/lambda2 below this = degenerate
+  PcaCoastSampleFrac: 0.25   # step = u * this
+  PcaLandMinPoints: 64
+
+# --- peaks (§7.1) ------------------------------------------------------
+peaks:
+  PeakElevationFrac: 0.35   # of MaxElevation
+  PeakNmsRadius: 400.0
+  PeakNamedCount: 3
+
+# --- settlements (§7.2) ------------------------------------------------
+settlements:
+  SettlementLattice: 128.0
+  SettlementCoastDist: 300.0
+  SettlementFlatGrad: 0.04   # m/m, quantised to 1e-4 first
+  SettlementShelterRadius: 600.0
+  SettlementMinSpacing: 1200.0
+  SettlementShelterWeight: 0.6
+  SettlementFlatnessWeight: 0.4
+
+# --- rivers (§7.3) -----------------------------------------------------
+rivers:
+  RiverStep: 40.0
+  RiverJitterRad: 0.15
+  RiverMergeDist: 60.0
+  RiverMaxSteps: 400
+  RiverMinLength: 800.0
+
+# --- soundings (§6.3) --------------------------------------------------
+soundings:
+  SoundingLattice: 400.0
+
+# --- peak lattice ------------------------------------------------------
+peak_lattice:
+  PeakLattice: 64.0
+
+# --- points of interest ------------------------------------------------
+points_of_interest:
+  PoiLattice: 128.0
+  PoiMinSpacing: 800.0
+  PoiCountMountainousMin: 3
+  PoiCountMountainousMax: 8   # 3-7
+  PoiCountFjordedMin: 3
+  PoiCountFjordedMax: 9   # 3-8
+  PoiCountAtollMin: 0
+  PoiCountAtollMax: 4   # 0-3
+  PoiShoreBand: 128.0
+  PoiSteepShoreGrad: 0.14
+  PoiSeaArchGrad: 0.22
+  PoiBlowholeCoastDist: 60.0
+  PoiSpringMinElevation: 20.0
+  PoiSpringConvergence: 0.0060
+  PoiOpenGrad: 0.06
+  PoiFlatGrad: 0.03
+  PoiModerateGradMin: 0.06
+  PoiModerateGradMax: 0.20
+  PoiErraticElevMinFrac: 0.20
+  PoiErraticElevMaxFrac: 0.60
+  PoiTreeElevMinFrac: 0.05
+  PoiTreeElevMaxFrac: 0.40
+  PoiTreeSettlementDist: 1000.0
+  PoiChapelSettlementDist: 1000.0
+  PoiTowerPeakDist: 400.0
+  PoiCairnPeakFrac: 0.50
+  PoiHeadlandShelterMax: 0.55
+  PoiJettyShelterMin: 0.88
+
+# --- detail sheets (spec §2.1) -----------------------------------------
+detail_sheets:
+  DetailSheetWidthMm: 250.0
+  DetailSheetHeightMm: 250.0
+  DetailSheetMarginMm: 15.0
+  PoiScaleDenominator: 1250
+
+# --- gameplay (read by Archivist.Building, NOT by Tuning) --------------
+gameplay:
+  assistedSnap: true
+  GlowingHintRange: 1.0   # multiples of the dragged slab's LONGER side

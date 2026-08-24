@@ -36,6 +36,24 @@ namespace Archivist.Building.Interactables
     /// a real, issued sheet of the same island — not a fake — so the verb, when it exists,
     /// will be exercised against the real thing. Turn <c>looseDebugSheet</c> off and the crate
     /// delivers a binder and nothing else, which is what it should eventually do.</para>
+    ///
+    /// <para><b>Two temporary knobs, both for the map table, both to be put back.</b>
+    /// <c>bindersPerOpening</c> above 1 delivers several folders of the <i>same</i> island in
+    /// one opening, which is how the table's second-binder branch (C4.3) and its no-room
+    /// refusal are reached without opening the crate twice — with
+    /// <c>openNewIslandEachTime</c> on, opening twice gives two different islands and tests
+    /// the refusal instead. When it is above 1 the sheets are <b>one</b> pick dealt into
+    /// shares rather than one pick per binder, because two draws from a ledger snapshot taken
+    /// before either could hand the same sheet out twice.</para>
+    ///
+    /// <para><c>everySheetOfTheIsland</c> files the whole survey into the delivery instead of
+    /// a handful, so a table can be composed in full rather than from five sheets scattered
+    /// across an island. It is the opposite of what the crate is for — the count is what makes
+    /// the ledger's exclusion visible, and an archive whose islands arrive complete has no
+    /// backlog — which is why it says TEMPORARY in the Inspector. Note the loose debug sheet
+    /// still comes out of that total: the binder holds every sheet <i>but one</i>, and filing
+    /// the loose one into it completes the island, which is a better test of the filing verb
+    /// than a spare sheet from an island nobody has laid out.</para>
     /// </summary>
     public sealed class MapCrate : Interactable
     {
@@ -48,8 +66,20 @@ namespace Archivist.Building.Interactables
         [SerializeField] Transform dropAnchor;
 
         [Header("Contents")]
-        [Tooltip("Sheets filed into the binder each opening.")]
+        [Tooltip("Sheets filed into each binder every opening.")]
         [SerializeField] int sheetsPerOpening = 5;
+
+        [Tooltip("TEMPORARY, for testing the map table: how many binders one opening " +
+                 "delivers, all of the SAME island. 1 is the design — a delivery is one " +
+                 "folder; raise it to reach the table's same-island and no-room branches " +
+                 "without opening the crate twice.")]
+        [SerializeField, Min(1)] int bindersPerOpening = 1;
+
+        [Tooltip("TEMPORARY, for testing the map table: file EVERY unissued sheet of the " +
+                 "island, ignoring the count above, so one delivery is the whole survey and " +
+                 "the board can be composed in full. Turn it off to go back to a handful per " +
+                 "opening, which is what makes the ledger's exclusion visible.")]
+        [SerializeField] bool everySheetOfTheIsland = true;
 
         [Tooltip("Debug: also drop one loose sheet of the same island on the floor, so there " +
                  "is something to file into a binder once that verb exists. Not part of the " +
@@ -102,7 +132,15 @@ namespace Archivist.Building.Interactables
             HashSet<SheetId> issued = generator.Ledger.Snapshot(seed);
             int drawSeed = unchecked((int)(seed ^ ((ulong)issued.Count * 0x9E3779B97F4A7C15UL)));
 
-            int count = sheetsPerOpening;
+            // One pick for the whole delivery, then dealt out: asking the picker twice would
+            // be two draws from a ledger snapshot taken before either, and the second could
+            // pick sheets the first had already taken.
+            int wantBinders = Mathf.Max(1, bindersPerOpening);
+
+            // 0 asks for the whole island — a sentinel rather than a very large number,
+            // because Fill adds one to it for the loose sheet and int.MaxValue + 1 is
+            // negative, which would quietly deliver nothing at all.
+            int count = everySheetOfTheIsland ? 0 : sheetsPerOpening * wantBinders;
             bool wantLoose = looseDebugSheet && spawner != null;
             double ppmm = pixelsPerPaperMm;
 
@@ -148,23 +186,35 @@ namespace Archivist.Building.Interactables
 
             Transform anchor = dropAnchor != null ? dropAnchor : transform;
 
-            BinderView binder = null;
-            if (opening.Filed.Count > 0)
-            {
-                binder = binders.Create(seed, opening.IslandName);
+            // Dealt in order, so the first binder holds the first share. Ceil rather than
+            // floor: with fewer sheets than asked for — an island running low — the shares
+            // stay full and the last binder simply is not created, which is better than
+            // several thin folders of one sheet each.
+            var delivered = new List<BinderView>(wantBinders);
+            int perBinder = opening.Filed.Count > 0
+                ? Mathf.Max(1, Mathf.CeilToInt(opening.Filed.Count / (float)wantBinders))
+                : 0;
 
-                if (binder != null)
+            for (int first = 0; first < opening.Filed.Count; first += perBinder)
+            {
+                BinderView binder = binders.Create(seed, opening.IslandName);
+                if (binder == null) break;
+
+                int last = Mathf.Min(first + perBinder, opening.Filed.Count);
+                for (int i = first; i < last; i++)
                 {
-                    for (int i = 0; i < opening.Filed.Count; i++)
-                    {
-                        // R2.10 enforced here and nowhere else: a sheet that is already out is
-                        // never issued twice, even if a picker somewhere later gets it wrong.
-                        // Filed only if the ledger agrees it is this call that issued it.
-                        SheetId id = opening.Filed[i];
-                        if (generator.Ledger.MarkIssued(id)) binder.Add(id);
-                    }
-                    binders.Place(binder, anchor);
+                    // R2.10 enforced here and nowhere else: a sheet that is already out is
+                    // never issued twice, even if a picker somewhere later gets it wrong.
+                    // Filed only if the ledger agrees it is this call that issued it.
+                    SheetId id = opening.Filed[i];
+                    if (generator.Ledger.MarkIssued(id)) binder.Add(id);
                 }
+
+                // Each is placed before the next is made: BinderSpawner.RestingPose probes
+                // downward for what is already lying there, so the second binder comes to rest
+                // on the first rather than inside it.
+                binders.Place(binder, anchor);
+                delivered.Add(binder);
             }
 
             yield return null;
@@ -175,8 +225,15 @@ namespace Archivist.Building.Interactables
             IslandHolding holding;
             generator.Ledger.TryGetHolding(seed, out holding);
 
-            string delivered = binder != null ? binder.Summary : "no binder";
-            Debug.Log($"[MapCrate] delivered {delivered}" +
+            var what = new System.Text.StringBuilder();
+            for (int i = 0; i < delivered.Count; i++)
+            {
+                if (i > 0) what.Append(" + ");
+                what.Append(delivered[i].Summary);
+            }
+            if (delivered.Count == 0) what.Append("no binder");
+
+            Debug.Log($"[MapCrate] delivered {what}" +
                       $"{(opening.Loose != null ? " + 1 loose sheet" : "")} — {holding}", this);
 
             busy = false;
@@ -217,6 +274,11 @@ namespace Archivist.Building.Interactables
         ///
         /// <para>Public because it is the whole pipeline minus the keypress, and a bench can
         /// drive it directly — proving generation and picking without entering play mode.</para>
+        ///
+        /// <para><paramref name="forBinder"/> of zero or less means <b>every</b> unissued sheet
+        /// of the island, the sentinel <see cref="SheetPicker.PickUnissued"/> takes. The loose
+        /// sheet then comes out of that total rather than being drawn on top of it — there is
+        /// no "one more" once everything has been asked for.</para>
         /// </summary>
         public static Opening Fill(IslandGenerator generator, ulong islandSeed,
                                    HashSet<SheetId> issued, int forBinder, bool wantLoose,
@@ -227,7 +289,11 @@ namespace Archivist.Building.Interactables
             // dictionary lookup rather than another third of a second.
             Island island = generator.GetOrGenerate(islandSeed);
 
-            int wanted = forBinder + (wantLoose ? 1 : 0);
+            // forBinder <= 0 means the whole island; the loose sheet then comes out of that
+            // total rather than being one more on top of it, because there is no "one more"
+            // once every sheet has been asked for. Adding to the sentinel would turn it into
+            // an ordinary count of 1.
+            int wanted = forBinder <= 0 ? 0 : forBinder + (wantLoose ? 1 : 0);
             List<Sheet> picks = SheetPicker.PickUnissued(island, wanted, issued, drawSeed);
 
             // The loose sheet is the last of the pick, and is NOT one of the binder's: it

@@ -232,6 +232,31 @@ namespace Archivist.Building.Sheets
         }
 
         /// <summary>
+        /// Stops counting a sheet as part of the floor. The counterpart of
+        /// <see cref="Register"/>, and it exists because <see cref="ClearAll"/> is no longer
+        /// the only way paper leaves the world.
+        ///
+        /// <para>A sheet is about to gain a second exit: being filed into a binder, where the
+        /// paper is destroyed and only its <c>SheetId</c> survives. <c>spawned</c> is a plain
+        /// <c>List</c> that <c>Register</c> only ever appends to, so a sheet destroyed that way
+        /// leaves a null hole behind in it — and <see cref="Spawned"/> is public and read by the
+        /// editor bench, which would then be reading a list of the floor that is partly about
+        /// sheets that are not on it. This keeps the floor's own record of the floor
+        /// honest.</para>
+        ///
+        /// <para><b>It does not touch the ledger</b>, for the reason <see cref="ClearAll"/>
+        /// gives for the same omission: what is lying on the floor and what has been issued are
+        /// different facts. Filing a sheet away is not un-issuing it, any more than clearing the
+        /// floor was — the ledger is the record that it exists at all (R2.10), and a sheet in a
+        /// binder still does.</para>
+        /// </summary>
+        public void Forget(SheetView view)
+        {
+            if (view == null) return;
+            spawned.Remove(view);
+        }
+
+        /// <summary>
         /// Removes every sheet this spawner has placed. Does not touch the ledger: what is
         /// on the floor and what has been issued are different facts, and clearing the floor
         /// is not un-issuing anything.

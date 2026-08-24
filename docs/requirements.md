@@ -110,8 +110,22 @@ world geometry above them and no spatial relationship between them.
 - **R2.3** Scale is drawn from three or four fixed values. Never continuous.
 - **R2.4** Rotation is fixed per survey, not per sheet. A survey may follow a
   coast or a ridge and sit at any angle.
-- **R2.5** Sheets within a survey overlap by roughly 10–25%. Sheets from
-  different surveys overlap freely and unevenly.
+- **R2.5** Overlap *within* a survey is a tuning parameter
+  (`paper.OverlapFraction` in `config/generation.yml`), not a fixed property of
+  the world. It defaults to 20%; **0% is permitted** — sheets then tile edge to
+  edge and a collection carries about a quarter fewer of them. Sheets from
+  different surveys overlap freely and unevenly at any setting, because rotation,
+  scale and extent are decided per survey and not by this number.
+
+  *Changed from "sheets within a survey overlap by roughly 10–25%". That range
+  was intent and was never a measurement; it became a parameter when the
+  generator's tuning moved to a config file. Measured at 0%: A3 finds no seams
+  (borders agree to 4×10⁻⁶ m), A5 finds no blank sheets across 444 of them, and
+  A6 falls from 100.0% of 527 overlapping cross-office pairs to 99.6% of 242 —
+  still well above its 90% floor. Nothing gated fails. The lower bound was
+  removed because it turned out to be defending nothing: what R2.10a calls
+  required overlap is the **cross-office** kind, which this parameter does not
+  control and cannot remove.*
 - **R2.6** Each office × era pair defines a **style**: line work, fill, colour,
   typography, paper stock, wear. Style is the fastest signal the player has.
 - **R2.7** Two sheets covering the same ground in different styles must show the
@@ -124,7 +138,10 @@ world geometry above them and no spatial relationship between them.
   no near-duplicates, no reprints. One sheet, one slot, always.
 - **R2.10a** Uniqueness is about the *sheet*, not the *ground*. Two offices
   surveying the same coast produce two different sheets of one place, and that
-  overlap is required (R2.5, R2.7). It is coverage, not duplication.
+  overlap is required (R2.7). It is coverage, not duplication. The overlap meant
+  here is the one *between offices*, which no setting controls; it is not the
+  within-survey overlap R2.5 makes tunable, and R2.5 reaching 0% does not weaken
+  this.
 - **R2.10b** A slot on a rack is therefore binary — filled or empty — and a gap
   in a run is unambiguous. The rack becomes a checklist made of physical space,
   with no readout needed.

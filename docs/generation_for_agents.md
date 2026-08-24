@@ -40,6 +40,29 @@ it predates something that made generation four times more expensive; or it was
 wrong. Until someone instruments `Island.FromSeed` per stage and finds out, treat
 both figures as unverified. A8's island-generation clause currently **fails**.
 
+**Re-measured when tuning became configurable, and the slow figure held.** Eight
+`fast` runs on the same idle machine, medians of ten islands each:
+
+| `Tuning` shape | A8 island generation |
+|---|---|
+| `const` (as it was) | 478.8, 492.6 ms |
+| `static readonly`, read from `config/generation.yml` once and frozen | 472.7, 481.5, 479.3 ms |
+| settable properties (`#if UNITY_EDITOR`, so the editor can tune live) | 565.8, 534.1 ms |
+
+Two things follow. **Making the constants configurable costs nothing**, provided
+they end up frozen — the JIT folds a `static readonly` primitive into a literal
+exactly as it folds a `const`, and the two measure the same. Leaving them
+writable costs ~13%, which is why the player build freezes them and only the
+editor pays. The determinism hash was `2933DCFC3DB132D5` under all three shapes,
+so no shape generates a different island.
+
+**And a clue for whoever finally instruments this.** Setting
+`paper.OverlapFraction` to 0 drops a collection from 590 sheets to 444 — a 25%
+cut in everything `SurveyCutter` does — and moves the median only from 479.3 ms
+to 461.7 ms, under 4%. **Whatever the ~467 ms is, it is not sheet cutting.** It
+is upstream of it: the field, the contour extraction, or the feature passes. That
+is where to put the first stopwatch.
+
 A8's *sheet re-contour* clause now **passes** at ~47 ms — that was F4, resolved
 for the paper path by capping `LodForScale`; see §5 and §10.
 
@@ -474,15 +497,38 @@ these counts predate the removal and have not been re-measured.
 ## 11. Running things
 
 ```bash
-Tools/run-acceptance.sh          # build + source assertions + full §13 suite
-Tools/run-acceptance.sh fast     # skip the 50-seed metrics
-Tools/run-acceptance.sh metrics  # A7 sheet economy + C6 POI density only
+Tools/run-acceptance.sh          # source assertions + editor type check + every gated check (~2 min)
+Tools/run-acceptance.sh --list   # the sections, the checks, and what each costs
+Tools/run-acceptance.sh all      # the above plus the 50-seed metrics and B5's PNG sweep (~3.5 min)
+Tools/run-acceptance.sh A8       # one check (~7 s). Build only; no source or editor check
+Tools/run-acceptance.sh render   # a group: the POC-02 gates (~4 s)
+Tools/run-acceptance.sh gate -A2 -C2   # the gates without the two 100x determinism loops (~1 min)
+Tools/run-acceptance.sh metrics --seeds=10   # the sweeps, at a fifth of the seeds
 Tools/check-sources.sh           # §4.1 / §14 assertions only
 ```
 
-Gated checks: A2–A6 and POC-03's **C2** (POI determinism), **C3** (placeability
-floor), **C4** (both numbering runs). A8's **sheet re-contour clause now passes**
-at ~47 ms (F4, capped LOD).
+A selector is a **group** (`gen`, `poi`, `render`, `metrics`, `sweep`, `describe`),
+a **check id** (`A2`, `C4`, `B3`, …), a **section this script owns** (`sources`,
+`editor`), or an alias (`all`, `gate`, and the old mode names `fast` and `poc02`).
+Prefix any of them with `-` to subtract. Naming specific checks skips the source
+assertions and the Unity type check — ask for them by name, or run with no
+selector at all, when you want them. Every run ends with a per-check time table:
+the whole suite is ~3.5 minutes and nearly all of it is island generation, so that
+table is what tells you which sections you can leave out next time.
+
+Where the time goes, measured on this machine (island generation ~0.5 s each,
+which is what almost every number below is made of): A2 55 s, A7 27 s, C6 27 s,
+C2 24 s, C3/C4/A4/A5 ~10 s each, A8 7 s, A6 5 s, B4 4 s, B2/B3/A3/B5 under 3 s.
+**A4, A5, C3 and C4 each regenerate islands 0–19 from scratch, and A6 regenerates
+0–9** — the same islands, four to five times over. A memoised `Island.FromSeed`
+in the harness (bypassed by A2, C2 and A8, which must generate for real) would cut
+the gate run by roughly half; it has not been done because it changes what the
+suites measure and nobody has checked that against §13 yet.
+
+Gated checks: A2–A5, A8 and POC-03's **C2** (POI determinism), **C3** (placeability
+floor), **C4** (both numbering runs). **A6** reports its percentage against the 90%
+target but never fails on it; `--list` marks every ungated check with `*`. A8's
+**sheet re-contour clause now passes** at ~47 ms (F4, capped LOD).
 
 ⚠ **A8's island-generation clause fails, and the reason is not understood.** This
 file records ~118 ms and dismisses a ~455 ms reading as a loaded machine. But

@@ -230,11 +230,12 @@ namespace Archivist.Building.Table
         }
 
         /// <summary>
-        /// Opens on the island the room last drew (C8.2). The single path both ways in — the
-        /// debug shortcut and <c>CartographyTable</c> — take, so "which island" is decided
-        /// once. The table in the room deliberately holds no island binding of its own; the
-        /// seed comes from the generator, which is the only thing that knows what the archive
-        /// has actually met.
+        /// Opens on the island the room last drew, through the whole ledger (C8.2). The debug
+        /// shortcut's way in, and only its way in: the table in the room asks a different
+        /// question — which papers are in the binders lying on it — and answers it by calling
+        /// <see cref="Open(ulong, ISheetSource)"/> with a source of its own. The table
+        /// deliberately holds no island binding either; the seed comes from the generator,
+        /// which is the only thing that knows what the archive has actually met.
         /// </summary>
         public void OpenCurrentIsland()
         {
@@ -255,15 +256,51 @@ namespace Archivist.Building.Table
                 return;
             }
 
-            Open(seed);
+            // Explicit, though the board's lazy default would build the very same object. The
+            // point of naming it here is that this path must never be the one that *inherits*
+            // a cabinet: see Open's comment on why the source is an argument.
+            Open(seed, new LedgerSheetSource(generator.Ledger));
+        }
+
+        /// <summary>
+        /// Opens on an island without an opinion about the cabinet — the board keeps whatever
+        /// source it already has, and an unassigned board falls through to its own lazy ledger
+        /// default (C1.3). For callers that only know which island; anything that knows which
+        /// *papers* should call the two-argument form.
+        /// </summary>
+        public void Open(ulong islandSeed)
+        {
+            Open(islandSeed, null);
         }
 
         /// <summary>
         /// Hands the room over to the board (§8.2). Safe to call on an already-open session:
         /// a different seed re-shows the board and the cabinet without repeating the mode
         /// switch, and the same seed does nothing at all.
+        ///
+        /// <para><b>Why the cabinet is an argument and not a setting.</b> There are two ways
+        /// into this board and they disagree about what the cabinet lists. The table in the
+        /// room opens on the sheets held by the binders lying on <i>that</i> table; the <c>C</c>
+        /// debug shortcut opens on <c>generator.LastIslandSeed</c> through everything the ledger
+        /// has ever issued. <see cref="BoardView.Source"/> is a single <c>[SerializeReference]</c>
+        /// field that survives between openings, so with the source set anywhere but here,
+        /// whichever path ran last would quietly leave its answer behind for the next one — a
+        /// debug opening listing one table's binders, or a table listing the whole archive.
+        /// Neither looks broken; both are wrong in a way only a count gives away. Making the
+        /// source an argument of <c>Open</c> means "which cabinet is this?" is answered by
+        /// whoever opened it, every time, and cannot be inherited.</para>
+        ///
+        /// <para>This is §4.3's seam being used as designed rather than merely provided for, and
+        /// it keeps <see cref="ISheetSource"/>'s standing rule intact: nothing in the UI layer
+        /// references <c>SheetLedger</c> directly. The session is the composition root — it is
+        /// what constructs the source and hands it in — which is precisely where
+        /// <see cref="LedgerSheetSource"/>'s own comment says the choice belongs.</para>
+        ///
+        /// <para><paramref name="source"/> may be null, and null is not an error: it means
+        /// "leave the board's source alone", which is what the one-argument overload exists to
+        /// say. Warning on it would make having no opinion look like a fault.</para>
         /// </summary>
-        public void Open(ulong islandSeed)
+        public void Open(ulong islandSeed, ISheetSource source)
         {
             if (islandSeed == 0)
             {
@@ -274,6 +311,12 @@ namespace Archivist.Building.Table
             if (open)
             {
                 if (islandSeed == IslandSeed) return;
+
+                // Before ShowContents, and on this path too. A caller that changes the island
+                // of an open table is changing which papers are on it; letting the previous
+                // caller's cabinet survive that is the exact inheritance this argument removes.
+                ApplySource(source);
+
                 IslandSeed = islandSeed;
                 ShowContents();
                 return;
@@ -300,7 +343,32 @@ namespace Archivist.Building.Table
             if (tableMap != null) tableMap.Enable();
             if (uiMap != null) uiMap.Enable();
 
+            // Before ShowContents, always: BoardView.Show reads Source as it builds the
+            // cabinet, so a source assigned afterwards would be right in the field and wrong
+            // on the screen until something rebuilt — which is the hardest kind of wrong to
+            // notice, because the next opening would look correct.
+            ApplySource(source);
+
             ShowContents();
+        }
+
+        /// <summary>
+        /// Puts the caller's cabinet on the board, if the caller named one.
+        ///
+        /// <para>Null falls through deliberately, leaving whatever the board has —
+        /// <see cref="BoardView.Source"/>'s own lazy default builds a
+        /// <see cref="LedgerSheetSource"/> the first time it is read, which is C1.3's answer for
+        /// this POC and the right one for a caller with no opinion. And the guard is on
+        /// <c>board</c> rather than on the source: a session whose board went missing has larger
+        /// problems, and they are already reported by <see cref="ShowContents"/>'s own silence
+        /// rather than by a second null warning from here.</para>
+        /// </summary>
+        void ApplySource(ISheetSource source)
+        {
+            if (source == null) return;
+            if (board == null) return;
+
+            board.Source = source;
         }
 
         /// <summary>

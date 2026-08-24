@@ -42,6 +42,13 @@ namespace Archivist.Harness
         /// ~467 ms here against the ~118 ms recorded in generation_for_agents.md §1, a 4x gap
         /// that is still unexplained. If the reference machine is genuinely that much faster this
         /// budget is far looser than it needs to be. Re-measure before trusting the headroom.</para>
+        ///
+        /// <para>⚠ Re-measured when tuning moved to <c>config/generation.yml</c>: eight runs
+        /// spanning 452-493 ms across three different shapes of <c>Tuning</c>, so the slow figure
+        /// is stable and is not an artefact of how the constants are stored. The useful datum is
+        /// that setting <c>paper.OverlapFraction</c> to 0 cuts a collection from 590 sheets to
+        /// 444 and moves this median under 4% — <b>the cost is not in sheet cutting</b>. Look
+        /// upstream, at the field, the contour extraction, or the feature passes.</para>
         /// </summary>
         const double A8SheetRecontourBudgetMs = 100.0;
 

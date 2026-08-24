@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Archivist.Building.Sheets;
@@ -22,6 +23,17 @@ namespace Archivist.Building.Handling
     /// numbers here. Moving that transform in the scene view <i>is</i> the tuning loop —
     /// which matters, because where a sheet sits while carried is a feel question and feel
     /// questions are not settled by editing constants.</para>
+    ///
+    /// <para><b>There are two ways an item leaves the hands, and they are two verbs rather
+    /// than one verb with a flag.</b> <see cref="Drop"/> is letting go: nothing has been
+    /// decided for the item, so it decides for itself through <see cref="ICarryable.RestingPose"/>
+    /// and falls to whatever it chose. <see cref="HandOver"/> is giving the item to something
+    /// that has already made that decision — a table anchor, later a shelf slot — and it
+    /// glides to the pose it was told. Folding these into one method taking a nullable pose
+    /// would hide the difference that matters: whether the destination is the item's business
+    /// or somebody else's, which also decides whether it is registered as part of the floor.
+    /// The hands still do not know what a table is. They are handed a pose and they move the
+    /// item to it.</para>
     ///
     /// <para><b>Q/E turning used to live here and no longer does</b> (D-C10): it moved to the
     /// cartography table, where it rotates the selected sheet on the board. Turning paper to
@@ -145,6 +157,16 @@ namespace Archivist.Building.Handling
             }
         }
 
+        float PlaceSeconds
+        {
+            get
+            {
+                return options != null
+                    ? options.BinderPlaceSeconds
+                    : HandlingOptions.DefaultBinderPlaceSeconds;
+            }
+        }
+
         /// <summary>
         /// Takes an item into the hold pose. Its collider goes off while carried: otherwise it
         /// sits directly in front of the eye and swallows every interaction ray the player
@@ -235,6 +257,66 @@ namespace Archivist.Building.Handling
             // there must not find the thing that is still on its way.
             t.gameObject.AddComponent<ItemFall>()
                         .Begin(item, rest, restRotation, options, transform.right, Land);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Gives the carried item to something that has already decided where it goes, and
+        /// lets it glide there. The pose is the caller's: a table anchor, a shelf slot,
+        /// anything that owns a place rather than merely being underneath one.
+        ///
+        /// <para>It glides rather than falls, through <see cref="ItemPlace"/> — see that class
+        /// for why a fall is the wrong path for a destination in front of the player rather
+        /// than below them.</para>
+        ///
+        /// <para><b>It deliberately does not call <c>ICarryable.Settled</c>, and must not be
+        /// "tidied up" by routing it through <c>Land</c>.</b> <see cref="Land"/> settles the
+        /// item, and settling is how an item tells whatever keeps track of the floor that it is
+        /// part of it again — for a binder that is <c>BinderSpawner.Register</c>. An item set
+        /// down on a table is not on the floor. Registering it there would put it into the pile
+        /// the drop probe stacks against, so the next thing dropped would come to rest on top
+        /// of a binder lying on a table, in mid-air. The collider still comes back on when it
+        /// arrives, because the item does need to be aimed at again; that is all that landing
+        /// means here.</para>
+        /// </summary>
+        public bool HandOver(Vector3 restPosition, Quaternion restRotation, Action<ICarryable> onLanded)
+        {
+            if (held == null) return false;
+
+            ICarryable item = held;
+            held = null;
+            arriving = false;
+
+            Transform t = item.Root;
+            if (t == null) return true;
+
+            t.SetParent(null, worldPositionStays: true);
+
+            // Update does not tick in edit mode, so an item handed over there would hang in
+            // the air halfway to the table. The bench gets the outcome, not the journey.
+            if (!Application.isPlaying)
+            {
+                t.SetPositionAndRotation(restPosition, restRotation);
+                if (item.Body != null) item.Body.enabled = true;
+                if (onLanded != null) onLanded(item);
+                return true;
+            }
+
+            // The collider stays off for the whole journey and comes back on when it arrives,
+            // for the same reason a falling item's does: something still travelling is not
+            // something to aim at, and a pose found by probing for what is already there must
+            // not find the thing that is still on its way.
+            t.gameObject.AddComponent<ItemPlace>()
+                        .Begin(item, restPosition, restRotation, PlaceSeconds, landedItem =>
+                        {
+                            if (landedItem.Body != null) landedItem.Body.enabled = true;
+
+                            if (logHandling)
+                                Debug.Log($"[Hands] handed {landedItem.CarryName} over at {landedItem.Root.position}", this);
+
+                            if (onLanded != null) onLanded(landedItem);
+                        });
 
             return true;
         }
