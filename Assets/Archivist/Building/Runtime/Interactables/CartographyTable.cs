@@ -14,31 +14,22 @@ namespace Archivist.Building.Interactables
     /// activity (R6.1) — which is why it is a thing in the room you may walk past rather than
     /// a screen the game puts in front of you.
     ///
-    /// <para><b>This class used to be one line, deliberately, and no longer is.</b> The record
-    /// of why it was emptied is worth keeping, because only half of it has been reversed. A
-    /// table id and an island binding were both built here and removed: not wrong, early.
-    /// Nothing read the id, because <c>BoardStore</c> was wired to nothing; nothing bound an
-    /// island, because the folder model that would do the binding did not exist (§13). What
-    /// they cost in the meantime was a serialised identity that had to be minted exactly once,
-    /// which turned out to be genuinely hard —
-    /// <c>PrefabUtility.LoadPrefabContents</c> loads a prefab into a <i>preview scene</i>,
-    /// where <c>IsPartOfPrefabAsset</c> is false and <c>GetCurrentPrefabStage</c> is null, so
-    /// the id was minted into the prefab asset itself, twice, and every instance inherited it
-    /// and shared one board; and <c>OnValidate</c> never fired at all on an instance created
-    /// through scripting, leaving a table with no id.</para>
+    /// <para><b>A table is bound by what is lying on it, and carries no serialised
+    /// identity.</b> The island named by the first binder on its anchors is a fact about the
+    /// room: it needs no minting, survives no domain reload because it was never serialised, and
+    /// cannot be shared between two tables by accident. C4.1–C4.4 are enforced here — unbound
+    /// tables accept any binder, the first fixes the island, a bound table takes only that
+    /// island, and taking the last binder off returns it to unbound.</para>
     ///
-    /// <para><b>The binding is back. The identity is not, and should not be.</b> A table is
-    /// bound by <i>what is lying on it</i> — the island named by the first binder on its
-    /// anchors — which is a fact about the room that needs no minting, survives no domain
-    /// reload because it was never serialised, and cannot be shared between two tables by
-    /// accident. C4.1–C4.4 are enforced here now: unbound tables accept any binder, the first
-    /// binder fixes the island, a bound table takes only that island, and taking the last
-    /// binder off returns it to unbound. If a serialised <c>tableId</c> is ever needed again
-    /// (it will be, the day board state is persisted), the lesson above still stands: it needs
-    /// <c>EditorSceneManager.IsPreviewSceneObject</c> alongside the prefab-asset and
-    /// prefab-stage checks, and a manual mint as an escape hatch, because the automatic paths
-    /// fail silently and the symptom — two tables quietly sharing a board — does not look like
-    /// an identity bug.</para>
+    /// <para><b>If a serialised <c>tableId</c> is ever needed</b> (it will be, the day board
+    /// state is persisted), it needs <c>EditorSceneManager.IsPreviewSceneObject</c> alongside
+    /// the prefab-asset and prefab-stage checks, plus a manual mint as an escape hatch.
+    /// <c>PrefabUtility.LoadPrefabContents</c> loads into a <i>preview scene</i> where
+    /// <c>IsPartOfPrefabAsset</c> is false and <c>GetCurrentPrefabStage</c> is null, so an id
+    /// gets minted into the prefab asset itself and every instance inherits it and shares one
+    /// board; and <c>OnValidate</c> never fires on an instance created through scripting. Both
+    /// paths fail silently, and the symptom — two tables quietly sharing a board — does not look
+    /// like an identity bug.</para>
     ///
     /// <para><b>What the verb is depends on what is in the player's hands</b>, and this is the
     /// one interactable where that is true of the <i>label</i> and not only of availability.
@@ -48,13 +39,12 @@ namespace Archivist.Building.Interactables
     /// <see cref="Label"/> for the one piece of coupling this costs.</para>
     ///
     /// <para><b>The board is opened on the table's own island, through its own binders.</b>
-    /// <c>TableSession.Open</c> takes an <see cref="ISheetSource"/> so that the cabinet's
-    /// answer belongs to whoever opened it (§4.3). Before this, the table called
-    /// <c>OpenCurrentIsland</c> and the cabinet was fed by the ledger — every sheet ever
-    /// <i>issued</i> of the last island the room drew. That looked correct and was not: it
-    /// agreed with the binder in the player's hands only for the binder from the most recent
-    /// crate opening, and even then listed one sheet too many, because <c>MapCrate</c>'s
-    /// <c>looseDebugSheet</c> issues a sixth sheet onto the floor.</para>
+    /// <c>TableSession.Open</c> takes an <see cref="ISheetSource"/> so the cabinet's answer
+    /// belongs to whoever opened it (§4.3). Feeding it from the ledger instead lists every sheet
+    /// ever <i>issued</i> of the last island the room drew — which agrees with the binder in the
+    /// player's hands only for the most recent crate opening, and even then lists one sheet too
+    /// many, because <c>MapCrate</c>'s <c>looseDebugSheet</c> issues a sixth onto the
+    /// floor.</para>
     ///
     /// <para><b>The mode switch is still not here</b> (§8.2). Disabling
     /// <c>FirstPersonController</c>, <c>PlayerInteractor</c> and <c>PlayerHands</c> as
@@ -156,16 +146,13 @@ namespace Archivist.Building.Interactables
         /// The verb for whatever the player is carrying — which means this reads a field that
         /// <see cref="CanInteract"/> wrote.
         ///
-        /// <para><b>Why that is safe, and what would break it.</b> <c>Label</c> has no
-        /// <c>PlayerInteractor</c> to ask, and finding the hands from here would be a
-        /// scene-wide search every frame the player is aimed at a table.
-        /// <c>PlayerInteractor.Refresh</c> calls <c>CanInteract</c> and then <c>Label</c>, in
-        /// that order, every frame — so the answer is never older than the state it describes.
-        /// If that order ever reverses the label lags by one frame; it does not lie about
-        /// availability, which is <see cref="InteractionState"/>'s job and stays entirely in
-        /// <see cref="CanInteract"/>. That separation is why C8.1 took <c>MapCrate</c>'s busy
-        /// state <i>out</i> of its label, and it is kept here: this field names what the key
-        /// does, never whether it can be pressed.</para>
+        /// <para><b>Why that is safe.</b> <c>Label</c> has no <c>PlayerInteractor</c> to ask,
+        /// and finding the hands from here would be a scene-wide search every frame the player is
+        /// aimed at a table. <c>PlayerInteractor.Refresh</c> calls <c>CanInteract</c> and then
+        /// <c>Label</c>, in that order, every frame, so the answer is never older than the state
+        /// it describes; reversing that order costs one frame of lag and no more. This field
+        /// names what the key does, never whether it can be pressed — that is
+        /// <see cref="InteractionState"/>'s job and stays in <see cref="CanInteract"/>.</para>
         /// </summary>
         public override string Label { get { return verb; } }
 
@@ -299,13 +286,12 @@ namespace Archivist.Building.Interactables
         /// <summary>
         /// Files a loose sheet into the first binder on the table, and destroys the paper.
         ///
-        /// <para><b>The sheet is consumed, and that is the point.</b> A sheet is a pure
-        /// function of its island's seed (R1.1, R1.11), so the identity is the whole of it —
-        /// keeping the <c>SheetView</c> as well would be the same document existing twice, once
-        /// as paper and once as a record, which is what C4.5 exists to forbid. It travels to
-        /// the binder first rather than blinking out of the hands, so filing looks like filing.
-        /// Worth knowing: this is irreversible in-world. There is no verb for taking a sheet
-        /// back out of a binder, and §13 puts moving sheets between folders out of scope.</para>
+        /// <para><b>The sheet is consumed, and that is the point.</b> A sheet is a pure function
+        /// of its island's seed (R1.1, R1.11), so the identity is the whole of it; keeping the
+        /// <c>SheetView</c> too would be the same document existing twice, which is what C4.5
+        /// forbids. It travels to the binder first rather than blinking out of the hands, so
+        /// filing looks like filing. This is irreversible in-world: there is no verb for taking a
+        /// sheet back out, and §13 puts moving sheets between folders out of scope.</para>
         ///
         /// <para>The island check is <see cref="BinderView.Add"/>'s, not a second copy of it
         /// here. It refuses a foreign island and a sheet already inside, and it does it by
@@ -343,12 +329,10 @@ namespace Archivist.Building.Interactables
         /// <summary>
         /// Takes the topmost binder back into the hands — never one from underneath.
         ///
-        /// <para>LIFO because the anchors are a stack: you cannot pull the bottom folder out of
-        /// a pile, and the alternatives are worse than the restriction. Re-packing the pile
-        /// downward means binders sliding about on their own; leaving the gap means one hanging
-        /// in the air. It also keeps occupancy hole-free, which is what lets "the next free
-        /// anchor" simply be the count. C4.3 means the pile is never mixed anyway, so there is
-        /// nothing in it worth singling out.</para>
+        /// <para>LIFO because the anchors are a stack: re-packing the pile downward means
+        /// binders sliding about on their own, and leaving the gap means one hanging in the air.
+        /// It also keeps occupancy hole-free, which is what lets "the next free anchor" simply be
+        /// the count. C4.3 means the pile is never mixed anyway.</para>
         ///
         /// <para>Taking the last one returns the table to unbound (C4.4). C4.4 also says the
         /// board state is discarded, which costs nothing today and must be honoured the day it

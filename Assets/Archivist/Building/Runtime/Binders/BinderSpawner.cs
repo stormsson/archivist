@@ -15,13 +15,12 @@ namespace Archivist.Building.Binders
     /// second place that mints identity the moment a second crate exists. Same shape as
     /// <c>IslandGenerator.nextIslandIndex</c>, and for the same reason.</para>
     ///
-    /// <para><b>A scene never starts with binders in it</b>, exactly as it never starts with
-    /// paper on the floor. A binder holds <c>SheetId</c>s of sheets the ledger has recorded as
-    /// issued, and the ledger does not survive a scene load — so a binder that did would hold
-    /// sheets nothing remembers issuing, and a crate could issue them a second time (R2.10).
-    /// Worse, its contents are not serialised at all, so what came back would be an empty
-    /// binder claiming a number. Swept at startup, and stripped before a scene is written to
-    /// disk by <c>SheetSceneGuard</c>.</para>
+    /// <para><b>A scene never starts with binders in it</b>, as it never starts with paper on
+    /// the floor. The ledger does not survive a scene load, so a binder that did would hold
+    /// sheets nothing remembers issuing and a crate could issue them again (R2.10) — and its
+    /// contents are not serialised at all, so what came back would be an empty binder claiming a
+    /// number. Swept at startup, and stripped before a scene is written to disk by
+    /// <c>SheetSceneGuard</c>.</para>
     /// </summary>
     public sealed class BinderSpawner : MonoBehaviour
     {

@@ -152,29 +152,24 @@ namespace Archivist.Generation.Features
         /// shelter = clamp01( 27/4 * land^2 * sea )
         /// </code>
         ///
-        /// <para><b>Why this shape.</b> <c>land</c> is the discrete concavity of the coastline as
+        /// <para><b>Why this shape.</b> <c>land</c> is the discrete concavity of the coastline
         /// seen from the candidate: land wrapping more than half the neighbourhood means the
-        /// shore curves around the point (a cove, a bay head, a fjord), and land wrapping less
-        /// than half means the point sticks out into the water (a headland). So <c>land^2</c> is
-        /// the concavity term, rising with enclosure. The bare <c>sea</c> factor is the
-        /// requirement that there be water to shelter in at all: without it every inland point
-        /// scores 1.0 and settlements march away from the coast, which is not what §7.2 wants
-        /// from a term weighted 0.6.</para>
+        /// shore curves around the point (a cove, a bay head, a fjord); less than half means it
+        /// sticks out into the water (a headland). So <c>land^2</c> is the concavity term. The
+        /// bare <c>sea</c> factor requires there be water to shelter in at all — without it every
+        /// inland point scores 1.0 and settlements march away from the coast.</para>
         ///
-        /// <para>The product peaks at <c>land = 2/3</c> — land on two thirds of the horizon, water
-        /// on one third, which is exactly a cove — and <c>27/4</c> is the normaliser that puts
-        /// that maximum at 1.0 (it is derived from the shape, not a tuned constant, which is why
-        /// no new entry in <see cref="Tuning"/> is needed). Representative values: bay head 1.00,
-        /// straight coast 0.84, exposed headland 0.50, deep inland and open sea both 0.00.</para>
+        /// <para>The product peaks at <c>land = 2/3</c>, exactly a cove, and <c>27/4</c> is the
+        /// normaliser putting that maximum at 1.0 — derived from the shape, not tuned, which is
+        /// why no <see cref="Tuning"/> entry is needed. Representative values: bay head 1.00,
+        /// straight coast 0.84, exposed headland 0.50, deep inland and open sea 0.00.</para>
         ///
-        /// <para><b>Deviation from the sketch, stated deliberately.</b> The obvious reading —
-        /// "shelter rises with the fraction of the neighbourhood that is sea" — is monotone but
-        /// inverts the geometry: a point with sea on many sides is a headland, the most exposed
-        /// place on the island, not a sheltered inlet. This measure is therefore unimodal in
-        /// <c>land</c> rather than monotone in <c>sea</c>. It stays monotone in the thing that
-        /// matters, concavity, over the whole coastal range <c>land ∈ [0, 2/3]</c>, and it is one
-        /// multiply-add per sample. If the map reads wrong, the exponent on <c>land</c> is the
-        /// single knob: raising it moves the optimum deeper into the inlet.</para>
+        /// <para><b>Unimodal in <c>land</c>, not monotone in <c>sea</c>.</b> The obvious reading
+        /// — shelter rises with the sea fraction — inverts the geometry: a point with sea on many
+        /// sides is a headland, the most exposed place on the island. This stays monotone in the
+        /// thing that matters, concavity, over the whole coastal range <c>land ∈ [0, 2/3]</c>. If
+        /// the map reads wrong, the exponent on <c>land</c> is the single knob: raising it moves
+        /// the optimum deeper into the inlet.</para>
         ///
         /// <para>The arithmetic itself lives in <see cref="ShelterMeasure.FromLandFraction"/>
         /// so POC-03's POI siting (spec §1.2) can reuse the same measure rather than copy it.

@@ -13,15 +13,13 @@ namespace Archivist.Building.Table
     ///     pose(M) under (phi, t)  =  ( R(phi) * M.CentreGround + t ,  M.RotationDeg + phi )
     /// </code>
     ///
-    /// <para><b>Why a frame at all, rather than comparing two sheets directly.</b> The table as
-    /// built judged each sheet against its <i>absolute</i> true pose (C6.1), a target that is
-    /// 2.6% of the board's width with nothing on screen indicating where it is — and R1.11
-    /// guarantees there never will be, because the island is never shown. The fit test becomes
-    /// relative (G1.1). The thing a dragged sheet is judged against is then whatever it is
-    /// joining, and that is a loose sheet on some occasions and a nine-sheet assembly on
-    /// others. Both present a frame — a loose sheet derives one through <see cref="ForSheet"/>,
-    /// a group has one stored (G4.2) — so there is exactly <b>one</b> fit path, not a sheet
-    /// case and a group case that can drift apart.</para>
+    /// <para><b>Why a frame at all, rather than comparing two sheets directly.</b> An absolute
+    /// test (C6.1) aims at a target 2.6% of the board's width with nothing on screen indicating
+    /// where it is — and R1.11 guarantees there never will be. So the fit test is relative
+    /// (G1.1), and what a dragged sheet is judged against is whatever it is joining: a loose
+    /// sheet on some occasions, a nine-sheet assembly on others. Both present a frame — a loose
+    /// sheet derives one through <see cref="ForSheet"/>, a group has one stored (G4.2) — so there
+    /// is exactly <b>one</b> fit path.</para>
     ///
     /// <para><b>Two frames cannot be compared to each other</b> (G3.6). A rotation difference
     /// displaces a far member more than a near one, so "how far apart are these two
@@ -44,12 +42,11 @@ namespace Archivist.Building.Table
     ///
     /// <para><b>A frame is a player fact, so a transcendental is allowed here.</b> §4.4 forbids
     /// letting <c>sin</c>/<c>cos</c> reach a branch <i>in the generator</i>, where a last-ulp
-    /// difference between libm implementations can flip a cull and change an island's sheet
-    /// count. Nothing here feeds generation: phi comes from where the player pointed, no value
-    /// on this struct is drawn from a stream (§10), and a board pose is never an input to a
-    /// seed. The worst an ulp can do is decide a release that lands exactly on the tolerance
-    /// circle, which is a coin the player cannot aim at and no acceptance check depends on.
-    /// Quantising phi to protect it would band every join instead.</para>
+    /// difference between libm implementations can flip a cull and change a sheet count. Nothing
+    /// here feeds generation: phi comes from where the player pointed and a board pose is never
+    /// an input to a seed. The worst an ulp can do is decide a release landing exactly on the
+    /// tolerance circle, which the player cannot aim at. Quantising phi would band every join
+    /// instead.</para>
     ///
     /// <para>No UnityEngine, no tuning constants: like <see cref="SheetFit"/> and
     /// <see cref="BoardSpace"/> this runs headless, which is what lets G-A1 through G-A6 live
@@ -107,10 +104,9 @@ namespace Archivist.Building.Table
         /// <see cref="BoardSpace.ToGround"/> first.</para>
         ///
         /// <para><c>truth.RotationDeg</c>, not <c>truth.Survey.RotationDeg</c> — see
-        /// <see cref="SheetFit"/>'s class comment (D-H2). Here the mistake would be quieter
-        /// still: it would build a frame that is wrong by the sheet's own coast-walk angle, so
-        /// a correctly assembled pair of Hydrographic strips would refuse to fuse while every
-        /// lattice office worked.</para>
+        /// <see cref="SheetFit"/>'s class comment (D-H2). The mistake is quieter here: the frame
+        /// comes out wrong by the sheet's own coast-walk angle, so a correctly assembled pair of
+        /// Hydrographic strips refuses to fuse while every lattice office works.</para>
         /// </summary>
         public static BoardFrame ForSheet(Sheet truth, V2 groundPos, double rotationDeg)
         {

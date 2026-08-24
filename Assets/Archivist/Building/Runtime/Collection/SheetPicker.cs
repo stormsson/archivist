@@ -22,23 +22,21 @@ namespace Archivist.Building.Collection
         /// that deals the result into shares gets a mixed folder rather than one office's
         /// worth, which is the arrangement §4.3 describes.</para>
         ///
-        /// <para>Drawing from the flattened set of every survey — rather than picking a survey
-        /// and then sheets within it — is what makes a crate's contents mixed, which is the
-        /// arrangement §4.3 describes: a crate carries sheets for one or two islands, and
-        /// sorting them by office is the player's first act, not the generator's.</para>
+        /// <para>Drawing from the flattened set of every survey, rather than picking a survey
+        /// and then sheets within it, is what makes a crate's contents mixed: sorting them by
+        /// office is the player's first act, not the generator's (§4.3).</para>
         ///
         /// <para><b>The whole-island sheet (R2.2a) is not in the pool.</b> It is the one sheet
         /// that is an entry point rather than a document — R6.8a makes it the board's outline
         /// — so it is reserved for whatever hands it over deliberately, and a crate must not
         /// be able to deal it out as one more sheet among thirty.</para>
         ///
-        /// <para><b>Why the pool and not the crate.</b> The obvious place to drop it looks like
-        /// the far end — <c>MapCrate</c> filing, or <c>BinderSheetSource</c> listing — and both
-        /// are wrong for the same reason: the draw would still have happened, so
-        /// <c>SheetLedger.MarkIssued</c> would already have marked the sheet issued and buried
-        /// it in a binder that then refused to show it. That is losing the sheet, not reserving
-        /// it. Excluded from the pool it is never drawn, so it stays permanently unissued and
-        /// <c>MarkIssued</c> remains the single gate through which it can later be claimed.</para>
+        /// <para><b>Why the pool and not the crate.</b> Dropping it at the far end —
+        /// <c>MapCrate</c> filing, <c>BinderSheetSource</c> listing — is wrong because the draw
+        /// would still have happened, so <c>SheetLedger.MarkIssued</c> would have marked the
+        /// sheet issued and buried it in a binder that then refused to show it: losing the sheet,
+        /// not reserving it. Excluded from the pool it is never drawn, so it stays permanently
+        /// unissued and <c>MarkIssued</c> stays the single gate.</para>
         ///
         /// <para>It stays in <c>Island.TotalSheets</c>, so an island sits at 30/31 until that
         /// claim happens. That is accurate — the sheet exists and is still issuable — rather

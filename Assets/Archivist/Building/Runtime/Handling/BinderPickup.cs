@@ -11,40 +11,33 @@ namespace Archivist.Building.Handling
     /// on <see cref="BinderView"/>, what can be <i>done</i> to it lives here, so a binder in a
     /// rack or on the map table can carry a different verb without touching the view.
     ///
-    /// <para><b>The verb does not say how full it is.</b> A binder knows its own count and
-    /// will happily give it — <see cref="BinderView.SheetCount"/>,
-    /// <see cref="BinderView.Summary"/> — but the label names what the key does and nothing
-    /// else (<see cref="IInteractable.Label"/>). A verb that reads "Take (5 sheets)" is a verb
-    /// that changes when the object does, and the player reads the verb to know what the
-    /// object <i>is</i>. Where the count belongs is a spine label on the model or a line in
-    /// the binder's own screen; both are somebody else's slice, and neither is the prompt.</para>
+    /// <para><b>The verb does not say how full it is.</b> A binder knows its own count
+    /// (<see cref="BinderView.SheetCount"/>), but the label names what the key does and nothing
+    /// else. "Take (5 sheets)" is a verb that changes when the object does, and the player reads
+    /// the verb to know what the object <i>is</i>. The count belongs on a spine label or in the
+    /// binder's own screen, not in the prompt.</para>
     ///
     /// <para>It stores nothing about the player: whoever aims at it brings their own hands.
     /// See <see cref="SheetPickup"/> for what that cost to learn.</para>
     ///
     /// <para><b>A binder on a table stops being a thing you take and becomes the table's
-    /// face.</b> <c>PlayerInteractor</c> resolves whatever its ray hits with
-    /// <c>GetComponentInParent&lt;Interactable&gt;()</c>, so a binder sitting on an anchor
-    /// shadows the table underneath it — and the pile is the obvious place to aim, being the
-    /// only part of a table whose state the player can actually see. Left alone, that one spot
-    /// would be the one spot that refused a binder. So when this finds a
-    /// <see cref="CartographyTable"/> among its parents it hands the verb over: full hands get
-    /// the table's own answer ("Add to table", "File sheet", and the table's refusals), and
-    /// empty hands still take a binder — but the table's topmost one, through
-    /// <see cref="CartographyTable.TakeTop"/>, never necessarily this one. You cannot pull the
-    /// bottom folder out of a pile, and one component owning that keypress is what keeps the
-    /// stack from growing holes.</para>
+    /// face.</b> <c>PlayerInteractor</c> resolves a hit with
+    /// <c>GetComponentInParent&lt;Interactable&gt;()</c>, so a binder on an anchor shadows the
+    /// table underneath — and the pile is the obvious place to aim, being the only part of a
+    /// table whose state the player can see, so that one spot would be the one spot that refused
+    /// a binder. Finding a <see cref="CartographyTable"/> among its parents, this hands the verb
+    /// over: full hands get the table's answer, empty hands take the table's <i>topmost</i>
+    /// binder through <see cref="CartographyTable.TakeTop"/>, never necessarily this one.</para>
     ///
     /// <para>The parent lookup is deliberately <b>not cached</b>. A binder is unparented for
     /// the length of its glide onto the table and only becomes an anchor's child when it
     /// lands, so a reference resolved once would be an answer about where it used to be.</para>
     ///
-    /// <para><b>The verb is the serialised field, not a constant.</b> <c>SheetPickup</c> hard-codes
-    /// "Take" because nothing ever puts a sheet in the world by hand — the spawner builds every
-    /// one at runtime, so there is no Inspector to type a verb into. A binder is an authored
-    /// prefab sitting in the Project window, which means the wording is an ordinary thing to
-    /// adjust while looking at it. Same pattern as <c>CartographyTable</c>: <see cref="Reset"/>
-    /// supplies the default, and whatever is in the field afterwards wins.</para>
+    /// <para><b>The verb is a serialised field, not a constant.</b> <c>SheetPickup</c> hard-codes
+    /// "Take" because the spawner builds every sheet at runtime and there is no Inspector to type
+    /// into; a binder is an authored prefab, so the wording is an ordinary thing to adjust while
+    /// looking at it. <see cref="Reset"/> supplies the default and the field wins afterwards.
+    /// </para>
     /// </summary>
     public sealed class BinderPickup : Interactable
     {

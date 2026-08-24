@@ -13,50 +13,36 @@ namespace Archivist.Building.Table
     /// table, and takes itself back": which island is open, what stops listening while it is,
     /// and what starts.
     ///
-    /// <para><b>It disables components, not action maps</b> (C8.5). Disabling the Player map
-    /// looks equivalent and is not: <see cref="PlayerInteractor.OnEnable"/> and
-    /// <see cref="PlayerHands.OnEnable"/> each call <c>Enable()</c> on their single action,
-    /// deliberately, so that neither depends on the order the player's components wake in.
-    /// That independence is exactly what makes a map-level switch unsafe here — anything that
-    /// re-enables one of those components while the table is open (a script, a prefab
-    /// revert, the inspector) silently re-arms <c>Interact</c> or <c>Drop</c> underneath a
-    /// full-screen view, and the symptom is paper being dropped in a room the player cannot
-    /// see. Components off is the only form of "off" that survives being woken.</para>
+    /// <para><b>It disables components, not action maps</b> (C8.5).
+    /// <see cref="PlayerInteractor.OnEnable"/> and <see cref="PlayerHands.OnEnable"/> each call
+    /// <c>Enable()</c> on their own action so neither depends on wake order — and that
+    /// independence is what makes a map-level switch unsafe: anything re-enabling one of those
+    /// components while the table is open silently re-arms <c>Interact</c> or <c>Drop</c>
+    /// underneath a full-screen view, and the symptom is paper dropped in a room the player
+    /// cannot see.</para>
     ///
     /// <para><b>It never touches the cursor</b> (C8.6). <see cref="FirstPersonController"/>
-    /// locks the cursor in <c>OnEnable</c> and releases it in <c>OnDisable</c>, so disabling
-    /// that component releases the cursor for free and re-enabling it re-captures it. A
-    /// <c>Cursor.lockState</c> line here would be a second owner of one piece of global
-    /// state, and two owners of a global disagree the first time an ordering changes —
-    /// typically as a table that closes onto a room you can look around but not click in.
-    /// There is deliberately no <c>Cursor</c> reference anywhere in this file.</para>
-    ///
-    /// <para><b>And it does not clear the reticle</b> (C8.7). <c>PlayerInteractor.OnDisable</c>
-    /// already nulls <c>current</c> and hides the prompt; a second hide here would be a second
-    /// thing to keep in step with the prompt's API for no gain.</para>
+    /// locks it in <c>OnEnable</c> and releases it in <c>OnDisable</c>, so disabling that
+    /// component does both for free. A <c>Cursor.lockState</c> line here would be a second owner
+    /// of one global, and two owners disagree the first time an ordering changes — typically as
+    /// a table that closes onto a room you can look around but not click in. <b>It does not
+    /// clear the reticle either</b> (C8.7): <c>PlayerInteractor.OnDisable</c> already
+    /// does.</para>
     ///
     /// <para><b>Prior enabled state is captured, not assumed.</b> Close re-enables the three
     /// components only if they were enabled when Open was called. A3 asks that closing restore
-    /// walk, look and interact <i>exactly as they were</i>, and "as they were" is not
-    /// necessarily "all three on" — the bench and the editor tools switch these off
-    /// individually, and a close that turned them all back on would quietly repair a state
-    /// somebody set on purpose.</para>
+    /// walk, look and interact <i>exactly as they were</i>, and that is not necessarily "all
+    /// three on" — the bench and the editor tools switch these off individually.</para>
     ///
     /// <para><b>The EventSystem is created here if the scene has none, and the scene has
-    /// none</b> — the project contains no <c>EventSystem</c> at all (§5.1 lists it as "does
-    /// not exist yet"), so without this the canvas would be visible and completely dead to the
-    /// pointer. Creating it lazily rather than requiring scene wiring keeps this slice
-    /// demonstrable without editing the scene, and the one we create is ours to switch off
-    /// again on close (C8.4). An EventSystem we <i>found</i> is left alone in both directions:
-    /// it belongs to whoever put it there, and disabling another system's input module on the
-    /// way out of a table is not this class's business.</para>
+    /// none</b> (§5.1), so without this the canvas would be visible and dead to the pointer. The
+    /// one we create is ours to switch off again on close (C8.4); one we <i>found</i> is left
+    /// alone in both directions.</para>
     ///
-    /// <para>Input teardown is symmetric with setup on purpose. A <c>performed</c> handler
-    /// left subscribed after a domain reload fires into a dead object and throws, once per
-    /// key press, from a stack trace that names the input system rather than this file —
-    /// which is why <see cref="OnDisable"/> unsubscribes everything <see cref="OnEnable"/>
-    /// subscribed, and why the actions are looked up in <c>Awake</c> where a missing one
-    /// throws immediately and names itself.</para>
+    /// <para>Input teardown is symmetric with setup: a <c>performed</c> handler left subscribed
+    /// after a domain reload throws into a dead object once per key press, from a stack trace
+    /// naming the input system rather than this file. The actions are looked up in <c>Awake</c>,
+    /// where a missing one throws immediately and names itself.</para>
     /// </summary>
     public sealed class TableSession : MonoBehaviour
     {
@@ -278,23 +264,19 @@ namespace Archivist.Building.Table
         /// a different seed re-shows the board and the cabinet without repeating the mode
         /// switch, and the same seed does nothing at all.
         ///
-        /// <para><b>Why the cabinet is an argument and not a setting.</b> There are two ways
-        /// into this board and they disagree about what the cabinet lists. The table in the
-        /// room opens on the sheets held by the binders lying on <i>that</i> table; the <c>C</c>
-        /// debug shortcut opens on <c>generator.LastIslandSeed</c> through everything the ledger
-        /// has ever issued. <see cref="BoardView.Source"/> is a single <c>[SerializeReference]</c>
-        /// field that survives between openings, so with the source set anywhere but here,
-        /// whichever path ran last would quietly leave its answer behind for the next one — a
-        /// debug opening listing one table's binders, or a table listing the whole archive.
-        /// Neither looks broken; both are wrong in a way only a count gives away. Making the
-        /// source an argument of <c>Open</c> means "which cabinet is this?" is answered by
-        /// whoever opened it, every time, and cannot be inherited.</para>
+        /// <para><b>Why the cabinet is an argument and not a setting.</b> Two ways into this
+        /// board disagree about what the cabinet lists: the table in the room opens on the sheets
+        /// in the binders lying on <i>that</i> table, the <c>C</c> debug shortcut on everything
+        /// the ledger has ever issued. <see cref="BoardView.Source"/> is a single
+        /// <c>[SerializeReference]</c> field that survives between openings, so setting it
+        /// anywhere but here leaves whichever path ran last quietly answering for the next one.
+        /// Neither result looks broken; both are wrong in a way only a count gives away. As an
+        /// argument, "which cabinet is this?" is answered by whoever opened it and cannot be
+        /// inherited.</para>
         ///
-        /// <para>This is §4.3's seam being used as designed rather than merely provided for, and
-        /// it keeps <see cref="ISheetSource"/>'s standing rule intact: nothing in the UI layer
-        /// references <c>SheetLedger</c> directly. The session is the composition root — it is
-        /// what constructs the source and hands it in — which is precisely where
-        /// <see cref="LedgerSheetSource"/>'s own comment says the choice belongs.</para>
+        /// <para>This is §4.3's seam used as designed, keeping <see cref="ISheetSource"/>'s rule
+        /// intact: nothing in the UI layer references <c>SheetLedger</c> directly. The session is
+        /// the composition root that constructs the source and hands it in.</para>
         ///
         /// <para><paramref name="source"/> may be null, and null is not an error: it means
         /// "leave the board's source alone", which is what the one-argument overload exists to

@@ -48,7 +48,7 @@ namespace Archivist.Editor
     /// its seed AND of these numbers (R1.11). Change one and every seed in the archive means
     /// something else: the sheet identities keep their numbers — sheet 7 is still sheet 7 — while
     /// the ground underneath them moves, so a ledger written before the change describes paper that
-    /// no longer exists. The fingerprint is the hash of all 102 live values, and it is on screen so
+    /// no longer exists. The fingerprint is the hash of every live value, and it is on screen so
     /// that "did the ground move?" is a thing you can read rather than a thing you have to
     /// remember. Two runs agreeing on the fingerprint agree on every island.</para>
     ///

@@ -23,10 +23,10 @@ namespace Archivist.Render
     /// Hard band edges are what a hypsometric map looks like — a map, not a terrain render —
     /// so this is correct rather than a limitation. Only strokes are anti-aliased (§7).</para>
     ///
-    /// <para>Determinism (§5): band selection is a comparison against an already-quantised
-    /// value. <c>Height01</c> is quantised at <c>2^-16</c> upstream and <c>Elevation</c>
-    /// derives from it, so a band index is exactly as reproducible as the field and nothing
-    /// here needs its own quantisation. Pure and stateless, hence order-independent (T4.4).</para>
+    /// <para>Determinism (§5): band selection compares against an already-quantised value —
+    /// <c>Height01</c> is quantised at <c>2^-16</c> upstream and <c>Elevation</c> derives from
+    /// it — so a band index is exactly as reproducible as the field. Pure and stateless, hence
+    /// order-independent (T4.4).</para>
     /// </summary>
     public static class Bands
     {

@@ -7,16 +7,12 @@ namespace Archivist.Building.Table
     /// arithmetic that keeps the two honest. It is the whole of the interactive framing of
     /// G10.1's second half — the pan that G10.1 recorded as owed and did not build.
     ///
-    /// <para><b>C8.13 is now fully superseded, and this class is what supersedes it.</b> C8.13
-    /// said "no zoom, no pan — the board always frames the whole board", and its reason was
-    /// absolute seating: the mounting sheet's extent was the player's only clue to where a
-    /// sheet belonged, so cropping it removed the one reference on screen. G1.9 took absolute
-    /// correctness out of scope and G10.1 lifted the zoom half on that argument, leaving the
-    /// pan half explicitly unpaid — <i>"pan is the other half of this change and has not been
-    /// built"</i>. Both halves are lifted here. What is kept of C8.13 is its framing as the
-    /// <b>floor</b>: <see cref="Zoom"/> 1 is exactly the view C8.13 described, and the player
-    /// cannot zoom out past it, so the original composition is still a place the board returns
-    /// to rather than a state it has lost.</para>
+    /// <para><b>C8.13 is fully superseded, and this class is what supersedes it.</b> C8.13's
+    /// "no zoom, no pan" existed for absolute seating — the mounting sheet's extent was the
+    /// player's only clue to where a sheet belonged — and G1.9 takes that out of scope. What is
+    /// kept is C8.13's framing as the <b>floor</b>: <see cref="Zoom"/> 1 is exactly the view it
+    /// described and the player cannot zoom out past it, so the original composition is a place
+    /// the board returns to rather than a state it has lost.</para>
     ///
     /// <para><b>This is view state, and it is deliberately not board state.</b> Nothing here
     /// goes into <c>BoardStore</c>. That store holds player facts about paper — placements,
@@ -27,37 +23,29 @@ namespace Archivist.Building.Table
     /// <c>Show</c>. A player who zoomed in, closed the table and came back gets the board as the
     /// spec composes it, not as they last left it.</para>
     ///
-    /// <para><b>Zoom is multiplicative and is applied about a point.</b> Two decisions, and both
-    /// were taken against the obvious alternative. A linear step — <c>zoom ± 0.25</c> — is a
-    /// quarter of the view at zoom 1 and a sixteenth at zoom 4, so the same wheel notch feels
-    /// violent zoomed out and inert zoomed in; a constant <i>ratio</i> per notch is the same
-    /// apparent step everywhere, which is what a wheel is expected to do. And zooming about the
-    /// board centre rather than about the pointer makes the thing being looked at slide out of
-    /// frame exactly when the player leans in on it — the gesture becomes a fight, and the
-    /// player learns to zoom and then pan back, twice per look. <see cref="ZoomAbout"/> holds
-    /// one board point still, which is the whole difference between a magnifier and a
-    /// wrestle.</para>
+    /// <para><b>Zoom is multiplicative and is applied about a point.</b> A linear step —
+    /// <c>zoom ± 0.25</c> — is a quarter of the view at zoom 1 and a sixteenth at zoom 4, so one
+    /// wheel notch feels violent zoomed out and inert zoomed in; a constant <i>ratio</i> is the
+    /// same apparent step everywhere. And zooming about the board centre makes the thing being
+    /// looked at slide out of frame exactly when the player leans in on it, so they learn to
+    /// zoom and then pan back, twice per look. <see cref="ZoomAbout"/> holds one board point
+    /// still.</para>
     ///
-    /// <para><b>The pan clamp is stated as travel, not as a rectangle.</b> The centre may move
-    /// until the view's edge reaches the mounting sheet's edge and no further:
-    /// <c>travel = max(0, boardHalf − viewHalf)</c> per axis. Two consequences worth stating
-    /// because they are the design, not accidents. At zoom 1 both travels are zero — the view
-    /// already contains the board's full height and (on any wide viewport) more than its width,
-    /// so C8.13's framing is not merely the floor of the zoom but a genuinely fixed view, with
-    /// nothing to pan to. And the clamp is on the <i>camera centre</i>, so a slab whose centre
-    /// sits on the board's edge keeps its far half outside the view: what guarantees that half
-    /// is reachable is <c>BoardSpace.ForIsland</c>'s 8% padding, which already exists to hold
-    /// the coastal sheets that hang off the land (4.10 units on island 0). An extra overscroll
-    /// margin was considered and rejected — it is a second tuning value doing a job the padding
-    /// is already doing, and paper is only ever laid where the pointer can go, which is inside
-    /// the view.</para>
+    /// <para><b>The pan clamp is stated as travel, not as a rectangle:</b>
+    /// <c>travel = max(0, boardHalf − viewHalf)</c> per axis. Two consequences that are the
+    /// design rather than accidents. At zoom 1 both travels are zero — the view already contains
+    /// the board's full height and more than its width — so C8.13's framing is a genuinely fixed
+    /// view with nothing to pan to. And the clamp is on the <i>camera centre</i>, so a slab
+    /// centred on the board's edge keeps its far half outside the view; what makes that half
+    /// reachable is <c>BoardSpace.ForIsland</c>'s 8% padding (4.10 units on island 0), already
+    /// there to hold coastal sheets that hang off the land. An overscroll margin would be a
+    /// second tuning value doing the padding's job.</para>
     ///
-    /// <para><b>No engine dependency beyond <c>Vector2</c>/<c>Mathf</c>, and no Camera.</b> This
-    /// class does not know what a Camera is: <c>BoardView</c> reads <see cref="OrthographicSize"/>
-    /// and <see cref="Centre"/> and writes them onto the rig it owns. That keeps the one thing
-    /// worth testing — the fixed point of <see cref="ZoomAbout"/> — testable without a rig, and
-    /// keeps the depth of 100 and the Table-only culling mask (C5.1) in the one place that has
-    /// ever set them.</para>
+    /// <para><b>No engine dependency beyond <c>Vector2</c>/<c>Mathf</c>, and no Camera.</b>
+    /// <c>BoardView</c> reads <see cref="OrthographicSize"/> and <see cref="Centre"/> and writes
+    /// them onto the rig it owns, which keeps the fixed point of <see cref="ZoomAbout"/> testable
+    /// without a rig and keeps the depth and the Table-only culling mask (C5.1) in the one place
+    /// that has ever set them.</para>
     /// </summary>
     public sealed class BoardViewport
     {

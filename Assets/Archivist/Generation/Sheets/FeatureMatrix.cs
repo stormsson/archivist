@@ -62,8 +62,8 @@ namespace Archivist.Generation.Sheets
 
         /// <summary>
         /// §8.3 drawn sets, DERIVED from <see cref="Table"/> row by row, in FeatureClass enum
-        /// order. These used to be hand-written literals beside the table; four structures
-        /// that all had to agree, with nothing checking that they did.
+        /// order. Hand-written literals beside the table would be four structures that all have
+        /// to agree, with nothing checking that they do.
         /// </summary>
         static readonly FeatureClass[][] DrawnByOffice;
 

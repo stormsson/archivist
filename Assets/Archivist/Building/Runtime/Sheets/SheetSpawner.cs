@@ -75,10 +75,10 @@ namespace Archivist.Building.Sheets
         /// scene.</para>
         ///
         /// <para>Walks the active scene's roots rather than calling
-        /// <c>FindObjectsByType</c>: it is scoped to one scene, it includes the sheet
-        /// currently in the player's hands (a child of the camera), and it does not care what
-        /// hideFlags anything carries — a lesson learned when <c>FindObjectsByType</c>
-        /// reported, quite confidently, that there was no paper in a room full of it.</para>
+        /// <c>FindObjectsByType</c>: scoped to one scene, includes the sheet in the player's
+        /// hands (a child of the camera), and indifferent to hideFlags — which
+        /// <c>FindObjectsByType</c> is not, having once reported no paper in a room full of
+        /// it.</para>
         /// </summary>
         public static SheetView[] AllInScene()
         {
@@ -236,13 +236,11 @@ namespace Archivist.Building.Sheets
         /// <see cref="Register"/>, and it exists because <see cref="ClearAll"/> is no longer
         /// the only way paper leaves the world.
         ///
-        /// <para>A sheet is about to gain a second exit: being filed into a binder, where the
-        /// paper is destroyed and only its <c>SheetId</c> survives. <c>spawned</c> is a plain
-        /// <c>List</c> that <c>Register</c> only ever appends to, so a sheet destroyed that way
-        /// leaves a null hole behind in it — and <see cref="Spawned"/> is public and read by the
-        /// editor bench, which would then be reading a list of the floor that is partly about
-        /// sheets that are not on it. This keeps the floor's own record of the floor
-        /// honest.</para>
+        /// <para>Filing a sheet into a binder destroys the paper and keeps only its
+        /// <c>SheetId</c>. <c>spawned</c> is a plain <c>List</c> that <c>Register</c> only
+        /// appends to, so that leaves a null hole in it — and <see cref="Spawned"/> is public and
+        /// read by the editor bench, which would then be reading a record of the floor that is
+        /// partly about sheets not on it.</para>
         ///
         /// <para><b>It does not touch the ledger</b>, for the reason <see cref="ClearAll"/>
         /// gives for the same omission: what is lying on the floor and what has been issued are

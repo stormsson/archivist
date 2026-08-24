@@ -23,13 +23,11 @@ namespace Archivist.Render
     /// the renderer, evaluated once per render from the already-0.1-quantised angle. The walk
     /// below is pure multiply/add.</para>
     ///
-    /// <para><b>No supersampling in v1</b> (§6.1, requirements §5.4). If thin features alias
-    /// out at low resolution, the fix is 2x2 SSAA of the fill — four samples per pixel averaged
-    /// into one colour — which costs linearly in field samples, i.e. 4x, and nothing else in
-    /// this method changes. It is deliberately not done up front: T4.3 says the resolution at
-    /// which the quality bar holds is a finding reported by B5's sweep, not a constant asserted
-    /// in advance, and averaging band colours would also soften the hard band edges T2.1 wants.
-    /// </para>
+    /// <para><b>No supersampling in v1</b> (§6.1, requirements §5.4). If thin features alias out
+    /// at low resolution the fix is 2x2 SSAA of the fill, costing 4x in field samples and nothing
+    /// else in this method. It is not done up front because T4.3 makes the resolution at which
+    /// the quality bar holds a finding from B5's sweep rather than a constant asserted in
+    /// advance, and averaging band colours would soften the hard band edges T2.1 wants.</para>
     /// </summary>
     public static class FillRenderer
     {

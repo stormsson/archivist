@@ -22,13 +22,11 @@ namespace Archivist.Building.Interactables
     /// cut from, and the player's only access to it is paper. Showing it would answer the
     /// question the whole game is about.</para>
     ///
-    /// <para><b>It used to tip five loose sheets onto the floor, and no longer does.</b> The
-    /// cartography table's spec had already settled the model (§13, D-C1): the player's
-    /// physical item is the folder, never the sheet. Loose paper was five things to pick up
-    /// one at a time and — once racks exist — five things to file individually, for a game
-    /// whose unit of work is meant to be a document, not a page. A delivery is now one binder,
-    /// which is also one object to carry, one to shelve, and one for a map table to take its
-    /// island from (C4.2).</para>
+    /// <para><b>A delivery is one binder</b> (§13, D-C1): the player's physical item is the
+    /// folder, never the sheet. Loose paper is N things to pick up one at a time and, once racks
+    /// exist, N things to file individually, for a game whose unit of work is a document rather
+    /// than a page. One binder is also one object to carry, one to shelve, and one for a map
+    /// table to take its island from (C4.2).</para>
     ///
     /// <para><b>Except for one loose sheet, which is a debug affordance and says so.</b>
     /// Nothing can yet take a sheet <i>out</i> of a binder, so without a sheet somewhere in
@@ -38,22 +36,19 @@ namespace Archivist.Building.Interactables
     /// delivers a binder and nothing else, which is what it should eventually do.</para>
     ///
     /// <para><b>Two temporary knobs, both for the map table, both to be put back.</b>
-    /// <c>bindersPerOpening</c> above 1 delivers several folders of the <i>same</i> island in
-    /// one opening, which is how the table's second-binder branch (C4.3) and its no-room
-    /// refusal are reached without opening the crate twice — with
-    /// <c>openNewIslandEachTime</c> on, opening twice gives two different islands and tests
-    /// the refusal instead. When it is above 1 the sheets are <b>one</b> pick dealt into
+    /// <c>bindersPerOpening</c> above 1 delivers several folders of the <i>same</i> island in one
+    /// opening, which is how the table's second-binder branch (C4.3) is reached without opening
+    /// the crate twice — with <c>openNewIslandEachTime</c> on, opening twice gives two islands
+    /// and tests the no-room refusal instead. Above 1 the sheets are <b>one</b> pick dealt into
     /// shares rather than one pick per binder, because two draws from a ledger snapshot taken
     /// before either could hand the same sheet out twice.</para>
     ///
-    /// <para><c>everySheetOfTheIsland</c> files the whole survey into the delivery instead of
-    /// a handful, so a table can be composed in full rather than from five sheets scattered
-    /// across an island. It is the opposite of what the crate is for — the count is what makes
-    /// the ledger's exclusion visible, and an archive whose islands arrive complete has no
-    /// backlog — which is why it says TEMPORARY in the Inspector. Note the loose debug sheet
-    /// still comes out of that total: the binder holds every sheet <i>but one</i>, and filing
-    /// the loose one into it completes the island, which is a better test of the filing verb
-    /// than a spare sheet from an island nobody has laid out.</para>
+    /// <para><c>everySheetOfTheIsland</c> files the whole survey into the delivery, so a table
+    /// can be composed in full. It is the opposite of what the crate is for — the count is what
+    /// makes the ledger's exclusion visible, and an archive whose islands arrive complete has no
+    /// backlog — hence TEMPORARY in the Inspector. The loose debug sheet still comes out of that
+    /// total, so filing it completes the island: a better test of the filing verb than a spare
+    /// sheet from an island nobody has laid out.</para>
     /// </summary>
     public sealed class MapCrate : Interactable
     {

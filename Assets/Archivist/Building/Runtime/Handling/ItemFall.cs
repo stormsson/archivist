@@ -19,11 +19,10 @@ namespace Archivist.Building.Handling
     /// nothing as the sheet nears the floor, so it arrives flat and settled rather than
     /// snapping straight at the last moment.</para>
     ///
-    /// <para><b>Was <c>SheetFall</c>, and is deliberately no longer.</b> A binder falls by the
-    /// same rules and for the same reason — the resting place must be decided at release —
-    /// and it is not paper. The sway and tilt are still tuned for paper; a heavier item that
-    /// wants to drop like a book turns them down through <see cref="HandlingOptions"/> rather
-    /// than growing a second falling component here.</para>
+    /// <para><b>Not paper-specific</b>, despite the tuning: a binder falls by the same rules and
+    /// for the same reason. The sway and tilt are tuned for paper, and a heavier item that wants
+    /// to drop like a book turns them down through <see cref="HandlingOptions"/> rather than
+    /// growing a second falling component here.</para>
     /// </summary>
     public sealed class ItemFall : MonoBehaviour
     {

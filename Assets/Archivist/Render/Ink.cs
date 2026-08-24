@@ -4,18 +4,13 @@ namespace Archivist.Render
     /// §7 — the palette-derived stroke ink, and the ONE place it is derived.
     ///
     /// <para><b>Why this is its own class.</b> Two code paths draw the coastline:
-    /// <see cref="FieldCoast"/> from the fill's own h01 samples (the normal case, whenever the
-    /// fill is on) and <see cref="Strokes"/>'s vector contour fallback (when it is not). They
-    /// must lay down the SAME ink, or the same island rendered with the fill and without it
-    /// comes back in two different colours. That is not hypothetical: the derivation was once
-    /// written out twice, one copy rounding (<c>v * f + 0.5</c>) and the other truncating, and
-    /// the shipped deep colour <c>16324f</c> = (22,50,79) at <c>f = 0.55</c> came out as
-    /// (12,28,43) rounded and (12,27,43) truncated — green alone, because 22*0.55 = 12.1 and
-    /// 79*0.55 = 43.45 agree either way while 50*0.55 = 27.5 does not. A 1/255 split is small,
-    /// but it was a split between two paths that draw the same line, and the truncating copy
-    /// also dropped alpha — harmless only because today's palette is opaque. Both callers now
-    /// ask this class instead of re-deriving. Do not re-inline it, and do not add a second
-    /// rounding rule.</para>
+    /// <see cref="FieldCoast"/> from the fill's own h01 samples (the normal case) and
+    /// <see cref="Strokes"/>'s vector contour fallback. They must lay down the SAME ink, or one
+    /// island rendered with the fill and without it comes back in two colours. Written out twice,
+    /// one copy rounding (<c>v * f + 0.5</c>) and the other truncating, the deep colour
+    /// <c>16324f</c> = (22,50,79) at <c>f = 0.55</c> splits on green alone — 27.5 rounds one way
+    /// and truncates the other, while 12.1 and 43.45 agree — and the truncating copy also dropped
+    /// alpha. Do not re-inline this, and do not add a second rounding rule.</para>
     ///
     /// <para>Art direction is UNDEFINED for POC-02 — §6.4 calls even the fill palette a
     /// placeholder "to be replaced wholesale". These are placeholders too. RenderTuning.cs

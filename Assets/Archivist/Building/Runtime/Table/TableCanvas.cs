@@ -13,13 +13,11 @@ namespace Archivist.Building.Table
     /// an orthographic camera and puts <i>only</i> the chrome in UGUI, and this is that chrome.
     /// Nothing here knows the board camera exists.
     ///
-    /// <para><b>Built in code, like the room.</b> No prefab and no UXML. <c>RoomBuilder</c> is
-    /// the pattern — CLAUDE.md's standing rule is that scripts build things so provisional
-    /// numbers stay cheap to rebuild, and every number in this view is provisional: they were
-    /// measured off <c>1b-empty-table.png</c> at 1442 px wide and scaled to a 1920 canvas, which
-    /// is a guess about a screen nobody has played on yet. A prefab would freeze that guess into
-    /// a binary asset and make adjusting a hairline a merge conflict. All of them live in
-    /// <see cref="CabinetStyle"/>; none are written in this file.</para>
+    /// <para><b>Built in code, like the room.</b> No prefab, no UXML: every number here is
+    /// provisional — measured off <c>1b-empty-table.png</c> at 1442 px and scaled to a 1920
+    /// canvas, a guess about a screen nobody has played on — and a prefab would freeze it into a
+    /// binary asset where adjusting a hairline is a merge conflict. All of them live in
+    /// <see cref="CabinetStyle"/>; none in this file.</para>
     ///
     /// <para><b>UGUI, not UI Toolkit.</b> <c>InteractionPrompt</c> and
     /// <c>RoomBuilder.BuildInteractionUi</c> are already legacy UGUI, and the assembly definition
@@ -34,49 +32,41 @@ namespace Archivist.Building.Table
     /// alive between openings, and — the part that matters — stops the cabinet swallowing
     /// clicks meant for the room while the player is walking around it.</para>
     ///
-    /// <para><b>This is where the cabinet meets the board, and the only place that knows both.</b>
-    /// The cabinet reports gestures in screen space; <c>BoardInteractor</c> owns selection and
-    /// placement in the board's space. Neither references the other. This class translates:
-    /// a drop is turned into <c>BeginPlace</c>, the interactor's selection is turned into a
-    /// header line (C7.6). <see cref="SetSelected"/> stays a pure display update — it writes two
-    /// strings and touches nothing else — because selection is <i>decided</i> elsewhere and the
-    /// header only ever reports it.</para>
+    /// <para><b>This is where the cabinet meets the board, and the only place that knows
+    /// both.</b> The cabinet reports gestures in screen space; <c>BoardInteractor</c> owns
+    /// selection and placement in the board's space, and neither references the other. This
+    /// class translates: a drop becomes <c>BeginPlace</c>, the interactor's selection becomes a
+    /// header line (C7.6). <see cref="SetSelected"/> stays a pure display update, because
+    /// selection is <i>decided</i> elsewhere and the header only reports it.</para>
     ///
-    /// <para><b>A group crosses the same seam as a sheet, by the same two events.</b> The
-    /// Groups section (G6.1) raises row gestures carrying a group id instead of a
-    /// <see cref="SheetId"/>, and they are translated here exactly as the office rows' are: a
+    /// <para><b>A group crosses the same seam as a sheet, by the same two events</b> (G6.1): a
     /// click becomes a selection, a drop over the composition area becomes
     /// <c>BoardInteractor.PlaceGroup</c> (G6.5). The other direction — a group dragged off the
-    /// board onto the column and parked (G6.4) — never reaches this class at all, for the reason
-    /// the refile flag paragraph below gives: it is a board gesture, and
-    /// <c>ReleaseOverCabinet</c> is how the board hears about the column.</para>
+    /// board onto the column and parked (G6.4) — never reaches this class, because it is a board
+    /// gesture and <c>ReleaseOverCabinet</c> is how the board hears about the column.</para>
     ///
-    /// <para><b>Board or cabinet is decided by one rectangle, negatively.</b> "Over the board"
-    /// is defined as <i>not</i> inside the cabinet's rect (C7.5). The positive test was tried
-    /// first and abandoned: hit-testing the board would mean a physics raycast through
-    /// <c>BoardCamera</c>, which makes this chrome depend on the board camera it is documented
-    /// above as not knowing about, and — worse — a drop on the dark wood <i>beside</i> the
-    /// mounting sheet would hit nothing and be silently discarded, when it is plainly a drop on
-    /// the table. The cabinet's rectangle is the one thing this class already owns, so it is the
-    /// thing that gets asked.</para>
+    /// <para><b>Board or cabinet is decided by one rectangle, negatively.</b> "Over the board" is
+    /// <i>not</i> inside the cabinet's rect (C7.5). Hit-testing the board positively means a
+    /// physics raycast through <c>BoardCamera</c>, which makes this chrome depend on the camera
+    /// it is documented above as not knowing about — and a drop on the dark wood <i>beside</i>
+    /// the mounting sheet would hit nothing and be discarded, when it is plainly a drop on the
+    /// table.</para>
     ///
-    /// <para><b>Why the refile flag comes from the cabinet's pointer-enter and not from the row
-    /// drag.</b> C7.5 has two directions, and only one of them passes through a
-    /// <see cref="CabinetPanel.Dragging"/> event: a slab dragged off the board and back into the
-    /// drawer is a board gesture this class never hears about, so driving
-    /// <c>ReleaseOverCabinet</c> from row drags would leave the flag stale for exactly the case
-    /// it exists to serve. <see cref="CabinetPanel.PointerOverChanged"/> is true of the pointer
-    /// at any moment, whatever is being dragged and whether anything is. It is written from one
-    /// place only — two writers of one boolean disagree on the frame they differ, and a wrong
-    /// value here does not misdraw something, it refiles a sheet the player meant to keep.</para>
+    /// <para><b>Why the refile flag comes from the cabinet's pointer-enter and not the row
+    /// drag.</b> C7.5 has two directions and only one passes through
+    /// <see cref="CabinetPanel.Dragging"/>: a slab dragged off the board and back into the drawer
+    /// is a board gesture this class never hears about, so driving <c>ReleaseOverCabinet</c> from
+    /// row drags leaves the flag stale for exactly the case it exists to serve.
+    /// <see cref="CabinetPanel.PointerOverChanged"/> is true of the pointer at any moment,
+    /// whatever is being dragged. It is written from one place only: a wrong value here does not
+    /// misdraw something, it refiles a sheet the player meant to keep.</para>
     ///
-    /// <para><b>Why an <see cref="IslandGenerator"/> is wanted.</b> <c>BoardView</c> hands over
-    /// seeds and sheets, but a sheet's name needs the whole island — <c>SheetNaming.NameFor</c>
-    /// takes an <see cref="Island"/> deliberately, so that a UI cannot hide a 340 ms generation
-    /// inside a call it makes once per visible row (C7.7a). So the island is resolved once per
-    /// opening, through the generator's cache when there is one. Without a generator in the
-    /// scene it falls back to <c>Island.FromSeed</c>, which is correct but uncached: that path
-    /// is for a test bench, not for play.</para>
+    /// <para><b>Why an <see cref="IslandGenerator"/> is wanted.</b> A sheet's name needs the
+    /// whole island — <c>SheetNaming.NameFor</c> takes an <see cref="Island"/> deliberately, so a
+    /// UI cannot hide a 340 ms generation inside a call it makes once per visible row (C7.7a). So
+    /// the island is resolved once per opening, through the generator's cache when there is one.
+    /// Without a generator it falls back to <c>Island.FromSeed</c>: correct but uncached, and for
+    /// a test bench rather than for play.</para>
     /// </summary>
     [RequireComponent(typeof(Canvas))]
     [RequireComponent(typeof(CanvasScaler))]
@@ -278,26 +268,12 @@ namespace Archivist.Building.Table
         // --------------------------------------------------------------------
 
         /// <summary>
-        /// C7.6 — a click on a row puts that sheet in the header, the same as a click on the
-        /// board does.
+        /// C7.6 — a row click tells the BOARD first, and the header follows from that.
         ///
-        /// <para><b>Recorded disagreement.</b> This writes the header only; it cannot tell
-        /// <c>BoardInteractor</c> that the sheet is selected, because the interactor exposes no
-        /// way to be told (<c>Selected</c> is read-only and <c>SelectionChanged</c> runs the
-        /// other way). So a row click and a board click produce the same header and a different
-        /// internal state: after a row click <c>Q</c>/<c>E</c> still turn whatever the board had
-        /// selected, or nothing. It is written this way rather than dropped because C7.6 names
-        /// the row click explicitly, and the next board event corrects the header. The clean fix
-        /// is a <c>Select(SheetId)</c> on the interactor, which is not this slice's file.</para>
-        /// </summary>
-        /// <summary>
-        /// A row click tells the BOARD first, and the header follows from that.
-        ///
-        /// <para>Setting the header directly was the first version and it lied: the interactor
-        /// kept whatever was selected on the board, so the header named one sheet while
-        /// <c>Q</c>/<c>E</c> turned another. Going through <c>Select</c> makes one of them the
-        /// authority — the board — and the header is then just a view of it, updated by
-        /// <c>SelectionChanged</c> like every other selection change (C7.6).</para>
+        /// <para>Setting the header directly lies: the interactor keeps whatever was selected on
+        /// the board, so the header names one sheet while <c>Q</c>/<c>E</c> turns another. Going
+        /// through <c>Select</c> makes the board the authority and leaves the header a view of
+        /// it, updated by <c>SelectionChanged</c> like every other selection change.</para>
         ///
         /// <para>The direct <c>SetSelected</c> stays as the fallback for a table with no
         /// interactor wired, where the cabinet is still worth reading.</para>
@@ -328,16 +304,14 @@ namespace Archivist.Building.Table
         /// A click on a Groups row selects the assembly (G6.1, C7.6 applied to the new section).
         ///
         /// <para><b>It selects a member, because that is what a selection is.</b> G1.6 makes the
-        /// group the unit of interaction by way of the clicked sheet — <c>BoardInteractor</c>
-        /// holds a <see cref="SheetId"/> and reads the group off it — so the row hands over the
-        /// first member in join order, the same sheet the row's own label names (G6.3's
-        /// "from n"). Selecting the group then follows, and <c>Q</c>/<c>E</c> and the corner
-        /// handle turn the whole assembly, which is the useful half of clicking the row.</para>
+        /// group the unit of interaction by way of the clicked sheet, so the row hands over the
+        /// first member in join order — the sheet the row's own label names (G6.3's "from n").
+        /// Selecting the group follows, and <c>Q</c>/<c>E</c> and the corner handle then turn the
+        /// whole assembly.</para>
         ///
         /// <para>For a <b>parked</b> group this clears the board selection rather than setting
         /// one, because <c>Select</c> refuses a sheet that is not on the table — the same answer
-        /// a click on a drawer row already gives, and for the same reason: there is no slab to
-        /// outline and nothing for the verbs to turn.</para>
+        /// a click on a drawer row gives.</para>
         /// </summary>
         void OnGroupRowClicked(int groupId)
         {

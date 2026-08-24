@@ -30,8 +30,8 @@ namespace Archivist.Generation.Sheets
     }
 
     /// <summary>
-    /// The office list, in one place. Every site that used to enumerate the offices with an
-    /// inline <c>new[] { Hydrographic, LandSurvey, Garrison }</c> reads this instead, so adding
+    /// The office list, in one place. Any site that would otherwise enumerate the offices with
+    /// an inline <c>new[] { Hydrographic, LandSurvey, Garrison }</c> reads this instead, so adding
     /// a fifth office cannot be silently ignored by a caller that forgot to grow its array.
     /// </summary>
     public static class Offices

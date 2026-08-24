@@ -11,32 +11,25 @@ namespace Archivist.Building.Table
     /// One sheet on the cartography board: the <b>map alone</b>, at the exact size of the
     /// ground it covers. Not a sheet of paper — a window onto the island.
     ///
-    /// <para><b>Why this is not a mode on <c>SheetView</c>.</b> The board tried that first,
-    /// and the two objects turned out to disagree about what a sheet *is*. <c>SheetView</c>
-    /// builds paper: a slab at <c>Format.WidthMm</c> with the map composited inside its margin,
-    /// which is right for the room — the margin is in the texture precisely so a sheet is one
-    /// surface and cannot z-fight itself (see <c>SheetTexture</c>). On a ground-space board
-    /// that same object is simply <i>wrong</i>: <c>SurveySpec.SheetGroundWidth</c> is
-    /// <c>Scale.GroundMetres(Format.MapWidthMm)</c> — the map area, not the paper — so
+    /// <para><b>Why this is not a mode on <c>SheetView</c>.</b> The two disagree about what a
+    /// sheet <i>is</i>. <c>SheetView</c> builds paper — a slab at <c>Format.WidthMm</c> with the
+    /// map composited inside its margin — which is right for the room. On a ground-space board
+    /// that is simply wrong: <c>SurveySpec.SheetGroundWidth</c> is
+    /// <c>Scale.GroundMetres(Format.MapWidthMm)</c>, the map area and not the paper, so
     /// <c>Sheet.FrameRect</c>, <c>Sheet.Contains</c> and <c>Sheet.GroundCorners</c> have always
-    /// described the map and nothing else. Drawing whole paper against those numbers
-    /// over-covers the ground by the margin on all four sides and misplaces every edge, which
-    /// then makes the snap test of §6.1 argue with the geometry it is snapping to. Two
-    /// meanings of "a sheet" cannot share a component without one of them being a special
-    /// case in every method, so they do not share one. Removing the margin here is a
-    /// correctness fix, not a look.</para>
+    /// described the map alone. Drawing whole paper against those numbers over-covers the ground
+    /// by the margin on all four sides and misplaces every edge, which makes §6.1's snap test
+    /// argue with the geometry it is snapping to. Removing the margin here is a correctness fix,
+    /// not a look.</para>
     ///
-    /// <para><b>A quad, not a slab — §3.2's thickness problem deleted rather than
-    /// managed.</b> §3.2 sizes a paper-size mesh by <c>Scale.Denominator * UnitsPerMetre</c>
-    /// and applies it as <c>(s, 1, s)</c>, non-uniform on purpose, because scaling Y too would
-    /// make a 1:25000 whole-island sheet ten times thicker than a 1:2500 detail sheet. That
-    /// awkwardness only existed because the mesh had a thickness the board never wanted: the
-    /// board is looked at straight down by an orthographic camera (§3.1) and nothing on it can
-    /// ever see an edge. With a flat quad there is no Y extent to scale wrongly, so the
-    /// non-uniform scale and <c>BoardSpace.SlabScaleFor</c> both go away. <b>§3.2 is superseded
-    /// on both counts</b> — paper size and non-uniform scale — while its actual finding, that
-    /// sheets differ in board size by exactly as much as their ground footprints differ (D-C5),
-    /// is what this component now expresses directly.</para>
+    /// <para><b>A quad, not a slab</b> (§3.2 superseded). A paper-size mesh scaled by
+    /// <c>Scale.Denominator * UnitsPerMetre</c> has to be applied non-uniformly as
+    /// <c>(s, 1, s)</c>, or a 1:25000 whole-island sheet comes out ten times thicker than a
+    /// 1:2500 detail sheet — an awkwardness that only exists because the mesh has a thickness the
+    /// board never wanted, since it is looked at straight down by an orthographic camera (§3.1).
+    /// A flat quad has no Y extent to scale wrongly. §3.2's actual finding — sheets differ in
+    /// board size by exactly as much as their ground footprints differ (D-C5) — is what this
+    /// component expresses directly.</para>
     ///
     /// <para><b>Sized in board units, in the vertices.</b> Width and height are
     /// <c>Survey.SheetGroundWidth/Height * unitsPerMetre</c>, baked into the four corners, and
@@ -242,15 +235,10 @@ namespace Archivist.Building.Table
         /// IS the sheet (see the class comment), so there is nothing to composite it onto.
         ///
         /// <para><b>The one vertical flip.</b> <see cref="ImageBuffer"/> is RGBA32, row-major,
-        /// TOP-LEFT origin — what raster consumers and PNG expect — and <c>Texture2D</c> is
-        /// BOTTOM-LEFT, so uploading the raw bytes shows the map upside down. On a roughly
-        /// symmetric island that is genuinely easy to miss, which is why
-        /// <c>SheetTexture.Compose</c> does it in exactly one place and says so. This is the
-        /// board's copy of that flip, and it cannot be shared: <c>Archivist.Render</c> is
-        /// engine-free by design and neither side may pull it toward UnityEngine. With no
-        /// margin to write there is nothing to fold the flip into, so it is what it looks
-        /// like — a plain row copy, source row y landing at destination row
-        /// <c>Height - 1 - y</c>.</para>
+        /// TOP-LEFT origin and <c>Texture2D</c> is BOTTOM-LEFT, so raw bytes show the map upside
+        /// down — easy to miss on a roughly symmetric island. The board's own copy of the flip,
+        /// unshareable because <c>Archivist.Render</c> is engine-free by design: a plain row
+        /// copy, source row y landing at <c>Height - 1 - y</c>.</para>
         /// </summary>
         static Texture2D Upload(ImageBuffer map, string name)
         {

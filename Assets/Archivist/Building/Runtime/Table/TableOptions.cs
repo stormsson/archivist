@@ -6,24 +6,18 @@ namespace Archivist.Building.Table
     /// <summary>
     /// Tuning for the cartography table — every number spec §10 lists, and no others.
     ///
-    /// <para><b>One asset, because the alternative has already been measured.</b> CLAUDE.md's
-    /// standing rule is that tuning constants live in one place per assembly and are not
-    /// scattered into behaviours, and the table is the feature most able to break that rule:
-    /// its numbers are read from a board space, a draw-order stack, a texture budget, a snap
-    /// test and an input handler, none of which owns them. Put the scale on the board builder
-    /// and the tolerance on the snap component and there is no longer a place to answer "what
-    /// is this table set to" — and two of those numbers are the *same* number seen twice
-    /// (C5.5: the board slab and the cabinet thumbnail share one render, so they must share
-    /// one pixel density or the cache silently renders twice).</para>
+    /// <para><b>One asset.</b> These numbers are read from a board space, a draw-order stack, a
+    /// texture budget, a snap test and an input handler, none of which owns them; scattered,
+    /// there is no place to answer "what is this table set to". Two of them are also the
+    /// <i>same</i> number seen twice (C5.5: the board slab and the cabinet thumbnail share one
+    /// render, so they must share one pixel density or the cache silently renders twice).</para>
     ///
-    /// <para><b>A ScriptableObject rather than consts, for the reason
-    /// <see cref="Archivist.Building.Handling.HandlingOptions"/> gives.</b> These are feel
-    /// values. They are settled by playing — dragging a sheet until the tolerance stops
-    /// feeling either generous or fussy — not by reasoning about them and editing a literal.
-    /// An asset can be edited *while in play mode and the edit is kept*, so a tuning session
-    /// is one session; consts mean exit play mode, edit, recompile, re-enter, and lose the
-    /// board you were looking at. The defaults here are starting points, not findings:
-    /// findings go in <c>docs/UI/cartography_table/findings.md</c>.</para>
+    /// <para><b>A ScriptableObject rather than consts</b>, for the reason
+    /// <see cref="Archivist.Building.Handling.HandlingOptions"/> gives: these are feel values,
+    /// settled by dragging a sheet until the tolerance stops feeling either generous or fussy.
+    /// An asset can be edited <i>in play mode and the edit is kept</i>; consts mean exit play
+    /// mode, edit, recompile, re-enter, and lose the board you were looking at. The defaults are
+    /// starting points — findings go in <c>docs/UI/cartography_table/findings.md</c>.</para>
     ///
     /// <para><b>No randomness.</b> Nothing on this table draws from a stream (§10), so there
     /// is no <c>StreamNames</c> entry and no value here can move an island. Every number
@@ -44,17 +38,12 @@ namespace Archivist.Building.Table
         /// Where the board camera starts, as a divisor of "the whole board fits" (§3.1, C5.1).
         /// 1 is C8.13's original framing; 2 draws every sheet at twice the size.
         ///
-        /// <para><b>C8.13 is superseded outright, both halves.</b> C8.13 said "no zoom, no pan
-        /// — the board always frames the whole board", and it existed because of absolute
-        /// seating: the mounting sheet's full extent was the player's only reference for where
-        /// a sheet belonged, so cropping it took away the one clue on screen. G1.9 removed that
-        /// reason, and G10.1 lifted the zoom half on exactly that argument while recording the
-        /// pan half as an unpaid debt — <i>"pan is the other half of this change and has not
-        /// been built"</i>. It is built now (<see cref="BoardViewport"/>), so this value is no
-        /// longer the board's framing but only where the framing <b>starts</b>: the wheel moves
-        /// it between <see cref="BoardZoomMin"/> and <see cref="BoardZoomMax"/> and a right-drag
-        /// pans, and both reset to this number on every opening because a camera is not a
-        /// player fact and does not belong in <c>BoardStore</c> (§4.2, G4.4).</para>
+        /// <para><b>C8.13 is superseded outright, both halves</b> (G10.1,
+        /// <see cref="BoardViewport"/>). This is no longer the board's framing but only where the
+        /// framing <b>starts</b>: the wheel moves it between <see cref="BoardZoomMin"/> and
+        /// <see cref="BoardZoomMax"/> and a right-drag pans, and both reset to this number on
+        /// every opening, because a camera is not a player fact and does not belong in
+        /// <c>BoardStore</c> (§4.2, G4.4).</para>
         ///
         /// <para><b>Why 2 rather than 1 as the resting view.</b> At 1 a Land Survey slab is 35%
         /// of the viewport height on island 0 — small paper for the thing the whole activity
@@ -120,13 +109,12 @@ namespace Archivist.Building.Table
         /// same hardware, so a table that needed two numbers for that would be stating the same
         /// fact twice and drifting.
         ///
-        /// <para><b>Why a dial at all rather than a smaller zoom step.</b> The Input System
-        /// does not normalise scroll: a Windows detent reports 120, a macOS one about 1, and a
-        /// trackpad a continuous stream of whatever the OS thought your fingers did — several
-        /// "notches" inside one frame. <see cref="DefaultBoardZoomStep"/> is what one notch is
-        /// worth and is argued from the range (about ten notches stop to stop); this is how
-        /// much of a notch the hardware actually delivered. Folding them together would mean
-        /// tuning a trackpad on the field that documents how far the zoom reaches.</para>
+        /// <para><b>Why a dial rather than a smaller zoom step.</b> The Input System does not
+        /// normalise scroll: a Windows detent reports 120, a macOS one about 1, and a trackpad a
+        /// continuous stream — several "notches" inside one frame.
+        /// <see cref="DefaultBoardZoomStep"/> is what one notch is worth, argued from the range;
+        /// this is how much of a notch the hardware delivered. Folded together, tuning a trackpad
+        /// would mean editing the field that documents how far the zoom reaches.</para>
         ///
         /// <para><b>0.03 is measured, not reasoned</b> — settled with a hand on a macOS
         /// trackpad, where the raw reading is roughly thirty units per notch's worth of intent.

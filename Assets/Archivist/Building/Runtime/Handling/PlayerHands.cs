@@ -10,14 +10,11 @@ namespace Archivist.Building.Handling
     /// (R5.1), weight (R5.2) and the settle (R5.3), which is why it is its own component
     /// rather than a field on the controller.
     ///
-    /// <para><b>It holds an <see cref="ICarryable"/>, not a sheet.</b> Paper was the first
-    /// thing worth carrying and for a while the only one; a binder is the second (§13's
-    /// folder), and it is not paper — different mesh, different contents, different verb on
-    /// the floor. The hands were the wrong place to learn that difference. They used to keep
-    /// a <c>SheetSpawner</c> and ask it where a released sheet lands, which with two kinds of
-    /// carried thing would have become a type switch inside a component that models a pair of
-    /// hands. Now the item is asked where it comes to rest and told when it has arrived, and
-    /// this class knows only how to take, carry and let go.</para>
+    /// <para><b>It holds an <see cref="ICarryable"/>, not a sheet.</b> A binder is not paper —
+    /// different mesh, different contents, different verb on the floor — and the hands are the
+    /// wrong place to learn that difference. Holding a <c>SheetSpawner</c> and asking it where a
+    /// released sheet lands becomes a type switch inside a component that models a pair of hands.
+    /// Instead the item is asked where it comes to rest and told when it has arrived.</para>
     ///
     /// <para>The held pose lives on <c>holdAnchor</c>, a transform under the eye, not in
     /// numbers here. Moving that transform in the scene view <i>is</i> the tuning loop —
@@ -35,21 +32,11 @@ namespace Archivist.Building.Handling
     /// The hands still do not know what a table is. They are handed a pose and they move the
     /// item to it.</para>
     ///
-    /// <para><b>Q/E turning used to live here and no longer does</b> (D-C10): it moved to the
-    /// cartography table, where it rotates the selected sheet on the board. Turning paper to
-    /// read it belongs where paper is read. The orientation the player chose in hand was
-    /// discarded the moment the sheet was laid on a board, because the board has a true
-    /// orientation of its own; keeping the verb in both places would mean two turn states —
-    /// one in hand, one on the board — that can disagree, and the hand's is the one with no
+    /// <para><b>Q/E turning belongs to the cartography table, not here</b> (D-C10). Turning
+    /// paper to read it belongs where paper is read: the orientation chosen in hand is discarded
+    /// the moment the sheet is laid on a board, which has a true orientation of its own, so the
+    /// verb in both places would mean two turn states that can disagree and one of them with no
     /// consequence.</para>
-    ///
-    /// <para>The reasoning worth carrying to the table's implementation: the turn was
-    /// <i>held</i>, not pressed, because turning a sheet to read it is a continuous adjustment
-    /// rather than a series of steps, and a step size is one more number to be wrong about.
-    /// And the action was a 1D axis composite rather than two buttons, because Q and E are the
-    /// two ends of one continuous adjustment — which also means a future stick or shoulder
-    /// pair binds with no code change. In hand, the rotation was about the sheet's local Y,
-    /// its face normal while carried, so it spun the paper rather than tipping it.</para>
     /// </summary>
     public sealed class PlayerHands : MonoBehaviour
     {
@@ -271,14 +258,12 @@ namespace Archivist.Building.Handling
         /// than below them.</para>
         ///
         /// <para><b>It deliberately does not call <c>ICarryable.Settled</c>, and must not be
-        /// "tidied up" by routing it through <c>Land</c>.</b> <see cref="Land"/> settles the
-        /// item, and settling is how an item tells whatever keeps track of the floor that it is
-        /// part of it again — for a binder that is <c>BinderSpawner.Register</c>. An item set
-        /// down on a table is not on the floor. Registering it there would put it into the pile
-        /// the drop probe stacks against, so the next thing dropped would come to rest on top
-        /// of a binder lying on a table, in mid-air. The collider still comes back on when it
-        /// arrives, because the item does need to be aimed at again; that is all that landing
-        /// means here.</para>
+        /// "tidied up" by routing it through <c>Land</c>.</b> Settling is how an item tells
+        /// whatever tracks the floor that it is part of it again, and an item set down on a table
+        /// is not on the floor: registering it there puts it into the pile the drop probe stacks
+        /// against, so the next thing dropped comes to rest on top of a binder lying on a table,
+        /// in mid-air. The collider still comes back on when it arrives, because the item does
+        /// need to be aimed at again.</para>
         /// </summary>
         public bool HandOver(Vector3 restPosition, Quaternion restRotation, Action<ICarryable> onLanded)
         {

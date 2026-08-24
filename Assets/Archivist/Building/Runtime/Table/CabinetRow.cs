@@ -15,13 +15,10 @@ namespace Archivist.Building.Table
     /// <para><b>Two states, and no third (C7.4).</b> <i>In the drawer</i> is plain: white plate,
     /// hairline border, ink name. <i>On the table</i> is gold border, gold tint, gold title, the
     /// thumbnail tilted a few degrees off-square, and a table mark on the right. That is the
-    /// whole vocabulary. The ✓ drawn on some rows in <c>1a-mid-assembly.png</c> and
-    /// <c>1c-snap-moment.png</c> is legacy and must not be reproduced: D-C4 says the
-    /// <c>2a-cabinet-states.png</c> legend governs and those two mockups were simply never
-    /// re-rendered. Nor is there a "seated" row state — seating is visible on the board, and
-    /// R5.5 is explicit that a cabinet full of checkmarks turns an archive into a score sheet.
-    /// D-C3 keeps the section <i>count</i> against R5.5 and drops the mark; a per-row mark has
-    /// no such defence.</para>
+    /// whole vocabulary. The ✓ on some rows in <c>1a-mid-assembly.png</c> and
+    /// <c>1c-snap-moment.png</c> is legacy and must not be reproduced (D-C4). Nor is there a
+    /// "seated" row state: seating is visible on the board, and R5.5 is explicit that a cabinet
+    /// full of checkmarks turns an archive into a score sheet.</para>
     ///
     /// <para><b>The tilt is not decoration.</b> A row for a sheet that is out on the table shows
     /// its thumbnail knocked off-square because that is what the sheet itself is: laid down,
@@ -29,12 +26,10 @@ namespace Archivist.Building.Table
     /// matters for the one player who cannot tell the gold tint from the cream plate.</para>
     ///
     /// <para><b>Why the row raises an event rather than acting.</b> Rows are a picture of the
-    /// ledger and nothing more; they decide nothing. <see cref="Clicked"/>, <see cref="DragStarted"/>,
-    /// <see cref="Dragging"/> and <see cref="DragEnded"/> all report — none of them moves paper.
-    /// A row must never call the board directly: it does not know whether a drop landed on the
-    /// board or on the cabinet (that is a screen-rectangle question, and the row does not own
-    /// the rectangle), and a row that laid its own sheet down would have to be torn down and
-    /// rebuilt by the very rebuild its own action triggered.</para>
+    /// ledger; they decide nothing. A row must never call the board directly: it does not know
+    /// whether a drop landed on the board or on the cabinet — a screen-rectangle question, and
+    /// the row does not own the rectangle — and a row that laid its own sheet down would be torn
+    /// down by the rebuild its own action triggered.</para>
     ///
     /// <para><b>The drag ghost (C7.5).</b> A drag from the drawer to the board carries a small,
     /// semi-transparent copy of the thumbnail under the pointer. It is <i>not</i> this row's
@@ -52,29 +47,22 @@ namespace Archivist.Building.Table
     /// <para><b>One row type serves sheets and groups both (G6.1).</b> A Groups row is the same
     /// object in the mockup's vocabulary — thumbnail, serif title, spaced sub-line, mark at the
     /// right, two states — so it is this class with <see cref="IsGroupRow"/> set rather than a
-    /// second MonoBehaviour. A second class was the first plan and was dropped: it would have
-    /// meant a second copy of the ghost, the tilt, the drag refusal and the two-state colouring,
-    /// which are exactly the parts that must not drift apart, and Unity's one-behaviour-per-file
-    /// convention would have forced a fourth file into a slice that owns three. What actually
-    /// differs between the two is the <i>key</i> — a <see cref="SheetId"/> or a group id — and a
-    /// key is a field, not a type.</para>
+    /// second MonoBehaviour. A second class means a second copy of the ghost, the tilt, the drag
+    /// refusal and the two-state colouring, which are exactly the parts that must not drift
+    /// apart. What differs is the <i>key</i> — a <see cref="SheetId"/> or a group id — and a key
+    /// is a field, not a type.</para>
     ///
-    /// <para><b>Events carry the row, not the key</b>, and the panel unpacks them. The first
-    /// version raised <c>Action&lt;SheetId&gt;</c>, which cannot name a group; the obvious repair
-    /// was four more group-keyed events beside the four sheet-keyed ones, and a row deciding
-    /// which pair to raise. That is eight events on an object whose whole job is to report that
-    /// it was touched. Handing the listener the row instead keeps the count at four and puts the
-    /// one decision — "sheet event or group event?" — in <see cref="CabinetPanel"/>, which is
-    /// already the conduit that re-raises them and already the only thing that constructs
-    /// rows.</para>
+    /// <para><b>Events carry the row, not the key</b>, and the panel unpacks them.
+    /// <c>Action&lt;SheetId&gt;</c> cannot name a group, and four more group-keyed events beside
+    /// the four sheet-keyed ones is eight events on an object whose whole job is to report that
+    /// it was touched. Handing over the row keeps the count at four and puts the one decision in
+    /// <see cref="CabinetPanel"/>, already the conduit that re-raises them.</para>
     ///
     /// <para><b>A grouped sheet's row is inert (G6.2).</b> It keeps its place in its office
-    /// section, so the office count still reads as the island's inventory, but it cannot be
-    /// dragged and clicking it raises nothing: the only place an assembly can be picked up is
-    /// its Groups row. The refusal is <i>marked</i>, not merely silent — see
-    /// <see cref="BuildGroupMark"/> — and hovering it still lights the whole assembly
-    /// (<see cref="HoverChanged"/>), so an inert row is visibly related to something rather than
-    /// visibly dead.</para>
+    /// section, so the count still reads as inventory, but cannot be dragged and clicking raises
+    /// nothing: an assembly is picked up from its Groups row. The refusal is <i>marked</i>
+    /// (<see cref="BuildGroupMark"/>) and hovering still lights the whole assembly, so an inert
+    /// row is visibly related to something rather than visibly dead.</para>
     /// </summary>
     public sealed class CabinetRow : MonoBehaviour,
                                      IPointerClickHandler,
@@ -171,16 +159,13 @@ namespace Archivist.Building.Table
         /// on it: hovering a Groups row lights that group's rows in the office section above,
         /// and hovering one of those lights the Groups row and its siblings.
         ///
-        /// <para>Raised by every row, grouped or loose, and the panel decides that a loose row
-        /// lights nothing. The row does not filter because it cannot know: a row is told which
-        /// group it belongs to, but "does anything else share it?" is a question about the whole
-        /// accordion.</para>
+        /// <para>Raised by every row, and the panel decides that a loose one lights nothing. A
+        /// row is told which group it belongs to, but "does anything else share it?" is a
+        /// question about the whole accordion.</para>
         ///
-        /// <para>This does not disturb <see cref="CabinetPanel.PointerOverChanged"/>. The event
+        /// <para>This does not disturb <see cref="CabinetPanel.PointerOverChanged"/>: the event
         /// system sends enter and exit along the <i>difference</i> between the old and new
-        /// hierarchies, so moving from one row to the next raises exit and enter on the two rows
-        /// and nothing at all on their common ancestors — which is exactly what makes the
-        /// panel's column-edge event trustworthy in the first place.</para>
+        /// hierarchies, so moving between rows raises nothing on their common ancestors.</para>
         /// </summary>
         public event Action<CabinetRow, bool> HoverChanged;
 
@@ -308,13 +293,11 @@ namespace Archivist.Building.Table
         /// The kin bar of G6.3 — a short gold rule down the row's left edge, hidden until the
         /// pointer is on a row of the same group.
         ///
-        /// <para><b>A bar rather than a tint.</b> The obvious highlight is a warmer fill, and it
-        /// cannot be had: the fill already carries C7.4's two states, so a hover tint would need
-        /// a second warm cream <i>per state</i> and would have to stay distinguishable from the
-        /// gold tint it sits beside — two more colours off no mockup, competing with the one
-        /// signal the mockup does define. A bar is additive. It is legible on both fills, it
-        /// cannot be confused with either state because neither state has one, and it points
-        /// along the run of rows it is grouping, which is the fact being shown.</para>
+        /// <para><b>A bar rather than a tint.</b> The fill already carries C7.4's two states, so
+        /// a hover tint needs a second warm cream <i>per state</i>, both distinguishable from the
+        /// gold beside them — two more colours off no mockup, competing with the one signal the
+        /// mockup does define. A bar is additive, legible on both fills, confusable with neither
+        /// state, and it points along the run of rows it is grouping.</para>
         ///
         /// <para>Inset by a hairline top, bottom and left so it sits <i>inside</i> the row's
         /// border rather than straddling it — the cabinet's own <c>EdgeRule</c> straddles,
@@ -491,13 +474,11 @@ namespace Archivist.Building.Table
         /// again in those two would be wrong as well as redundant, because a refresh can flip
         /// the flag underneath a live drag and half a drag is worse than none.</para>
         ///
-        /// <para><b>Why a refused drag does not scroll the cabinet instead.</b> It could —
-        /// forwarding the drag up to <c>CabinetPanel</c>, which owns the column's scrolling
-        /// since G10.4, is three lines. It is not
-        /// done because it would make the two states of C7.4 differ in a way the mockup never
-        /// promises: an identical gesture would scroll on a gold row and carry paper on a plain
-        /// one. The wheel scrolls over any row, and the section headers still drag-scroll, so
-        /// nothing is unreachable.</para>
+        /// <para><b>Why a refused drag does not scroll the cabinet instead.</b> Forwarding it to
+        /// <c>CabinetPanel</c> is three lines, and it would make C7.4's two states differ in a
+        /// way the mockup never promises: one gesture scrolling on a gold row and carrying paper
+        /// on a plain one. The wheel scrolls over any row and the section headers still
+        /// drag-scroll, so nothing is unreachable.</para>
         /// </summary>
         void IBeginDragHandler.OnBeginDrag(PointerEventData eventData)
         {
@@ -702,18 +683,14 @@ namespace Archivist.Building.Table
         /// covers groups.⟩
         ///
         /// <para><b>Why a bracket.</b> It is the typographic sign that already means <i>these
-        /// belong together</i>, so it needs no legend, and its meaning survives being seen once
-        /// on a row and once beside a run of them. It is also unmistakably not the trestle: a
-        /// spine with two arms against a table top with two legs, at a glance, in the same
-        /// 18 × 14 box.</para>
+        /// belong together</i>, so it needs no legend, and it is unmistakably not the trestle — a
+        /// spine with two arms against a table top with two legs, in the same 18 × 14 box.</para>
         ///
-        /// <para><b>Rejected: two overlapping sheet outlines</b>, which is the more literal
-        /// picture of an assembly. Each outline is a coloured quad with a fill quad inset inside
-        /// it (the row's own border-and-fill idiom), so the mark is four quads instead of three
-        /// — and, fatally, the inner fills have to be the <i>row's</i> fill colour, which means
-        /// the mark has to be retinted twice on every state change and would show as a solid
-        /// blob against any surface that is not the plate it was built for. Rejected also: a
-        /// glyph — 🔗, §, ⧉ — for the hollow-box reason above.</para>
+        /// <para><b>Rejected: two overlapping sheet outlines</b>, the more literal picture. Each
+        /// needs a fill quad inset inside a coloured one, so the mark is four quads instead of
+        /// three, and the inner fills have to be the <i>row's</i> colour — retinted on every
+        /// state change, and a solid blob against any other surface. Rejected also: a glyph.
+        /// </para>
         ///
         /// <para>Colour is a parameter and the caller changes it with state: gold while the
         /// group is out on the table, muted while it is parked. The mark says <i>grouped</i>;

@@ -29,29 +29,16 @@ namespace Archivist.Building.Table
     /// a 3 km island and a 12 km island get proportionate margins; the default (0.08) lives in
     /// <c>TableOptions</c>, not here, because it is a feel value.</para>
     ///
-    /// <para><b>Slab scale used to live here, and no longer does.</b> There was a
-    /// <c>SlabScaleFor(Sheet)</c> returning <c>Scale.Denominator * UnitsPerMetre</c>, the
-    /// factor §3.2 applies to a <c>SheetView</c> mesh built at true paper size — applied
-    /// <c>(s, 1, s)</c>, non-uniform, so that a 1:25000 whole-island sheet did not come out ten
-    /// times thicker than a 1:2500 detail sheet. Both the factor and its awkward application
-    /// are gone: <see cref="Archivist.Building.Table.BoardSheetView"/> bakes
+    /// <para><b>A slab's size is baked into its quad, not applied as a scale.</b>
+    /// <see cref="Archivist.Building.Table.BoardSheetView"/> puts
     /// <c>Survey.SheetGroundWidth * UnitsPerMetre</c> straight into a flat quad's vertices and
-    /// leaves <c>localScale</c> at one. Two reasons it moved rather than stayed. First it was
-    /// <b>wrong</b>: <c>SheetGroundWidth</c> is the ground covered by the MAP area
-    /// (<c>Scale.GroundMetres(Format.MapWidthMm)</c>), which is what <c>Sheet.FrameRect</c> and
-    /// <c>Sheet.Contains</c> describe, so drawing whole paper over-covered the ground by the
-    /// margin on all four sides. Second, a paper-metres-to-board-units factor only exists to
-    /// undo a unit conversion nobody needed to make; ground metres were always the answer. The
-    /// finding §3.2 was really recording survives untouched — sheets differ in board size by
-    /// exactly as much as their ground footprints differ (D-C5). Only the figures change, and
-    /// the size of the change is the size of the bug: a 1:2500 A1 covers <b>1285 × 1902 m</b>
-    /// (map 514 × 761 mm) where the paper-derived figure said 1485 × 2103 m; a Hydrographic
-    /// strip covers <b>875 × 425 m</b> (map 350 × 170 mm) where paper said 950 × 500 m. At
-    /// 0.01 units/m those are the board sizes directly. §3.2 has since been rewritten to these
-    /// numbers, so code and spec now agree — this paragraph records the correction, not a
-    /// standing disagreement. The method is deleted rather than obsoleted because a method
-    /// nothing calls is a method someone will call wrongly, and this one returns a plausible
-    /// number for a question the board no longer asks.</para>
+    /// leaves <c>localScale</c> at one. A paper-metres-to-board-units factor only exists to undo
+    /// a unit conversion nobody needed to make: <c>SheetGroundWidth</c> is the ground covered by
+    /// the MAP area, which is what <c>Sheet.FrameRect</c> and <c>Sheet.Contains</c> describe, so
+    /// scaling from whole paper over-covers the ground by the margin on all four sides. The
+    /// figures §3.2 carries are the corrected ones: a 1:2500 A1 covers <b>1285 × 1902 m</b> (map
+    /// 514 × 761 mm), a Hydrographic strip <b>875 × 425 m</b> (map 350 × 170 mm). Sheets still
+    /// differ in board size by exactly as much as their ground footprints differ (D-C5).</para>
     ///
     /// <para>No UnityEngine, and no tuning constants: every value arrives as a parameter, so
     /// the transform is testable headlessly (A7) and the defaults stay in one place (§10).</para>

@@ -63,7 +63,12 @@ quietly picking one.
   sub-stream** (`StreamNames`) so an unrelated draw cannot move an island.
 - Tuning constants live in one place per assembly: `Tuning`, `RenderTuning`,
   `HandlingOptions`. Do not scatter magic numbers into behaviours.
-- Class-level XML doc comments here explain *why*, including the approach that
-  was tried and failed. Match that when adding code.
+- Class-level XML doc comments here explain *why*: the rule, and the trap that
+  must not be "fixed". State the claim once, in as few lines as carry it. Do
+  **not** narrate the change — no "it used to", "the first version", "both are
+  gone". Decision history belongs in `docs/`, cited by number (D-C10, G7.1
+  superseded); a comment that retells it is a second copy that drifts. A
+  rejected alternative earns a sentence only when someone would otherwise
+  reintroduce it. Match that when adding code.
 - Scripts build geometry (`RoomBuilder`), rather than geometry being hand-placed
   — provisional numbers have to be cheap to rebuild.

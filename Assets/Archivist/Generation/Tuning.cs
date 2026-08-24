@@ -6,7 +6,7 @@ namespace Archivist.Generation
     ///
     /// <para><b>These are the DEFAULTS, not the live values.</b> Each was a <c>const</c> until
     /// tuning became configurable; a <c>const</c> is a compile-time literal the compiler inlines
-    /// into all 197 call sites, so nothing could ever configure one. The literal and the
+    /// into every call site, so nothing could ever configure one. The literal and the
     /// reasoning that produced it stay here, as <c>Default*</c>; the value the generator actually
     /// reads — <c>Tuning.OverlapFraction</c>, unchanged at every call site — lives in the
     /// generated <c>Tuning.Values.cs</c>, is read once from <c>config/generation.yml</c> at

@@ -15,13 +15,10 @@ namespace Archivist.Building.Table
     /// <see cref="ISheetSource"/> has been kept: <b>nothing in the UI layer references
     /// <see cref="SheetLedger"/> directly.</b></para>
     ///
-    /// <para><b>Not a MonoBehaviour.</b> Deliberately. It owns no scene state, has no lifetime
-    /// of its own, and the whole reason it exists is to be substitutable — a component would
-    /// make substitution a prefab edit instead of a constructor argument, and would tempt a
-    /// consumer to <c>GetComponent</c> its way to the concrete type and back to the ledger.
-    /// It follows <c>SheetLedgerStore</c>'s split: the scene-facing half is the
-    /// <see cref="SheetLedger"/> component it is handed, everything that is logic is a plain
-    /// object.</para>
+    /// <para><b>Not a MonoBehaviour.</b> It owns no scene state and exists to be substitutable;
+    /// a component would make substitution a prefab edit instead of a constructor argument, and
+    /// would tempt a consumer to <c>GetComponent</c> its way to the concrete type and back to the
+    /// ledger. Same split as <c>SheetLedgerStore</c>.</para>
     ///
     /// <para><b>It copies, and it has to.</b>
     /// <c>SheetLedgerStore.IssuedSheets</c> is explicit that it returns <i>the live list, not a

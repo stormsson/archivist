@@ -6,20 +6,16 @@ namespace Archivist.Building.Handling
     /// Something the player can pick up, carry, and put down. A sheet is one; a binder is
     /// another; a crate of them will be a third.
     ///
-    /// <para><b>Why an interface rather than a base class.</b> The two things that are carried
-    /// today have nothing else in common. <c>SheetView</c> owns a mesh, a material and a
-    /// texture it built at runtime and must destroy; <c>BinderView</c> owns an imported model
-    /// and a list of identities. Making them share an ancestor would mean inventing a common
-    /// parent for two objects whose only shared fact is that hands can hold them — which is
-    /// exactly what an interface says and a base class does not.</para>
+    /// <para><b>Why an interface rather than a base class.</b> The two things carried today have
+    /// nothing else in common: <c>SheetView</c> owns a mesh, material and texture built at
+    /// runtime and must destroy them; <c>BinderView</c> owns an imported model and a list of
+    /// identities. Their only shared fact is that hands can hold them, which is what an interface
+    /// says and a base class does not.</para>
     ///
-    /// <para><b>Why the resting pose is asked of the item.</b> <c>PlayerHands</c> used to hold
-    /// a <c>SheetSpawner</c> reference and ask it where a released sheet lands. That works
-    /// while there is one kind of carried thing and becomes a type switch the moment there are
-    /// two — the hands would have to know that sheets go to the sheet spawner and binders to
-    /// the binder spawner, which is knowledge about paper living in the component that models
-    /// a pair of hands. Here the item answers for itself, and the hands stay a pair of hands:
-    /// they take, they carry, they let go.</para>
+    /// <para><b>Why the resting pose is asked of the item.</b> The alternative — hands holding a
+    /// <c>SheetSpawner</c> and asking it where a released sheet lands — becomes a type switch the
+    /// moment there are two kinds of carried thing, putting knowledge about paper inside the
+    /// component that models a pair of hands.</para>
     ///
     /// <para><b>The pose is decided at release, not on arrival</b> — see <c>ItemFall</c>. An
     /// implementation must answer <see cref="RestingPose"/> without having moved anything.</para>

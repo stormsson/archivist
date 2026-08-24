@@ -14,17 +14,13 @@ namespace Archivist.Building.Table
     /// <summary>
     /// Every colour, size and spacing the cabinet and the header use, in one place.
     ///
-    /// <para><b>Why this is not in <see cref="TableOptions"/>.</b> <c>TableOptions</c> is a
-    /// ScriptableObject holding "every number spec §10 lists, and no others" — feel values,
-    /// settled by playing: a snap tolerance is argued about with a mouse in your hand, so it has
-    /// to survive being edited in play mode. None of that is true of a hairline width. These are
-    /// <i>look</i> values, and their authority is not play at all but the four PNGs in
-    /// <c>docs/UI/cartography_table/</c>. Putting them in the tuning asset would invite someone
-    /// to drag the panel cream three stops off the mockup in an inspector, with no diff and
-    /// nothing to review; as consts they change in one file, in one commit, against the mockup
-    /// they are supposed to match. CLAUDE.md's rule is "one place per assembly, not scattered
-    /// into behaviours" — this is that one place for chrome, and the rule it is really serving
-    /// is the second half.</para>
+    /// <para><b>Why this is not in <see cref="TableOptions"/>.</b> That asset holds feel values
+    /// settled by playing — a snap tolerance is argued about with a mouse in your hand, so it
+    /// has to survive being edited in play mode. None of that is true of a hairline width. These
+    /// are <i>look</i> values whose authority is the four PNGs in
+    /// <c>docs/UI/cartography_table/</c>, and as consts they change in one file, in one commit,
+    /// against the mockup they are supposed to match — where an inspector field invites dragging
+    /// the panel cream three stops off it with no diff to review.</para>
     ///
     /// <para><b>Reference space is 1920 × 1080</b>, the same as the room's canvas in
     /// <c>RoomBuilder.BuildInteractionUi</c>. The mockups were rendered at 1442 wide, so every
@@ -32,12 +28,10 @@ namespace Archivist.Building.Table
     /// looked arbitrary in the mockup it has been rounded to something a human can hold.</para>
     ///
     /// <para><b>The fonts are approximations and are meant to be.</b> No font assets may be
-    /// added, so the serif is asked for from the OS by name and the sans is Unity's built-in
-    /// face. Letter-spaced small caps do not exist in legacy <see cref="Text"/> at all, so
-    /// <see cref="Spaced"/> fakes them by putting a space between characters. It is coarse, and
-    /// it is visibly the right shape, which for a slice whose point is "does this layout read"
-    /// is the thing that matters. When this becomes real type, it becomes real type here and
-    /// nowhere else.</para>
+    /// added, so the serif is asked of the OS by name and the sans is Unity's built-in face.
+    /// Letter-spaced small caps do not exist in legacy <see cref="Text"/>, so
+    /// <see cref="Spaced"/> fakes them with a space between characters — coarse, and visibly the
+    /// right shape, which is what a "does this layout read" slice needs.</para>
     /// </summary>
     public static class CabinetStyle
     {
@@ -212,11 +206,9 @@ namespace Archivist.Building.Table
         /// this pulsing for "related and near", this steady for "inside tolerance" — and the
         /// player learns one thing rather than three.
         ///
-        /// <para><b>There is a second copy of this value.</b> <c>BoardInteractor</c> holds it as
-        /// a private <c>SnapGold</c>, from before there was anywhere shared to put it. This is
-        /// the place it belongs, by the class comment's own argument; the duplicate should
-        /// collapse onto this field the next time that file is opened, and until it does the two
-        /// must be kept equal — <c>0xE6A83E</c>.</para>
+        /// <para><b>There is a second copy of this value</b> — <c>BoardInteractor</c>'s private
+        /// <c>SnapGold</c>. It should collapse onto this field; until it does the two must be
+        /// kept equal at <c>0xE6A83E</c>.</para>
         /// </summary>
         public static readonly Color SnapGold = Rgb(0xE6, 0xA8, 0x3E);
 
@@ -234,22 +226,14 @@ namespace Archivist.Building.Table
         /// exactly the steady <see cref="SnapGold"/> the player is being led toward.</summary>
         public const float HintAlphaMax = 1.0f;
 
-        // ---- the halo the pulse is drawn as (G7.5, second attempt) ----
+        // ---- the halo the pulse is drawn as (G7.5) ----
         //
-        // ⟨proposed⟩, every one of them, on exactly the same terms as the four above and with
-        // the same warning attached twice over: NO MOCKUP covers any of this. 1c-snap-moment.png
-        // shows a steady rim and nothing that glows, so the first playtest is the authority and
-        // these numbers are a starting position, not a measurement. They are consts here rather
-        // than fields on TableOptions for the class comment's reason — look values, one file,
-        // one commit — and see SnapHint's class comment for the arithmetic each one came from.
-        //
-        // THE FIRST ATTEMPT WAS A HARD RIM AND IT WAS REJECTED ON SIGHT. G7.5's alpha was
-        // applied to the 1.02 selection outline, which on island 0's Land Survey slab
-        // (12.85 board units short side) is a rim 0.128 units wide — about 3 screen pixels at
-        // the old framing, 6 at BoardZoom 2 — and G7.5 then dimmed that hairline to 0.15 at the
-        // trough. It was a correct implementation of a signal too small to see. What replaces it
-        // is light rather than line: a stack of concentric quads bleeding outward from the
-        // paper, each faint, compositing into a gradient.
+        // ⟨proposed⟩, every one: NO MOCKUP covers any of this. 1c-snap-moment.png shows a steady
+        // rim and nothing that glows, so the first playtest is the authority and these are a
+        // starting position, not a measurement. See SnapHint's class comment for the arithmetic
+        // behind each — in short, light rather than line: a hard rim on the 1.02 selection
+        // outline is ~3-6 px, too small to carry a pulse, so this is a stack of concentric quads
+        // bleeding outward from the paper, each faint, compositing into a gradient.
 
         /// <summary>How many concentric quads the halo is built from. They are nested filled
         /// quads, not annuli, so a point near the paper is covered by all of them and a point at
@@ -324,31 +308,21 @@ namespace Archivist.Building.Table
         /// should: five rings at 0.45 already stack to about 0.81 at the paper's edge.</summary>
         public const float SeatedAlphaPeak = 0.55f;
 
-        // ---- the ghost slot (the assist, after G7.1 was superseded) ----
+        // ---- the ghost slot (the assist, G7.1 superseded) ----
         //
-        // ⟨proposed⟩, every one of them, and on stronger terms than anything above: NO MOCKUP
-        // COVERS ANY OF THIS. 1c-snap-moment.png shows a steady rim on paper and nothing that
-        // marks an empty place on the board, so the first playtest is the authority and these
-        // four numbers are a starting position and not a measurement. Consts here rather than
-        // fields on TableOptions for the class comment's reason — look values, one file, one
-        // commit.
+        // ⟨proposed⟩, every one: NO MOCKUP COVERS ANY OF THIS. 1c-snap-moment.png shows a steady
+        // rim on paper and nothing marking an empty place on the board, so the first playtest is
+        // the authority and these four numbers are a starting position.
         //
-        // WHAT THIS IS FOR. The assist used to be feedback only (G7.1): the halo lit at
-        // GlowingHintRange — 19.03 board units, ≈750 px at BoardZoom 2 on island 0 — and the
-        // release only fused inside reach, 1.54 units, ≈61 px. The player was shown a
-        // relationship across a radius twelve times wider than the one in which letting go did
-        // anything, and the playtest reported it as broken. G7.1 is now superseded: with the
-        // assist on, releasing joins wherever the ghost is showing. The ghost is what makes
-        // that legible — it is the place the paper will land, drawn before the player commits.
+        // WHAT THIS IS FOR. With the assist on, releasing joins wherever the ghost is showing.
+        // The ghost is what makes that legible: the place the paper will land, drawn before the
+        // player commits.
         //
-        // A SLOT, NEVER A COPY OF THE MAP. Four thin bars on the sheet's own footprint: an
-        // empty rectangle, so it reads as somewhere to put paper rather than as paper. The
-        // alternative — a low-alpha copy of the slab, mesh and texture — was rejected on sight
-        // and would have been cheaper: a translucent map at the target pose is a second sheet
-        // on the board, and the board's whole grammar is that a sheet on the board is a sheet
-        // the player has laid. A filled quad with no texture was the other option and is what
-        // the bars beat: a fill has to be dark enough to see, and anything dark enough to see
-        // over the mounting sheet stops looking empty.
+        // A SLOT, NEVER A COPY OF THE MAP. Four thin bars on the sheet's footprint — an empty
+        // rectangle, so it reads as somewhere to put paper rather than as paper. A low-alpha
+        // copy of the slab would be cheaper and is a second sheet on the board, against the
+        // board's grammar that a sheet on the board is one the player has laid. A filled quad
+        // has to be dark enough to see, and anything that dark stops looking empty.
 
         /// <summary>Thickness of the ghost's four bars, <b>in board units</b> — the same
         /// reasoning <see cref="SeatedBleed"/> gives, and for the same reason it is not a scale
@@ -362,10 +336,9 @@ namespace Archivist.Building.Table
         /// ghost bleeds 0.10 units — 3.93 px — beyond the footprint the paper will occupy and
         /// cannot be mistaken for a sheet lying slightly proud of its place.</para>
         ///
-        /// <para><b>Why not the ~5 px the rim was.</b> That hairline is the thing this whole
-        /// family of changes exists to replace (see the halo block above). 7.87 px is a line a
-        /// player can follow round a corner; it is deliberately thinner than the seated halo's
-        /// 11.8 px, because the halo is light on paper and this is a line on the table.</para>
+        /// <para>7.87 px is a line a player can follow round a corner, and deliberately thinner
+        /// than the seated halo's 11.8 px: the halo is light on paper, this is a line on the
+        /// table.</para>
         /// </summary>
         public const float GhostLineWidth = 0.20f;
 
@@ -614,90 +587,65 @@ namespace Archivist.Building.Table
     /// paper.
     ///
     /// <para><b>Sections are offices, in <c>Offices.All</c> order (C7.1)</b>, and an office that
-    /// has issued nothing is <i>not drawn</i> — not drawn empty, not drawn greyed. That is the
-    /// second idea of the game showing up in the UI: the cabinet lists what the archive
-    /// <i>holds</i>, never what exists. A greyed-out "Garrison (0)" would tell the player there
-    /// is a Garrison survey out there to be got, which is precisely the answer the game is
-    /// about not giving.</para>
+    /// has issued nothing is <i>not drawn</i> — not empty, not greyed. The cabinet lists what the
+    /// archive <i>holds</i>, never what exists: a greyed-out "Garrison (0)" would tell the player
+    /// there is a Garrison survey out there to be got, which is the answer the game is about not
+    /// giving.</para>
     ///
     /// <para><b>Counts, no fractions, no ticks (C7.2, D-C3, D-C4).</b> The number beside a
     /// section title is how many sheets are in it — an inventory, not a grade. It must never
-    /// become "3 / 7": the denominator would leak how many sheets the survey actually has, and
-    /// R5.5 forbids the scoreboard that a fraction turns the cabinet into. When every sheet in a
-    /// section is out on the table the count is replaced by the table mark and the header tints
-    /// gold, per the <c>2a-cabinet-states.png</c> legend — a statement about where the paper is,
-    /// which is recoverable by picking it up, not about whether the player has done well.</para>
+    /// become "3 / 7": the denominator leaks how many sheets the survey actually has, and R5.5
+    /// forbids the scoreboard a fraction turns the cabinet into. When every sheet in a section is
+    /// on the table the count is replaced by the table mark and the header tints gold
+    /// (<c>2a-cabinet-states.png</c>) — a statement about where the paper is, recoverable by
+    /// picking it up.</para>
     ///
     /// <para><b>Names come from the island, not from here (C7.7a).</b> The panel is handed an
-    /// <see cref="Island"/> and asks <see cref="SheetNaming"/>. It does not generate, cache or
-    /// invent a name, because a name is a fact about the island's paperwork and has to be the
-    /// same for a headless test as for this column.</para>
+    /// <see cref="Island"/> and asks <see cref="SheetNaming"/>; it does not generate, cache or
+    /// invent a name, because a name has to be the same for a headless test as for this
+    /// column.</para>
     ///
     /// <para><b>Rebuild is coarse on purpose.</b> When the set of available sheets changes the
-    /// whole accordion is thrown away and built again; only thumbnails and row states are
-    /// updated in place. A cabinet is a few dozen rows and changes when a folder is laid down —
-    /// seconds apart, not frames — so an incremental diff would be more code than it saves and
-    /// would have its own bugs. Collapse state is carried across a rebuild by office, so the
-    /// section the player closed stays closed.</para>
+    /// whole accordion is rebuilt; only thumbnails and row states update in place. A cabinet is a
+    /// few dozen rows and changes seconds apart, not frames, so an incremental diff would be more
+    /// code than it saves. Collapse state carries across a rebuild by office.</para>
     ///
     /// <para><b>A conduit for row events, and nothing more.</b> Every row event is re-raised
-    /// unchanged. The panel deliberately holds no opinion about what a click or a drop means: it
-    /// is torn down and rebuilt by the very changes those gestures cause, so a decision taken
-    /// here would be taken by an object about to be destroyed. The panel does own one fact
+    /// unchanged: the panel is torn down and rebuilt by the very changes those gestures cause, so
+    /// a decision taken here would be taken by an object about to be destroyed. It owns one fact
     /// nobody else can see — whether the pointer is inside the column
     /// (<see cref="PointerOverChanged"/>) — because that is a fact about <i>this</i>
     /// rectangle.</para>
     ///
-    /// <para><b>The Groups section (G6.1) is a fifth section, after the offices and before the
-    /// footer</b>, listing every group of the bound island — on the table and parked alike,
-    /// marked by state exactly as an office row is. <b>It is drawn even when it is empty</b>,
-    /// which looks like a contradiction of C7.1's "a section with no issued sheets is not drawn"
-    /// and is not. C7.1 suppresses an empty office because an office is an <i>island</i> fact: a
-    /// greyed "Garrison (0)" would tell the player there is a Garrison survey out there to be
-    /// got, which is precisely the answer the game is about not giving. A group is a
-    /// <b>player</b> fact — it exists because two sheets were laid correctly — so an empty
-    /// Groups section leaks nothing at all; it says only that nothing has been joined yet, which
-    /// the player already knows. G6.1's own wording settles it: the section "starts empty
-    /// because no groups exist yet, not because it only holds parked ones", and a section that
-    /// is not drawn cannot start empty.</para>
+    /// <para><b>The Groups section (G6.1) is a fifth section</b>, after the offices and before
+    /// the footer, listing every group of the bound island, on the table and parked alike.
+    /// <b>It is drawn even when empty</b>, which only looks like a contradiction of C7.1. C7.1
+    /// suppresses an empty office because an office is an <i>island</i> fact; a group is a
+    /// <b>player</b> fact — it exists because two sheets were laid correctly — so an empty Groups
+    /// section leaks nothing, saying only that nothing has been joined yet.</para>
     ///
-    /// <para><b>A grouped sheet keeps its office row (G6.2)</b>, marked and inert. Rejected:
-    /// moving grouped sheets out of their office section and into the Groups one. It makes the
-    /// office count read as "what is still separate", which is a different and less useful fact
-    /// than "what this office issued" — the count is an inventory (C7.2, D-C3) and an inventory
-    /// that shrinks when paper is rearranged is not one. It also makes a sheet vanish from where
-    /// the player last saw it, which is the failure C7.5's "dragging a slab onto the cabinet
-    /// returns it to the drawer" exists to avoid at the other end of the gesture.</para>
+    /// <para><b>A grouped sheet keeps its office row (G6.2)</b>, marked and inert. Moving grouped
+    /// sheets into the Groups section instead makes the office count read as "what is still
+    /// separate", and an inventory that shrinks when paper is rearranged is not one (C7.2, D-C3).
+    /// It also makes a sheet vanish from where the player last saw it.</para>
     ///
     /// <para><b>"n of N" counts what the archive HOLDS, not what the survey shipped — a
-    /// deliberate departure from G6.3's wording.</b> G6.3 asks for "members present, sheets in
-    /// the survey", and the second number is unavailable to this column on the settled reading of
-    /// R5.5. D-C3 permits the section counts at all only on this ground: <i>"a count of sheets
-    /// held is inventory, not a grade — and because the accordion lists only issued sheets, it
-    /// never reveals how many the survey actually has"</i>, and <c>LedgerSheetSource</c> states
-    /// the same invariant from the other side: <i>"the ledger only knows what has come out of
-    /// the crates, which is why the cabinet's counts (C7.2) never reveal how large the survey
-    /// really is"</i>. <c>Survey.SheetCount</c> is exactly the number both of those refuse, and
-    /// putting it on a row would make "2 of 9" tell a player holding five Land Survey sheets
-    /// that four more exist — the leak D-C4 dropped the ✓ to prevent, restored in a denominator.
-    /// So N is the count of that survey's sheets in <see cref="Available"/>, which is the same
-    /// number the section header above already shows, and "n of N" then means <i>this much of
-    /// what you have is assembled</i> — a fact the player can act on rather than a score against
-    /// an unknown total. <b>This is recorded, not silently fixed</b> (CLAUDE.md): G6.3 is marked
-    /// ⟨proposed⟩ and has no mockup, D-C3/D-C4 are settled against a mockup and a numbered
-    /// requirement, and where they disagree the earlier and better-evidenced one governs. If the
-    /// project owner wants the island total, it is one expression in
-    /// <see cref="HeldOfSurvey"/> — and G9.1's <c>complete(group)</c> is where that number
-    /// legitimately belongs, since it is consumed by nothing and shown to nobody.</para>
+    /// deliberate departure from G6.3's wording, recorded rather than silently fixed.</b> G6.3
+    /// asks for "members present, sheets in the survey", and the second number is unavailable to
+    /// this column on the settled reading of R5.5: D-C3 permits section counts only because the
+    /// accordion lists issued sheets alone and so "never reveals how many the survey actually
+    /// has". <c>Survey.SheetCount</c> is exactly the number that refuses, and "2 of 9" would tell
+    /// a player holding five Land Survey sheets that four more exist — the leak D-C4 dropped the
+    /// ✓ to prevent, restored in a denominator. So N is that survey's sheets in
+    /// <see cref="Available"/>, and "n of N" means <i>this much of what you have is
+    /// assembled</i>. G6.3 is ⟨proposed⟩ with no mockup; D-C3/D-C4 are settled against a mockup
+    /// and a numbered requirement, so the better-evidenced one governs. If the island total is
+    /// wanted it is one expression in <see cref="HeldOfSurvey"/>.</para>
     ///
-    /// <para><b>Collapse survives a <see cref="Clear"/>, and so does the Groups section's.</b>
-    /// The office flags already do — "a player who closed POIs meant it" — and the same sentence
-    /// is true of a player who closed Groups. It is a preference about a section of a column,
-    /// not a fact about a board: the groups themselves live in <c>BoardStore</c> and are none of
-    /// this panel's business. <b>The section does not open itself when the first group
-    /// appears</b>, tempting though it is: nothing else in the accordion moves on its own, and a
-    /// section that re-opens after being closed teaches the player that closing it does not
-    /// stick.</para>
+    /// <para><b>Collapse survives a <see cref="Clear"/>, Groups included</b> — a preference about
+    /// a section of a column, not a fact about a board. <b>The section does not open itself when
+    /// the first group appears:</b> nothing else in the accordion moves on its own, and a section
+    /// that re-opens teaches the player that closing it does not stick.</para>
     /// </summary>
     public sealed class CabinetPanel : MonoBehaviour,
                                    IPointerEnterHandler, IPointerExitHandler,
@@ -806,15 +754,10 @@ namespace Archivist.Building.Table
         ///
         /// <para><b>They carry an <c>int</c>, not a <c>GroupRecord</c>.</b> The record is a
         /// value copied out of the store when the accordion was built, and the accordion is
-        /// rebuilt by the very changes these gestures cause — so a listener handed one would be
-        /// holding a snapshot of a group that may already have grown. The id is the durable
-        /// half: ids are never reused (<c>BoardStore</c>), so a stale one fails loudly at
-        /// <c>TryGetGroup</c> instead of quietly naming somebody else.</para>
-        ///
-        /// <para><b>Nothing in this slice raises them into any behaviour.</b> Park and retrieve
-        /// are G6.4 and G6.5 and belong to slice S5, in <c>BoardInteractor</c> and
-        /// <c>TableCanvas</c> — files this slice does not own. They exist now so that S5 is a
-        /// wiring change and not a change to this class.</para>
+        /// rebuilt by the very changes these gestures cause, so a listener handed one would hold
+        /// a snapshot of a group that may already have grown. Ids are never reused, so a stale
+        /// one fails loudly at <c>TryGetGroup</c> instead of quietly naming somebody else.
+        /// </para>
         /// </summary>
         public event Action<int> GroupRowClicked;
 
@@ -997,11 +940,8 @@ namespace Archivist.Building.Table
         ///
         /// <para><b>Groups take the coarse path, deliberately.</b> A group appearing, growing,
         /// parking or being retrieved changes which rows exist and which are inert, so it
-        /// rebuilds the whole accordion exactly as a new sheet does. Nothing incremental was
-        /// written for it: the class comment's argument holds unchanged — a cabinet is a few
-        /// dozen rows and changes when paper is put down, seconds apart, not frames — and a
-        /// second, partial update path for groups would be more code than it saves and would
-        /// have its own bugs. Only thumbnails, row states and group marks are updated in place.
+        /// rebuilds the whole accordion exactly as a new sheet does — the class comment's
+        /// argument, unchanged. Only thumbnails, row states and group marks update in place.
         /// </para>
         /// </summary>
         public void Refresh()
@@ -1416,11 +1356,10 @@ namespace Archivist.Building.Table
         /// nothing.
         ///
         /// <para><b>Exit is checked against the row that lit it</b> rather than clearing
-        /// unconditionally. The event system raises enter on the new row before exit on the old
-        /// one in some orderings, and a blind clear would then extinguish the highlight the new
-        /// row had just lit — a flicker that only appears when the pointer moves between two
-        /// rows of the <i>same</i> group, which is exactly the case this feature exists
-        /// for.</para>
+        /// unconditionally: the event system sometimes raises enter on the new row before exit on
+        /// the old, and a blind clear would extinguish the highlight the new row just lit — a
+        /// flicker appearing only between two rows of the <i>same</i> group, which is the case
+        /// this feature exists for.</para>
         ///
         /// <para>A loose row lights nothing, and a hover over one clears whatever was lit. That
         /// is what makes the highlight read as a property of the group rather than of the
@@ -1467,10 +1406,10 @@ namespace Archivist.Building.Table
         /// system runs it up the hierarchy from whatever was hit, so one implementation covers
         /// every child without any of them knowing about scrolling.
         ///
-        /// <para><b>Why this is not a <see cref="ScrollRect"/> any more.</b> It was one, and it
-        /// scrolled intermittently on a trackpad — sometimes moving, sometimes not, sometimes
-        /// the wrong way. The cause is four lines of <c>ScrollRect.OnScroll</c>, and they are
-        /// not a bug in this project:</para>
+        /// <para><b>Why this is not a <see cref="ScrollRect"/>.</b> As one it scrolled
+        /// intermittently on a trackpad — sometimes moving, sometimes not, sometimes the wrong
+        /// way. The cause is four lines of <c>ScrollRect.OnScroll</c>, not a bug in this
+        /// project:</para>
         ///
         /// <code>
         /// delta.y *= -1;
@@ -1481,30 +1420,26 @@ namespace Archivist.Building.Table
         /// </code>
         ///
         /// <para>A vertical-only <c>ScrollRect</c> substitutes the <b>horizontal</b> reading
-        /// whenever it is the larger one, so that a horizontal-only device can still drive a
-        /// vertical list. A mouse wheel has no horizontal reading and never trips it. A trackpad
-        /// has one constantly — a two-finger swipe drifts sideways at the start and end of every
-        /// stroke — so on exactly those frames the column moved by the sideways drift instead of
-        /// the intended travel, and since <c>delta.x</c> is substituted <i>after</i>
-        /// <c>delta.y</c> was negated, it also arrives with the opposite sign. That is precisely
-        /// "sometimes it works and sometimes it doesn't", and no sensitivity can fix it: the
-        /// number being scaled is the wrong axis. Lowering <c>scrollSensitivity</c> made it
-        /// worse, because it shrank the honest frames and left the drift frames as a larger
-        /// share of what the player felt.</para>
+        /// whenever it is the larger, so a horizontal-only device can still drive a vertical
+        /// list. A mouse wheel has no horizontal reading and never trips it; a trackpad has one
+        /// constantly, because a two-finger swipe drifts sideways at the start and end of every
+        /// stroke. On those frames the column moves by the drift instead of the intended travel,
+        /// and with the opposite sign, since <c>delta.x</c> is substituted <i>after</i>
+        /// <c>delta.y</c> was negated. No sensitivity fixes it — the number being scaled is the
+        /// wrong axis, and lowering it makes the drift frames a larger share of what the player
+        /// feels.</para>
         ///
-        /// <para><b>So: y only, and read from the device.</b> The x reading is discarded rather
-        /// than borrowed — a column of paper does not scroll sideways, and there is no device
-        /// this table is played with that cannot report y. The magnitude comes from
-        /// <c>Mouse.scroll</c> rather than from <c>eventData.scrollDelta</c> so that it is in
-        /// the same units the board's zoom reads (see <see cref="Wheel"/>); the event supplies
-        /// only the fact that the pointer is here.</para>
+        /// <para><b>So: y only, read from the device.</b> The x reading is discarded — a column of
+        /// paper does not scroll sideways. The magnitude comes from <c>Mouse.scroll</c> rather
+        /// than <c>eventData.scrollDelta</c> so it is in the same units the board's zoom reads
+        /// (see <see cref="Wheel"/>); the event supplies only the fact that the pointer is
+        /// here.</para>
         ///
         /// <para><b>The wheel sets a target, it does not move the list.</b> A trackpad delivers
-        /// its travel in bursts — several notches in one frame, then nothing for three — and
-        /// applying each burst directly is a column that lurches. <see cref="Update"/> eases the
-        /// real offset toward the target, so a burst becomes a glide and the per-frame cap that
-        /// the board needs is not needed here: over-scrolling a list is recoverable in a way
-        /// that crossing the whole zoom range is not.</para>
+        /// travel in bursts, and applying each directly is a column that lurches.
+        /// <see cref="Update"/> eases the offset toward the target, so a burst becomes a glide
+        /// and the board's per-frame cap is unnecessary here: over-scrolling a list is
+        /// recoverable in a way crossing the whole zoom range is not.</para>
         /// </summary>
         void IScrollHandler.OnScroll(PointerEventData eventData)
         {
@@ -1561,12 +1496,10 @@ namespace Archivist.Building.Table
 
         /// <summary>
         /// Drag-to-scroll, over anything in the column that is not a row. <c>CabinetRow</c>
-        /// takes the drags that start on a row — that gesture carries paper (C7.4) — so what
-        /// reaches here is a drag on a section header or on the bare cream between two
-        /// sections, which is exactly what the enclosing <c>ScrollRect</c> used to receive.
-        /// It is kept because <c>CabinetRow</c>'s refusal to drag-scroll a gold row is argued
-        /// on "the section headers still drag-scroll, so nothing is unreachable", and removing
-        /// the component underneath that sentence would have quietly falsified it.
+        /// takes drags that start on a row — that gesture carries paper (C7.4) — so what reaches
+        /// here is a drag on a section header or on the bare cream between two sections. It is
+        /// kept because <c>CabinetRow</c>'s refusal to drag-scroll a gold row rests on "the
+        /// section headers still drag-scroll, so nothing is unreachable".
         ///
         /// <para><b>Direct, not eased.</b> <see cref="OnScroll"/> eases because a wheel arrives
         /// in bursts; a drag arrives once per frame with the pointer already where the player
@@ -1695,18 +1628,13 @@ namespace Archivist.Building.Table
         /// The member with the lowest sheet number — the group's disambiguator (G6.3), its
         /// label's code and its thumbnail, so that all three name one sheet.
         ///
-        /// <para>The lowest number rather than <c>Members[0]</c>, which is the first to join.
-        /// Join order is real and load-bearing elsewhere (G5.6 draws a group's members in it),
-        /// but it is a fact about the player's hands, and a row that renamed itself because a
-        /// lower-numbered sheet joined later would be worse than one that renames itself because
-        /// a lower-numbered sheet joined — that at least is the same rule stated once. Sheet
-        /// numbers are contiguous <c>1..N</c> within a survey (<c>SheetLookup</c>), so the lowest
-        /// is stable, meaningful and easy to find in the section above.</para>
+        /// <para>The lowest number rather than <c>Members[0]</c>, the first to join: join order
+        /// is load-bearing elsewhere (G5.6) but is a fact about the player's hands. Sheet numbers
+        /// are contiguous <c>1..N</c> within a survey (<c>SheetLookup</c>), so the lowest is
+        /// stable, meaningful and easy to find in the section above.</para>
         ///
-        /// <para>Returns <c>default</c> for an empty group, which cannot exist —
-        /// <c>BoardStore.CreateGroup</c> makes them with two members and membership never
-        /// shrinks (G1.4) — but is answered rather than thrown on, so that a bug in the store
-        /// costs a dashed row and not the table.</para>
+        /// <para>Returns <c>default</c> for an empty group, which cannot exist (G1.4), rather
+        /// than throwing — a bug in the store then costs a dashed row and not the table.</para>
         /// </summary>
         static SheetId LowestMember(GroupRecord group)
         {

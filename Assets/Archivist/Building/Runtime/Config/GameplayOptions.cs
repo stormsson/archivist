@@ -25,33 +25,25 @@ namespace Archivist.Building.Config
     /// caller asks <see cref="AssistedSnap"/> either way.</para>
     ///
     /// <para><b>Reusing the generator's file machinery, not copying it.</b>
-    /// <see cref="TuningFile.Locate"/> already answers "where is the config file" — env var
-    /// first, then an upward directory walk from both the working directory and the assembly,
-    /// bounded so a symlink loop cannot hang type-initialisation — and <see cref="Yaml.Read"/>
-    /// already answers "what does it say". A second finder would drift out of step with the
-    /// first the day someone moves the file, and a second parser would disagree with it about
-    /// some line nobody has written yet. What is <i>not</i> reused is
-    /// <see cref="TuningFile.Load"/>: it deliberately keys by name alone and throws the section
-    /// away, because <c>Tuning</c> is the authority on where its own keys live. Here the
-    /// section is the whole point, so the entries are filtered on it and a
-    /// <c>GlowingHintRange</c> filed under <c>paper:</c> is simply not ours.</para>
+    /// <see cref="TuningFile.Locate"/> answers "where is the config file" and
+    /// <see cref="Yaml.Read"/> answers "what does it say"; a second finder would drift out of
+    /// step the day someone moves the file. What is <i>not</i> reused is
+    /// <see cref="TuningFile.Load"/>, which keys by name alone and throws the section away
+    /// because <c>Tuning</c> is the authority on where its own keys live. Here the section is the
+    /// whole point, so entries are filtered on it and a <c>GlowingHintRange</c> filed under
+    /// <c>paper:</c> is simply not ours.</para>
     ///
     /// <para><b>Never throws, never blocks startup.</b> Missing file, missing key, unparseable
-    /// value: the compiled default applies and a line lands in <see cref="Problems"/>. Same
-    /// reasoning as <c>TuningFile</c>'s — this assembly runs inside a shipped player, where
-    /// there is no config file at all and the defaults are the right answer, and "a generator
-    /// that refuses to generate is worse than one that generates the documented default". The
-    /// table must open whatever is on disk. <see cref="Problems"/> is a diagnostic for an
-    /// editor window to show, not a warning anything logs at startup, so it can afford to be
-    /// chatty about a file that is merely absent.</para>
+    /// value: the compiled default applies and a line lands in <see cref="Problems"/>. This
+    /// assembly runs inside a shipped player, where there is no config file at all and the
+    /// defaults are the right answer. <see cref="Problems"/> is a diagnostic for an editor window
+    /// to show, not a warning anything logs at startup.</para>
     ///
     /// <para><b>Read once, on first touch; <see cref="Reload"/> for the editor.</b> A static
     /// constructor runs exactly once per domain and cannot be skipped by whichever of the four
-    /// entry points — editor, player, acceptance harness, test runner — forgot to call an
-    /// initialiser. In the editor a domain reload re-reads the file for free, so saving a
-    /// changed YAML and letting Unity recompile is already enough; <see cref="Reload"/> exists
-    /// for a settings window that wants the new value without one. This mirrors
-    /// <c>Tuning</c>.</para>
+    /// entry points forgot to call an initialiser. A domain reload re-reads the file for free;
+    /// <see cref="Reload"/> exists for a settings window that wants the new value without one.
+    /// Mirrors <c>Tuning</c>.</para>
     /// </summary>
     public static class GameplayOptions
     {

@@ -12,12 +12,11 @@ namespace Archivist.Building.Binders
     /// player carries around the archive. One island's sheets, in one folder, under one
     /// number.
     ///
-    /// <para><b>Why the crate stopped throwing paper on the floor.</b> Five loose sheets per
-    /// opening is five objects to pick up one at a time, five things to lose under a rack, and
-    /// — the part that matters — five items the player has to file individually when the racks
-    /// exist. The cartography table's spec already settled the model (§13, C4.1–C4.4, D-C1):
-    /// <i>the player's physical item is the folder, never the sheet</i>. This is that folder.
-    /// It is what gets carried, what gets shelved, and what a table adopts an island from.</para>
+    /// <para><b>The player's physical item is the folder, never the sheet</b> (§13, C4.1–C4.4,
+    /// D-C1). Loose sheets are N objects to pick up one at a time, N things to lose under a rack
+    /// and — the part that matters — N items to file individually once the racks exist. This is
+    /// the folder: what gets carried, what gets shelved, and what a table adopts an island
+    /// from.</para>
     ///
     /// <para><b>It holds identities, not sheets.</b> The contents are <see cref="SheetId"/>
     /// values — island, office, whole-island flag, number — and never geometry, never a
@@ -32,11 +31,10 @@ namespace Archivist.Building.Binders
     /// the moment it is established — and there would be no good answer.</para>
     ///
     /// <para><b>Contents are not serialised, and must not be.</b> The ledger — the only record
-    /// that a sheet has been issued (R2.10) — starts empty on every load, so a binder that
-    /// survived a scene load would hold sheets nothing remembers issuing, and they could be
-    /// issued again from a crate. <see cref="BinderSpawner"/> sweeps binders at startup for
-    /// exactly the reason it sweeps sheets. The serialised fields here are the ones that are
-    /// only worth having in the Inspector while a session is running.</para>
+    /// that a sheet has been issued (R2.10) — starts empty on every load, so a binder surviving a
+    /// scene load would hold sheets nothing remembers issuing, and a crate could issue them
+    /// again. <see cref="BinderSpawner"/> sweeps binders at startup for the reason it sweeps
+    /// sheets.</para>
     /// </summary>
     public sealed class BinderView : MonoBehaviour, ICarryable
     {

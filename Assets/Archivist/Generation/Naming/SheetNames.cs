@@ -12,34 +12,25 @@ namespace Archivist.Generation.Naming
     /// <i>The Crown</i>. A function of the island seed and the sheet's identity, like everything
     /// else on an island (R1.1); never authored, never stored (R1.11).
     ///
-    /// <para><b>The sheet is named, not a feature. That is the whole of the idea, and it is a
-    /// reversal.</b> C7.7 as written says a sheet's name is "the nearest named feature to
-    /// <c>CentreGround</c>, taken from <c>island.Names</c> / <c>island.Features</c>", with the
-    /// bare code as a fallback. That was implemented in <c>Building.Table.SheetNaming</c> and
-    /// <b>abandoned</b>, because the generator as built names almost nothing a sheet sits on:
-    /// every settlement (§7.2) and the top <c>Tuning.PeakNamedCount</c> = 3 peaks (§7.1), and
-    /// that is the entire supply. Rivers have no name field, <see cref="Poi"/> is unnamed by
-    /// design (POC-03 §5 keeps labels out of scope), and <b>the coastline has no naming at
-    /// all</b> — it is a <see cref="Polyline"/> with no named parts. Meanwhile almost every name
-    /// in the mockups is coastal: <i>Cape Vela</i>, <i>Gull Spit</i>, <i>Cold Harbour</i>,
-    /// <i>Long Reef</i>. So the feature scan returned the fallback for most sheets and the whole
-    /// Hydrographic office read as a column of bare codes. A rule whose specified answer is
-    /// "nothing" for the majority of its inputs is not a naming rule.</para>
+    /// <para><b>The sheet is named from the ground it covers, not from a feature standing on
+    /// it — a reversal of C7.7 as written.</b> C7.7 asks for "the nearest named feature to
+    /// <c>CentreGround</c>", but the generator names almost nothing a sheet sits on: every
+    /// settlement (§7.2) and the top <c>Tuning.PeakNamedCount</c> = 3 peaks (§7.1), and that is
+    /// the entire supply. Rivers have no name field, <see cref="Poi"/> is unnamed by design, and
+    /// <b>the coastline has no naming at all</b>. Meanwhile almost every name in the mockups is
+    /// coastal — <i>Cape Vela</i>, <i>Gull Spit</i>, <i>Cold Harbour</i> — so a feature scan
+    /// returns the bare-code fallback for most sheets and the whole Hydrographic office reads as
+    /// a column of codes. A survey office naming a sheet after the water and rock it charts is
+    /// what the mockups were always showing: <i>Salt Flats</i> is a description, not a village.
+    /// The vocabulary is generic (<see cref="WaterGenerics"/> and friends) because the supply of
+    /// islands is unbounded (R1.2), so the tables must combine freely rather than encode specific
+    /// places.</para>
     ///
-    /// <para><b>So the name is derived from the ground the sheet covers, not from a thing on
-    /// it.</b> A survey office naming a sheet after the water and rock it charts is what the
-    /// mockups were always showing — <i>Salt Flats</i> is a description, not a village. The
-    /// vocabulary is generic (<see cref="WaterGenerics"/> and friends) because it has to be:
-    /// the supply of islands is unbounded (R1.2), so the tables must combine freely rather than
-    /// encode specific places, exactly as <see cref="Phonology"/> says of its own.</para>
-    ///
-    /// <para><b>Why this lives in <c>Archivist.Generation</c> and not in the UI.</b> A name
-    /// drawn on the Building side would not be a function of the island seed — it would be a
-    /// function of the seed plus whoever called it, and it could not be reproduced by anything
-    /// that only holds the seed (R1.11). The island's own naming already lives here (§9); this
-    /// is the same kind of fact about the same island. The assembly must never reference
-    /// UnityEngine (§14) and nothing here does — that rule is what lets
-    /// <c>Tools/run-acceptance.sh</c> run headless.</para>
+    /// <para><b>Why this lives in <c>Archivist.Generation</c> and not in the UI.</b> A name drawn
+    /// on the Building side would be a function of the seed <i>plus whoever called it</i>, and
+    /// could not be reproduced by anything holding only the seed (R1.11). The assembly must never
+    /// reference UnityEngine (§14), which is what lets <c>Tools/run-acceptance.sh</c> run
+    /// headless.</para>
     ///
     /// <para><b>Determinism (§4.3).</b> One new stream, <see cref="StreamNames.NamesSheets"/>,
     /// appended. It is indexed by <see cref="StableIndex"/> — a pure function of the sheet's
@@ -50,24 +41,22 @@ namespace Archivist.Generation.Naming
     /// terminal read of the island, run after it exists.</para>
     ///
     /// <para><b>No uniqueness pass, deliberately.</b> <see cref="NameGenerator"/> makes island,
-    /// settlement and peak names unique within an island; this does not, and must not. Two
-    /// sheets of the same office may both come out <i>Long Reef</i>. Enforcing uniqueness would
-    /// mean naming sheets in some global order and retrying on collision — which makes a
-    /// sheet's name depend on which other sheets exist, destroying the one property
+    /// settlement and peak names unique within an island; this must not. Enforcing uniqueness
+    /// means naming sheets in a global order and retrying on collision, which makes a sheet's
+    /// name depend on which other sheets exist and destroys the property
     /// <see cref="StableIndex"/> exists to buy. The cabinet row shows the name <i>and</i> the
     /// code (C7.3), so two sheets sharing a title are still told apart; a sheet renaming itself
-    /// because a neighbouring sheet was culled could not be.</para>
+    /// because a neighbour was culled could not be.</para>
     ///
     /// <para><b>Nothing here caches, and nothing here may cache.</b> The island is in hand when
     /// this is called. If it ever costs too much the fix is to call it less, not to remember
     /// it — the same bargain <c>SheetLookup</c> keeps.</para>
     ///
     /// <para><b>Constants live here, with the tables they shape.</b> §12 puts every constant in
-    /// <c>Tuning</c>; naming has no entry there and never has — <see cref="NameGenerator"/>
-    /// says so of its own qualifier chances — because these numbers shape a word list and mean
-    /// nothing outside it. The two thresholds that are <i>not</i> local are borrowed rather
-    /// than re-invented: <c>Tuning.PeakElevationFrac</c> is the generator's own definition of
-    /// high ground, and the sample grid matches §10.3's 16x16 cull lattice.</para>
+    /// <c>Tuning</c>, but naming has no entry there — these numbers shape a word list and mean
+    /// nothing outside it. The two thresholds that are <i>not</i> local are borrowed rather than
+    /// re-invented: <c>Tuning.PeakElevationFrac</c> is the generator's definition of high ground,
+    /// and the sample grid matches §10.3's 16x16 cull lattice.</para>
     /// </summary>
     public static class SheetNames
     {

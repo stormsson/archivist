@@ -13,10 +13,9 @@ namespace Archivist.Generation.Sheets
     /// covariance.
     ///
     /// <para>
-    /// D2 struck the "surveyed arc" from the Hydrographic row. The arc was circular: it is a
-    /// product of cutting, and rotation is step 1 of cutting. Removing it costs nothing —
-    /// Hydrographic's cull keeps every rect the coastline crosses, so the survey follows the
-    /// whole shore and there was never an arc to speak of.
+    /// There is no "surveyed arc" (D2): an arc is a product of cutting and rotation is step 1
+    /// of cutting, so it was circular. Hydrographic's cull keeps every rect the coastline
+    /// crosses, so the survey follows the whole shore.
     /// </para>
     ///
     /// <para>
@@ -279,12 +278,11 @@ namespace Archivist.Generation.Sheets
         /// Garrison keep the single-rotation lattice R2.4 requires of them; Antiquarian cuts
         /// one small sheet per qualifying POI and neither walks nor tiles (POC-03 §2).</para>
         ///
-        /// <para><b>Why it is here and not in <see cref="Island"/>.</b> It used to be an
-        /// <c>if/else</c> chain inside that class's private cutting pass, which put the
-        /// knowledge somewhere nothing else could reach: cutting one more survey of an
-        /// existing island meant copying the chain, and a copy is a second place to forget an
-        /// office. Planning is already separate (<see cref="PlanSurvey"/>) for the same
-        /// reason.</para>
+        /// <para><b>Why it is here and not in <see cref="Island"/>.</b> Inside that class's
+        /// private cutting pass the knowledge is somewhere nothing else can reach: cutting one
+        /// more survey of an existing island means copying the chain, and a copy is a second
+        /// place to forget an office. Planning is separate (<see cref="PlanSurvey"/>) for the
+        /// same reason.</para>
         ///
         /// <para><b>Every office is listed, and the default throws.</b> A fifth office added
         /// to the enum without a line here would otherwise fall through to the lattice cutter

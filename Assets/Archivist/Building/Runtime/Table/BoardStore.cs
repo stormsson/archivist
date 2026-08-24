@@ -10,49 +10,38 @@ namespace Archivist.Building.Table
     /// both of which are poses nobody needs to record at all.
     ///
     /// <para><b>The halving is the whole point (C4.6, D-C7).</b> A laid sheet's pose is a
-    /// player fact: it exists because the player dropped the paper there, it is not derivable
-    /// from anything, and it is exactly as unrecomputable as the ledger. A <i>seated</i>
-    /// sheet's pose is <c>Sheet.CentreGround</c> and <c>Sheet.RotationDeg</c> — a pure
-    /// function of the island seed (R1.1). Storing it would be caching a pure function of the
-    /// seed, which is the one mistake R1.11 exists to prevent, and it would rot: the day a
-    /// generator constant changes, every saved board would put its seated sheets in last
-    /// week's positions and be confidently wrong. So a seated placement is a flag and nothing
-    /// else, and the pose is looked up.</para>
+    /// player fact, as unrecomputable as the ledger. A <i>seated</i> sheet's pose is
+    /// <c>Sheet.CentreGround</c> and <c>Sheet.RotationDeg</c>, a pure function of the seed
+    /// (R1.1); storing it would cache a pure function of the seed — the mistake R1.11 exists to
+    /// prevent — and it would rot, because the day a generator constant changes every saved
+    /// board would put its seated sheets in last week's positions and be confidently wrong. So
+    /// a seated placement is a flag, and the pose is looked up.</para>
     ///
-    /// <para><b>A third state, and the same discipline again (G4.1).</b> <see cref="GroupId"/>
-    /// is 0 for a loose sheet and names a <see cref="GroupRecord"/> otherwise. A grouped
-    /// sheet's pose is derived from its group's frame exactly as a seated sheet's is derived
-    /// from the island — <c>pose(M) = (R(φ)·c_M + t, θ_M + φ)</c>, G3.1 — so the three pose
-    /// fields go meaningless for the second reason, which is the same reason. G4.3 gives four
-    /// consequences of storing one frame rather than N poses; the first is the one visible
-    /// here: a sheet that joins a group needs <i>no corrective write</i>. It was released
-    /// <i>near</i> the fit, not on it, and because it carries no pose there is nothing to
-    /// correct — it is drawn from the frame, so it is exactly right the instant it joins.
-    /// Storing the released pose beside the group id would leave the assembly permanently and
-    /// invisibly loose.</para>
+    /// <para><b>A third state, same discipline (G4.1).</b> <see cref="GroupId"/> is 0 for a
+    /// loose sheet and names a <see cref="GroupRecord"/> otherwise; a grouped sheet's pose is
+    /// derived from its group's frame — <c>pose(M) = (R(φ)·c_M + t, θ_M + φ)</c>, G3.1. The
+    /// visible consequence (G4.3) is that a sheet joining a group needs <i>no corrective
+    /// write</i>: it was released <i>near</i> the fit, not on it, and carrying no pose there is
+    /// nothing to correct. Storing the released pose beside the group id would leave the
+    /// assembly permanently and invisibly loose.</para>
     ///
     /// <para><b><see cref="Seated"/> and <see cref="GroupId"/> are mutually exclusive</b>, and
-    /// the factories make the pair unrepresentable rather than merely discouraged. Seated
-    /// means "at the island's own pose"; grouped means "at the frame's". Nothing is at two
-    /// derived poses at once, and a record claiming both would leave every reader to pick one
-    /// — which is two answers to a question that has to have exactly one. §13 keeps
-    /// <see cref="Seated"/> in the model deliberately: nothing produces it any more, and the
-    /// day absolute correctness comes back it is already the right shape.</para>
+    /// the factories make the pair unrepresentable rather than discouraged. Seated means "at the
+    /// island's own pose"; grouped means "at the frame's". A record claiming both would leave
+    /// every reader to pick one. §13 keeps <see cref="Seated"/> in the model deliberately:
+    /// nothing produces it now, and the day absolute correctness returns it is the right
+    /// shape.</para>
     ///
-    /// <para><b>An int, not a reference to the group.</b> This struct is a row of a save file
-    /// in waiting (§4.2, G4.4), and a reference would make the saved board a graph instead of
-    /// a table of primitives — which is exactly the property §9's one-move persistence rests
-    /// on. It also has the same effect the <c>bool</c> below has: a value cannot be followed,
-    /// so no call site can quietly start reading the group through the placement and end up
-    /// with two paths to the frame.</para>
+    /// <para><b>An int, not a reference to the group.</b> This struct is a save-file row in
+    /// waiting (§4.2, G4.4), and a reference would make the saved board a graph instead of a
+    /// table of primitives. It also means no call site can quietly start reading the group
+    /// through the placement and end up with two paths to the frame.</para>
     ///
-    /// <para><b>Not four structs.</b> Laid and seated were nearly separate types with a common
-    /// interface, which would have made the "seated carries no pose" rule impossible to break.
-    /// It also would have made the dictionary hold references and the save format hold a
-    /// discriminator, for a struct with four fields. Grouping would now have added a third
-    /// type and a third branch at every call site. A <c>bool</c>, an <c>int</c> and the
-    /// discipline written down here is cheaper, and the discipline is enforceable anyway:
-    /// nothing constructs a <see cref="Placement"/> except the three factories below.</para>
+    /// <para><b>Not four structs.</b> Separate types with a common interface would make "seated
+    /// carries no pose" unbreakable, at the cost of a dictionary of references and a save-format
+    /// discriminator, for a struct with four fields — and grouping would now add a third type
+    /// and a third branch at every call site. The discipline is enforceable anyway: nothing
+    /// constructs a <see cref="Placement"/> except the three factories below.</para>
     /// </summary>
     public readonly struct Placement
     {
@@ -125,10 +114,9 @@ namespace Archivist.Building.Table
         /// the membership; the geometry is asked for.
         ///
         /// <para><paramref name="groupId"/> must be a live id from
-        /// <see cref="BoardStore.CreateGroup"/>. 0 is not a group, and this does not guard
-        /// against it: the only caller is <see cref="BoardStore"/>, which never has a 0 to
-        /// pass, and a guard here could only choose between a throw at pointer speed and a
-        /// silent loose placement at the origin. Both are worse than the rule.</para>
+        /// <see cref="BoardStore.CreateGroup"/>. 0 is not a group and this does not guard against
+        /// it: the only caller never has a 0 to pass, and a guard could only choose between a
+        /// throw at pointer speed and a silent loose placement at the origin.</para>
         /// </summary>
         public static Placement InGroup(int groupId)
         {
@@ -150,43 +138,31 @@ namespace Archivist.Building.Table
     /// in it.
     ///
     /// <para><b>A frame, not N poses (G1.3, G4.3).</b> The three pose numbers here are the
-    /// <i>only</i> geometry a group owns; every member's pose is derived from them. That is
-    /// what makes a broken group unrepresentable — with N stored poses any path that moved one
-    /// member without the others would produce an assembly that is internally wrong with
-    /// nothing to say what it should have been, and here the members have no poses to disagree
-    /// with each other. It is also what keeps the group coherent across a tuning change:
-    /// <c>config/generation.yml</c>'s own header says <i>"sheet identities do not move — sheet
-    /// 7 stays sheet 7 — but the ground under them does"</i>, and a stored frame re-derives
-    /// every member onto the new ground where N stored poses would keep last week's
-    /// arrangement, still <i>look</i> assembled, and fail the test that created them. Float
-    /// drift is <b>not</b> among the reasons: in doubles, repeated compose/decompose is ~1e-13
-    /// relative, nanometres over an island (G4.3).</para>
+    /// <i>only</i> geometry a group owns; every member's pose is derived from them, so a broken
+    /// group is unrepresentable — the members have no poses to disagree with each other. It also
+    /// keeps the group coherent across a tuning change: <c>config/generation.yml</c>'s header
+    /// says <i>"sheet identities do not move — sheet 7 stays sheet 7 — but the ground under them
+    /// does"</i>, and a stored frame re-derives every member onto the new ground where N stored
+    /// poses would keep last week's arrangement, still <i>look</i> assembled, and fail the test
+    /// that created them. Float drift is <b>not</b> among the reasons: repeated
+    /// compose/decompose in doubles is ~1e-13 relative, nanometres over an island.</para>
     ///
-    /// <para><b>Three doubles, not a frame type.</b> There is a <c>BoardFrame</c> beside this
-    /// file that knows how to compose G3.1, and this record deliberately does not hold one.
-    /// Everything in <see cref="BoardStore"/> is a primitive, a <see cref="SheetId"/> or a flat
-    /// collection of them, because that is the property that makes §9's persistence one move
-    /// rather than a rewrite (§4.2). A struct borrowed from the interaction layer would be a
-    /// type the save format has to know about, and the day it grew a cached matrix or a
-    /// <c>Vector2</c> the store would have stopped being serialisable without anyone
-    /// noticing. The store holds the numbers; the layer above turns them into a
-    /// transform.</para>
+    /// <para><b>Three doubles, not a frame type.</b> Everything in <see cref="BoardStore"/> is a
+    /// primitive, a <see cref="SheetId"/> or a flat collection of them, which is what makes §9's
+    /// persistence one move rather than a rewrite (§4.2). A <c>BoardFrame</c> borrowed from the
+    /// interaction layer would be a type the save format has to know about, and the day it grew
+    /// a cached matrix the store would have stopped being serialisable unnoticed.</para>
     ///
-    /// <para><b>The survey key is two fields, and they are lifted straight off
-    /// <see cref="SheetId"/>.</b> G3.4 makes fusability <i>"same office, same whole-island
-    /// flag"</i> and nothing else — so a candidate can be rejected <b>without touching the
-    /// island</b>, which is the entire reason the key is these two fields rather than a
-    /// reference to a <c>SurveySpec</c>. Generating an island to find out that a Garrison
-    /// sheet cannot join a Land Survey group would cost a third of a second to learn something
-    /// the identity already said. <see cref="SheetId"/> names a survey the same way and for a
-    /// related reason: a survey's list position is not stable, and office plus the flag is.
-    /// The island itself is not on this record because it is the board's — a group only ever
-    /// exists on a bound board, and R6.8 makes that one island.</para>
+    /// <para><b>The survey key is two fields, lifted straight off <see cref="SheetId"/>.</b>
+    /// G3.4 makes fusability <i>"same office, same whole-island flag"</i> and nothing else, so a
+    /// candidate can be rejected <b>without touching the island</b> — generating one to learn
+    /// that a Garrison sheet cannot join a Land Survey group would cost a third of a second for
+    /// something the identity already said. A survey's list position is not stable; office plus
+    /// the flag is. The island is not on this record because it is the board's (R6.8).</para>
     ///
-    /// <para><b>A copy, taken when you asked.</b> Like <c>IslandHolding</c>, this is a
-    /// snapshot and never a handle: <see cref="Members"/> is a fresh array, not the store's
-    /// list, so a caller cannot write back into a board and does not see the assembly grow
-    /// under it. Ask again after a release; it costs a dictionary lookup.</para>
+    /// <para><b>A copy, taken when you asked.</b> Like <c>IslandHolding</c>, a snapshot and never
+    /// a handle: <see cref="Members"/> is a fresh array, so a caller cannot write back into a
+    /// board and does not see the assembly grow under it.</para>
     /// </summary>
     public readonly struct GroupRecord
     {
@@ -269,78 +245,62 @@ namespace Archivist.Building.Table
     /// What is lying on which table. <b>Keyed by table identity, never by island</b> — which
     /// is the one decision the rest of this class follows from (C1.7, R6.8).
     ///
-    /// <para>Keying by island seed was the obvious shape and it is wrong. R6.8 says one board
-    /// per island, and a dictionary from seed to board says exactly that — until the room has
-    /// two tables and the player wants the same island half-assembled on one and untouched on
-    /// the other, or until a table is walked away from and found again with its paper still
-    /// on it. A board is furniture: it is a thing in the room with a position and a lifetime,
-    /// and the island it currently carries is a property of it, not the other way round.
-    /// R6.8 is then kept by the <i>binding</i> (C4.3) rather than by the key, which is the
-    /// stronger form — the object refuses, no rule has to be remembered.</para>
+    /// <para>Keying by island seed is the obvious shape and it is wrong. R6.8 says one board
+    /// per island, and a seed-to-board dictionary says exactly that — until the room has two
+    /// tables and the player wants the same island half-assembled on one and untouched on the
+    /// other. A board is furniture: a thing in the room with a position and a lifetime, and the
+    /// island it carries is a property of it. R6.8 is then kept by the <i>binding</i> (C4.3)
+    /// rather than by the key, which is the stronger form — the object refuses, and no rule has
+    /// to be remembered.</para>
     ///
     /// <para><b>Binding is soft, and asymmetric.</b> An empty table accepts any island (C4.1);
-    /// the first sheet laid fixes it (C4.2); after that only that island's sheets go on
-    /// (C4.3). Coming back the other way is not automatic: only <see cref="Clear"/> unbinds
-    /// (C4.4). Unbinding the moment the last sheet is picked up was tried and abandoned — a
-    /// player who lifts their only sheet to re-drop it would silently hand the table back to
-    /// every other island for the length of one drag, and the spec's "emptying a table is the
-    /// deliberate act of clearing it" describes a folder being taken off, which this POC does
-    /// not have (§13). Until folders exist, the deliberate act is the explicit call.</para>
+    /// the first sheet laid fixes it (C4.2); after that only that island's sheets go on (C4.3).
+    /// Only <see cref="Clear"/> unbinds (C4.4) — unbinding when the last sheet is picked up
+    /// would hand the table back to every other island for the length of one drag.</para>
     ///
-    /// <para><b>Two states, not three (C4.5).</b> A sheet is in <c>Placed</c> or it is in the
-    /// cabinet. Nothing records a removal, because a removal is not a fact about the board —
-    /// it is the absence of one, and a store that remembered what had been taken off would
-    /// have to be asked twice about every row the cabinet draws. <b>A group does not add a
-    /// third state</b>, and that is what fixes what parking means: a parked group's members
-    /// leave <c>Placed</c> like any other sheet going back to the drawer (G6.4), and the one
-    /// invariant the group half of this class maintains is <i>a member is on the board exactly
-    /// when its group is</i>. Leaving parked members in <c>Placed</c> with a flag was the
-    /// alternative, and it makes <see cref="IsOnTable"/> — the question the cabinet's two row
-    /// states ask (C7.4) — answer yes about paper that is in a drawer.</para>
+    /// <para><b>Two states, not three (C4.5).</b> A sheet is in <c>Placed</c> or in the cabinet.
+    /// Nothing records a removal, because a removal is the absence of a fact and a store that
+    /// remembered what had been taken off would have to be asked twice about every row the
+    /// cabinet draws. <b>A group does not add a third state</b>, which is what fixes what
+    /// parking means: a parked group's members leave <c>Placed</c> like any other sheet going
+    /// back to the drawer (G6.4), and the invariant the group half maintains is <i>a member is
+    /// on the board exactly when its group is</i>. Leaving parked members in <c>Placed</c> with
+    /// a flag makes <see cref="IsOnTable"/> — the question the cabinet's two row states ask
+    /// (C7.4) — answer yes about paper that is in a drawer.</para>
     ///
-    /// <para><b>Membership is authoritative; the placement's copy of it is a memo.</b> A
-    /// sheet's group is <see cref="GroupRecord.Members"/>, because a parked group has no
-    /// placements at all and its membership still has to survive (G6.4).
-    /// <see cref="Placement.GroupId"/> holds the same fact where the pose discipline needs it
-    /// — a reader holding a placement must know not to read its pose fields without a second
-    /// lookup. They cannot drift apart, because exactly one path writes both.</para>
+    /// <para><b>Membership is authoritative; the placement's copy is a memo.</b> A sheet's group
+    /// is <see cref="GroupRecord.Members"/>, because a parked group has no placements at all and
+    /// its membership still has to survive (G6.4). <see cref="Placement.GroupId"/> holds the
+    /// same fact where the pose discipline needs it. They cannot drift apart, because exactly
+    /// one path writes both.</para>
     ///
-    /// <para><b>Order is kept on purpose.</b> The same reason <see cref="SheetLedgerStore"/>
-    /// keeps it, and here it is visible rather than merely tidy: lay order <i>is</i> the draw
-    /// order of unseated sheets (§3.3), and sheets at ground scale overlap by a fifth
-    /// (C1.2), so a board that reordered itself between two openings would come back with
-    /// different paper on top and be unreadable. A <c>Dictionary</c>'s enumeration order is
-    /// not a promise. Membership still tests through the dictionary; the list is only the
-    /// order, and re-laying a sheet that is already down deliberately does <b>not</b> move it
-    /// to the end — nudging a sheet is not the same act as putting it down (C4.7). Groups are
-    /// ordered the same way and for the same reason, twice over: the group table keeps
-    /// creation order, and each group keeps its own join order, which G5.6 turns into a
-    /// contiguous run of draw tiers. <b>Fusing does not reshuffle <see cref="LayOrder"/></b> —
-    /// it is the order the player built the board in, G5.6's run is composed from
-    /// <see cref="GroupRecord.Members"/>, and a store that resorted the board on every join
-    /// would make paper the player never touched change places.</para>
+    /// <para><b>Order is kept on purpose.</b> Lay order <i>is</i> the draw order of unseated
+    /// sheets (§3.3), and sheets at ground scale overlap by a fifth (C1.2), so a board that
+    /// reordered itself between two openings would come back with different paper on top and be
+    /// unreadable — and a <c>Dictionary</c>'s enumeration order is not a promise. Re-laying a
+    /// sheet already down deliberately does <b>not</b> move it to the end: nudging a sheet is
+    /// not putting it down (C4.7). Groups are ordered the same way twice over — the group table
+    /// keeps creation order, each group keeps its join order, which G5.6 turns into a contiguous
+    /// run of draw tiers. <b>Fusing does not reshuffle <see cref="LayOrder"/></b>: that is the
+    /// order the player built the board in, and resorting on every join would make paper the
+    /// player never touched change places.</para>
     ///
     /// <para><b>Not thread-safe.</b> Everything here is driven by the pointer on the main
-    /// thread. Nothing on the table renders from a worker the way the picker does, so there
-    /// is no snapshot and no need for one; if one ever appears, copy
+    /// thread. If a worker ever renders from the table, copy
     /// <see cref="SheetLedgerStore.Snapshot"/> rather than adding a lock.</para>
     ///
-    /// <para>Deliberately free of UnityEngine, mirroring <see cref="SheetLedgerStore"/>
-    /// exactly — same lifetime, same shape, same serialisation story, so the day either is
-    /// persisted both are, in one move (§4.2). Every field here is a primitive, a
-    /// <see cref="SheetId"/> or a flat collection of them, which is what keeps that move a
-    /// move and not a rewrite; the group table is three doubles, two identity fields and a
-    /// list of ids for exactly that reason (G4.4), and a nine-sheet assembly therefore saves
-    /// as one pose instead of nine. <b>No persistence code lives here yet</b>: §9 is a later
-    /// slice (S6) and it writes one archive file holding the ledger and every board together
-    /// (C9.5), which is a decision about both stores and belongs above both of them.</para>
+    /// <para>Deliberately free of UnityEngine, mirroring <see cref="SheetLedgerStore"/> — same
+    /// lifetime, shape and serialisation story, so the day either is persisted both are, in one
+    /// move (§4.2). Every field is a primitive, a <see cref="SheetId"/> or a flat collection of
+    /// them, which is what keeps that a move and not a rewrite; a nine-sheet assembly saves as
+    /// one pose instead of nine (G4.4). <b>No persistence code lives here yet</b> — §9 writes
+    /// one archive file holding the ledger and every board together (C9.5), a decision that
+    /// belongs above both stores.</para>
     ///
-    /// <para><b>What is deliberately not here.</b> The derivation itself — G3.1's
-    /// <c>pose(M) = (R(φ)·c_M + t, θ_M + φ)</c> — needs <c>Sheet.CentreGround</c>, which means
-    /// the island, and this store has never regenerated anything. It holds the frame and hands
-    /// it out; <c>BoardFrame</c> composes it. So is G9.1's <c>complete(group)</c>: it is a
-    /// count against the survey's sheet total, which again is the island's to say, and §13
-    /// defines it now precisely so that it is invented once rather than twice.</para>
+    /// <para><b>What is deliberately not here.</b> G3.1's derivation needs
+    /// <c>Sheet.CentreGround</c>, which means the island, and this store has never regenerated
+    /// anything: it holds the frame and hands it out, and <c>BoardFrame</c> composes it. So is
+    /// G9.1's <c>complete(group)</c>, a count against the survey's sheet total.</para>
     /// </summary>
     public sealed class BoardStore
     {
@@ -409,13 +369,10 @@ namespace Archivist.Building.Table
         /// Fixes which island this table carries (C4.2). Idempotent for the island it is
         /// already bound to.
         ///
-        /// <para><b>Refuses to rebind.</b> A bound table asked for a different island keeps
-        /// the one it has — silently, and deliberately not by throwing. This is called from
-        /// drag handling at pointer speed, and an exception there would take out the frame
-        /// for a condition the caller can test for free with <see cref="IsBound"/> and
-        /// <see cref="IslandOf"/>. Changing a board's island is not a refinement of binding,
-        /// it is <see cref="Clear"/> followed by a fresh bind, and saying so costs one line at
-        /// the call site.</para>
+        /// <para><b>Refuses to rebind</b>, silently rather than by throwing: this is called
+        /// from drag handling at pointer speed, and the caller can test the condition for free
+        /// with <see cref="IsBound"/> and <see cref="IslandOf"/>. Changing a board's island is
+        /// <see cref="Clear"/> followed by a fresh bind.</para>
         ///
         /// <para>A seed of 0 is refused too: 0 is the unbound sentinel, so "bind to 0" is a
         /// request to unbind expressed by accident. <see cref="Clear"/> is the way to say
@@ -454,22 +411,16 @@ namespace Archivist.Building.Table
         /// other island's paper, which is a table that is broken in a way nothing on screen
         /// can show.
         ///
-        /// <para><b>The groups go too, parked ones included</b> — and this is the one place
-        /// G5.5's "membership never shrinks" is overruled rather than honoured. It has to be.
-        /// A group is an arrangement of <i>this island's</i> paper, so an assembly that
-        /// outlived the binding would sit in the Groups section of a table now bound to a
-        /// different island, listing sheets that table will not accept. That is not a shrunk
-        /// group, it is a group with no board under it. G5.5 is a promise about <i>gestures</i>
-        /// — there is no detach, and the whole assembly can always be sent to the cabinet
-        /// instead (G6.4) — and clearing a table is not a gesture the player has; §13's folder
-        /// model is the thing that will eventually make it one.</para>
+        /// <para><b>The groups go too, parked ones included</b> — the one place G5.5's
+        /// "membership never shrinks" is overruled. A group is an arrangement of <i>this
+        /// island's</i> paper, so an assembly that outlived the binding would sit in the Groups
+        /// section of a table now bound elsewhere, listing sheets that table will not accept:
+        /// not a shrunk group but a group with no board under it. G5.5 is a promise about
+        /// <i>gestures</i>, and clearing a table is not one the player has.</para>
         ///
-        /// <para>The row itself stays in <see cref="KnownTables"/>. Clearing a table does not
-        /// remove the furniture; the board is still there, waiting, and dropping the row would
-        /// only mean re-adding it on the next sheet in a different position in the
-        /// order. <c>NextGroupId</c> stays where it is for the same shape of reason: the
-        /// furniture is the same furniture, and its next group must not be able to answer to a
-        /// name the last one used.</para>
+        /// <para>The row stays in <see cref="KnownTables"/> — clearing a table does not remove
+        /// the furniture. <c>NextGroupId</c> stays too: its next group must not be able to answer
+        /// to a name the last one used.</para>
         /// </summary>
         public void Clear(string tableId)
         {
@@ -491,17 +442,15 @@ namespace Archivist.Building.Table
         /// the board, and making the caller call <see cref="Bind"/> first would mean every
         /// call site repeating the rule and one of them eventually forgetting it.
         ///
-        /// <para>A sheet of another island is <b>dropped</b>, not placed (C4.3, R6.8). It
-        /// cannot be reached through the UI, because the cabinet only ever lists the bound
-        /// island's sheets (§6.3) — but R6.8 is a promise about what a board <i>is</i>, and a
-        /// promise kept only by the screen that happens to be in front of it is not kept.</para>
+        /// <para>A sheet of another island is <b>dropped</b>, not placed (C4.3, R6.8). The UI
+        /// cannot reach that case — the cabinet only lists the bound island's sheets (§6.3) — but
+        /// a promise kept only by the screen in front of it is not kept.</para>
         ///
-        /// <para>Laying a sheet that is already down replaces its pose and leaves it exactly
-        /// where it is in the draw order (C4.7). A sheet being nudged, dragged and re-dropped
-        /// half a metre is not being put down again, and having it jump to the top of the pile
-        /// on every release would make the board shuffle itself under the player's hand. What
-        /// draws on top of what while a sheet is being <i>dragged</i> is the view's business
-        /// (§3.3, points 3 and 4) and is not stored here.</para>
+        /// <para>Laying a sheet that is already down replaces its pose and leaves its place in
+        /// the draw order (C4.7): a sheet nudged half a metre is not being put down again, and
+        /// jumping to the top of the pile on every release would make the board shuffle itself
+        /// under the player's hand. What draws on top while a sheet is <i>dragged</i> is the
+        /// view's business (§3.3) and is not stored here.</para>
         ///
         /// <para><b>Laying a grouped sheet takes it out of nothing.</b> The placement becomes
         /// loose and the group loses a member exactly as <see cref="Remove"/> makes it lose
@@ -517,14 +466,11 @@ namespace Archivist.Building.Table
         /// <summary>
         /// Marks a sheet as being at its true pose (C6.5).
         ///
-        /// <para><b>Seating an already-laid sheet throws its coordinates away</b>, and that is
-        /// the point rather than a side effect: the pose of a seated sheet is
-        /// <c>Sheet.CentreGround</c> and <c>Sheet.RotationDeg</c>, a pure function of the
-        /// island seed, and keeping the released coordinates beside the flag would be caching
-        /// that function — the mistake R1.11 exists to prevent (C4.6, D-C7). It is also how A6
-        /// is provable: delete the pose fields from a save by hand and every seated sheet must
-        /// still come back to the right place. Anything that still read them would pass that
-        /// test only by luck.</para>
+        /// <para><b>Seating an already-laid sheet throws its coordinates away</b>, which is the
+        /// point: a seated sheet's pose is a pure function of the island seed, and keeping the
+        /// released coordinates beside the flag would cache that function (C4.6, D-C7, R1.11).
+        /// It is also how A6 is provable — delete the pose fields from a save by hand and every
+        /// seated sheet must still come back to the right place.</para>
         ///
         /// <para>Seats a sheet that is not on the table at all, rather than refusing. A sheet
         /// arriving directly at its true pose — restored from a save, or laid by the editor
@@ -549,33 +495,24 @@ namespace Archivist.Building.Table
         /// tried and dropped.</para>
         ///
         /// <para><b>A member can be removed, and G5.5 says none ever leave a group.</b> Both
-        /// are true, because G5.5 is a statement about gestures: there is no detach, and G6.2
-        /// makes a grouped sheet's office row inert precisely so the player cannot reach one.
-        /// But this method and <see cref="Clear"/> are code paths that predate groups and can
-        /// still be called — by editor tooling, by a save being repaired, by a bug — so the
-        /// store needs a defined answer rather than an accident. The answer is: the member
-        /// leaves, and <b>a group that falls below two members dissolves</b>. A group of one
-        /// is geometrically perfectly well defined (G3.6 says so outright: a group of one is
-        /// exactly the sheet case) but it is a thing the fuse rule could never have made —
-        /// G5.1 only ever creates a group from two — and it would draw a Groups row reading
-        /// "1 of 9" for something that is not an assembly.</para>
+        /// are true: G5.5 is about gestures — there is no detach, and G6.2 makes a grouped
+        /// sheet's office row inert so the player cannot reach one — but this method and
+        /// <see cref="Clear"/> predate groups and can still be called by tooling or by a save
+        /// being repaired, so the store needs a defined answer. It is: the member leaves, and
+        /// <b>a group that falls below two members dissolves</b>. A group of one is
+        /// geometrically well defined (G3.6) but is a thing the fuse rule could never make, and
+        /// it would draw a Groups row reading "1 of 9".</para>
         ///
         /// <para><b>The survivor is left <see cref="Placement.Laid"/> at the origin, which is
-        /// wrong, and is wrong on purpose.</b> Its correct pose is the one it had a moment ago:
-        /// the frame composed with its own truth (G3.1). Composing that needs
-        /// <c>Sheet.CentreGround</c>, which needs the island, and this store has never
-        /// regenerated anything and must not start — the whole reason it is engine-free and
-        /// serialisable is that it holds identities and player facts, never geometry. So the
-        /// choice is between inventing a plausible pose and admitting there is none. Zero is
-        /// chosen <i>because</i> it is obviously wrong: a sheet at island origin is visible
-        /// from across the table and points straight at the call site, where a subtly-off pose
-        /// would look like a settle that missed. <b>A caller that removes a member owns
-        /// re-laying the survivor</b>: ask <see cref="GroupIdOf"/> and
-        /// <see cref="TryGetGroup"/> <i>before</i> the call, and if the group is about to drop
-        /// below two, lay the survivor at its derived pose afterwards. Leaving that to the
-        /// caller is the wart; it is recorded here rather than hidden because the alternative
-        /// — sending the survivor back to the cabinet, which is lossless and needs no pose —
-        /// makes a sheet the caller did not name silently disappear from the table, and a
+        /// wrong on purpose.</b> Its correct pose is the frame composed with its own truth
+        /// (G3.1), and composing that needs the island, which this store has never regenerated
+        /// and must not start. So the choice is between inventing a plausible pose and admitting
+        /// there is none; zero is chosen <i>because</i> it is obviously wrong — a sheet at island
+        /// origin is visible from across the table, where a subtly-off pose would look like a
+        /// settle that missed. <b>A caller that removes a member owns re-laying the
+        /// survivor</b>: ask <see cref="GroupIdOf"/> and <see cref="TryGetGroup"/> <i>before</i>
+        /// the call. The alternative — sending the survivor back to the cabinet, lossless and
+        /// needing no pose — makes a sheet the caller did not name silently disappear, and a
         /// vanishing sheet is the one failure a player cannot describe.</para>
         /// </summary>
         public void Remove(string tableId, SheetId id)
@@ -596,30 +533,23 @@ namespace Archivist.Building.Table
         /// that forgets to check writes "loose" rather than a live-looking wrong id.
         ///
         /// <para><b>It is born empty, and briefly invalid.</b> G5.1 creates a group from two
-        /// sheets at once, so the group this returns is meant to be filled by the two
-        /// <see cref="AddToGroup"/> calls immediately following it, and the below-two rule of
-        /// <see cref="Remove"/> deliberately does not apply here — enforced at creation it
-        /// would make the API impossible to use, since there is no moment at which both members
-        /// have been passed. Taking the two founding members as arguments was the alternative
-        /// and it is the tidier signature, but it makes the other three cases of G5.1 (loose
-        /// joins group, group adopts loose, group merges group) call a different method than
-        /// the first, and the store would then have four entry points for one act.</para>
+        /// sheets at once, so this is meant to be filled by the two <see cref="AddToGroup"/>
+        /// calls immediately following, and <see cref="Remove"/>'s below-two rule does not apply
+        /// here — enforced at creation there would be no moment at which both members have been
+        /// passed. Taking the founding pair as arguments is the tidier signature but makes G5.1's
+        /// other three cases call a different method, giving the store four entry points for one
+        /// act.</para>
         ///
-        /// <para><b>The frame is passed in, whole.</b> The store cannot derive it: G3.1 builds
-        /// a loose sheet's frame from <c>φ = r_B − θ_B</c>, and <c>θ_B</c> is the sheet's truth
-        /// rotation, which is the island's to say. G5.2 decides <i>whose</i> frame this is —
-        /// the stationary thing's, never the dragged one's, because the table does not move
-        /// when paper is put on it.</para>
+        /// <para><b>The frame is passed in, whole.</b> The store cannot derive it: G3.1 builds a
+        /// loose sheet's frame from <c>φ = r_B − θ_B</c>, and <c>θ_B</c> is the island's to say.
+        /// G5.2 decides <i>whose</i> frame it is — the stationary thing's.</para>
         ///
-        /// <para><b>A group does not bind the board</b>, because it carries no seed to bind it
-        /// with: the survey key is an office and a flag (G3.4), which name a survey of every
-        /// island equally. The first member does the binding, through the same path a laid
-        /// sheet does (C4.2). And <paramref name="wholeIsland"/> is not refused, though §6 says
-        /// the whole-island sheet can never fuse: that is a consequence of R2.2a making it a
-        /// survey of exactly one sheet — it has no peer — and not a rule about groups. Encoding
-        /// the consequence here as well would give the store two places to disagree with itself
-        /// the day that survey has two sheets. The below-two rule already makes a survey of one
-        /// ungroupable, once.</para>
+        /// <para><b>A group does not bind the board</b>, carrying no seed to bind it with: the
+        /// survey key is an office and a flag (G3.4), naming a survey of every island equally.
+        /// The first member binds, through the same path a laid sheet does (C4.2).
+        /// <paramref name="wholeIsland"/> is not refused, though §6 says the whole-island sheet
+        /// can never fuse — that follows from R2.2a making it a survey of exactly one sheet, and
+        /// the below-two rule already makes a survey of one ungroupable, once.</para>
         /// </summary>
         public int CreateGroup(string tableId, Office office, bool wholeIsland,
                                double rotationDeg, double offsetX, double offsetY)
@@ -640,12 +570,11 @@ namespace Archivist.Building.Table
         /// already a member, the way <see cref="Bind"/> is idempotent for the island it already
         /// has. False is a refusal, and there are four of them:
         ///
-        /// <para><b>A different survey</b> (G3.4). Two offices survey at different scales and
-        /// rotations, so co-located sheets would satisfy a relative test whenever they were
-        /// roughly on top of one another and every group would swallow the board — but the
-        /// first reason is the game's: the difference between two offices' sheets of one
-        /// hillside is what the archive is about (G1.2), and fusing them erases it. Two
-        /// comparisons against the identity, no island touched.</para>
+        /// <para><b>A different survey</b> (G3.4). The difference between two offices' sheets of
+        /// one hillside is what the archive is about (G1.2), and fusing them erases it; second,
+        /// offices survey at different scales and rotations, so co-located sheets would satisfy a
+        /// relative test whenever roughly on top of one another and every group would swallow the
+        /// board. Two comparisons against the identity, no island touched.</para>
         ///
         /// <para><b>Another island</b> (C4.3, R6.8), by the same promise <see cref="Lay"/>
         /// keeps.</para>
@@ -657,13 +586,12 @@ namespace Archivist.Building.Table
         ///
         /// <para><b>No such group, or no such table.</b></para>
         ///
-        /// <para>A sheet that is not on the table is <b>accepted</b>, exactly as
-        /// <see cref="Seat"/> accepts one: a member arriving from a save, or from the retrieval
-        /// of a parked group (G6.5), has no pose to arrive with and no reason to be laid first.
-        /// Which side of C4.5 it lands on is decided by the group, not by where it was — a
-        /// member is on the board exactly when its group is — so joining a parked group takes a
-        /// sheet <i>off</i> the table. That is the invariant doing its job, not a surprise:
-        /// a group is one object and half of it cannot be in a drawer.</para>
+        /// <para>A sheet that is not on the table is <b>accepted</b>, as <see cref="Seat"/>
+        /// accepts one: a member arriving from a save or from a parked group's retrieval (G6.5)
+        /// has no pose to arrive with. Which side of C4.5 it lands on is the group's to decide —
+        /// a member is on the board exactly when its group is — so joining a parked group takes a
+        /// sheet <i>off</i> the table. A group is one object and half of it cannot be in a
+        /// drawer.</para>
         /// </summary>
         public bool AddToGroup(string tableId, int groupId, SheetId id)
         {
@@ -688,25 +616,19 @@ namespace Archivist.Building.Table
         /// Pours one group into another and destroys the empty one (G5.1's fourth case). True
         /// when it happened.
         ///
-        /// <para><b><paramref name="keepId"/>'s frame survives</b>, which is why the parameters
-        /// are named for what happens to them rather than left/right. G5.2: the dragged thing
-        /// moves and the stationary thing's frame wins, because the table does not move when
-        /// paper is put on it. The correction the absorbed members visibly take is bounded by
-        /// the fit tolerance that allowed the merge — at most 154 m on island 0's Land Survey,
-        /// well under a tenth of a sheet — so even a nine-sheet assembly joining a lone sheet
-        /// does not jump.</para>
+        /// <para><b><paramref name="keepId"/>'s frame survives</b> (G5.2), which is why the
+        /// parameters are named for what happens to them rather than left/right. The correction
+        /// the absorbed members visibly take is bounded by the fit tolerance that allowed the
+        /// merge — at most 154 m on island 0's Land Survey — so even a nine-sheet assembly
+        /// joining a lone sheet does not jump.</para>
         ///
-        /// <para><b>One flat group, never a nesting</b> (§13). The absorbed members are
-        /// appended in their own join order, so each half keeps the run G5.6 draws it in and
-        /// the seam between them is where the player made it.</para>
+        /// <para><b>One flat group, never a nesting</b> (§13). The absorbed members are appended
+        /// in their own join order, so each half keeps the run G5.6 draws it in.</para>
         ///
-        /// <para>Refuses a merge across surveys (G3.4), a group with itself, and — the one
-        /// worth arguing — <b>a parked group with an unparked one</b>. That pair is not a merge
-        /// the player can perform: both things have to be on the table to be dragged into each
-        /// other (G5.1 evaluates on release), so a caller asking for it means a retrieval and a
-        /// merge and has not said which way round. Normalising to
-        /// <paramref name="keepId"/>'s state would have quietly laid out or filed away paper
-        /// nobody asked about.</para>
+        /// <para>Refuses a merge across surveys (G3.4), a group with itself, and <b>a parked
+        /// group with an unparked one</b>. That pair is not a merge the player can perform — both
+        /// must be on the table to be dragged into each other — so a caller asking for it means a
+        /// retrieval and a merge and has not said which way round.</para>
         /// </summary>
         public bool MergeGroups(string tableId, int keepId, int absorbId)
         {
@@ -737,10 +659,9 @@ namespace Archivist.Building.Table
         ///
         /// <para>This is the write a drag and a <c>Q</c>/<c>E</c> turn both come down to, and
         /// its being a single write is the point of storing a frame rather than N poses (G4.3):
-        /// there is no path here that can move one member and not the others, so a group that
-        /// is internally wrong is unrepresentable. The turn's <i>pivot</i> — G5.4 puts it at the
-        /// union's bounding centre — is the caller's arithmetic, because a union is made of
-        /// quads and quads need the island.</para>
+        /// no path here can move one member and not the others. The turn's <i>pivot</i> is the
+        /// caller's arithmetic, because a union is made of quads and quads need the island.
+        /// </para>
         ///
         /// <para>Metres and degrees, never board units, matching <see cref="Placement.GroundX"/>
         /// so that a change to <c>TableOptions.BoardUnitsPerMetre</c> cannot move a saved
@@ -763,25 +684,20 @@ namespace Archivist.Building.Table
         /// Parks the group in the cabinet or lays it back out (G6.4, G6.5). True when the group
         /// exists; idempotent for the state it is already in.
         ///
-        /// <para><b>Membership and frame both survive a round trip</b>, and that is the whole
-        /// content of G6.4: parking is where an assembly is, never what it is. It is also what
-        /// makes G5.5 tolerable — C6.7's principle that <i>"seating is not a lock, and a locked
-        /// sheet is the harshest error state there is (R6.5)"</i> is honoured here rather than
-        /// by a detach gesture, because the whole group can always be sent to the drawer and
-        /// laid out again. Nothing is ever stuck.</para>
+        /// <para><b>Membership and frame both survive a round trip</b> — the whole content of
+        /// G6.4: parking is where an assembly is, never what it is. It is also what makes G5.5
+        /// tolerable, because R6.5's "nothing is ever stuck" is honoured by the drawer rather
+        /// than by a detach gesture.</para>
         ///
         /// <para>Parking removes every member from the board and retrieval puts them all back,
-        /// because C4.5 has two states and a group does not get a third: a parked group's
-        /// members are in the cabinet in the same sense every other sheet in the cabinet is,
-        /// and <see cref="IsOnTable"/> says so. They come back in join order, at the end of the
-        /// lay order, which is the contiguous run G5.6 wants and is also true: the player has
-        /// just put that paper down.</para>
+        /// because C4.5 has two states and a group does not get a third — <see cref="IsOnTable"/>
+        /// says a parked group's members are in the cabinet. They come back in join order at the
+        /// end of the lay order, the contiguous run G5.6 wants.</para>
         ///
-        /// <para>The frame's <c>φ</c> is untouched on retrieval, which G6.5 makes explicit and
-        /// which differs from <c>BeginPlace</c> laying a single sheet at rotation 0 <i>"never
-        /// at its true rotation"</i>. Resolving orientation is part of placing a sheet (P2.6,
-        /// C6.3); a group has already had its orientation resolved — that is what made it a
-        /// group — so resetting it would destroy the player's work to no end.</para>
+        /// <para>The frame's <c>φ</c> is untouched on retrieval (G6.5), unlike
+        /// <c>BeginPlace</c> laying a single sheet at rotation 0. Resolving orientation is part
+        /// of placing a <i>sheet</i> (P2.6, C6.3); a group has already had its resolved — that is
+        /// what made it a group.</para>
         /// </summary>
         public bool SetGroupOnTable(string tableId, int groupId, bool onTable)
         {

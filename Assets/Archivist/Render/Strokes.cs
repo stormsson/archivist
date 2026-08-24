@@ -23,13 +23,12 @@ namespace Archivist.Render
     /// sounding is a dot, never a depth figure. Typography is office style and is deferred.</para>
     ///
     /// <para><b>Determinism (§5).</b> Layers are drawn in one fixed order — coast, rivers,
-    /// settlements, peaks, soundings — and within a layer in the source list's own order.
-    /// Every source list is already totally ordered by the generator (contours by first vertex,
-    /// peaks by elevation desc, soundings in lattice order), no dictionary or set is ever
-    /// enumerated, and compositing is single-threaded, so the output is byte-identical run to
-    /// run. Nothing here calls a transcendental: <see cref="GroundImage"/> owns the only
-    /// cos/sin in the assembly (§5) and the mark geometry comes from a literal unit-circle
-    /// table.</para>
+    /// settlements, peaks, soundings — and within a layer in the source list's own order, which
+    /// the generator has already made total (contours by first vertex, peaks by elevation desc,
+    /// soundings in lattice order). No dictionary or set is enumerated and compositing is
+    /// single-threaded, so the output is byte-identical run to run. Nothing here calls a
+    /// transcendental: <see cref="GroundImage"/> owns the only cos/sin in the assembly and the
+    /// mark geometry comes from a literal unit-circle table.</para>
     /// </summary>
     public static class Strokes
     {

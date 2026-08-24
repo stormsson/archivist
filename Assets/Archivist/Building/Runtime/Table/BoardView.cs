@@ -20,83 +20,61 @@ namespace Archivist.Building.Table
     /// laid on it and one cached raster per sheet the table is allowed to offer.
     ///
     /// <para><b>This is <c>CartographyBoardBench</c> productionised, not rewritten.</b> Slice S1
-    /// (§11) built the same rig from an editor window and laid every sheet of island 0 at its
-    /// true ground pose, and the answer to the one question S1 existed to ask — does a board of
-    /// ground-scale sheets overlapping by a fifth read, or is it a heap — was <i>it reads</i>:
-    /// the coastline runs continuously across sheet boundaries and the assembled sheets are one
-    /// island. Every number that produced that result is carried over here unchanged, including
-    /// the rotation negation below, which is the one thing in the transform that is easy to get
-    /// wrong in a way that still looks plausible. <b>Nothing about the geometry is reopened by
-    /// this class.</b></para>
-    ///
-    /// <para><b>What does change: the board starts empty.</b> The bench laid everything at once
-    /// because a solved board was the thing being judged. That is a test fixture. The product is
-    /// a board the player assembles, so <see cref="Show"/> builds the rig and renders the
-    /// rasters and puts <i>nothing</i> on the mounting sheet; <see cref="Lay"/>,
-    /// <see cref="Seat"/> and <see cref="Remove"/> are the only ways a slab arrives or leaves.
-    /// The cabinet (§7) and the drag verbs (§8.3) drive them; this class holds no input and no
-    /// UGUI, so the same board can be driven by a test, a bench or a pointer.</para>
+    /// answered the one question it existed to ask — does a board of ground-scale sheets
+    /// overlapping by a fifth read, or is it a heap — with <i>it reads</i>. Every number that
+    /// produced that result is carried over unchanged, including the rotation negation below,
+    /// which is the one thing in the transform that is easy to get wrong in a way that still
+    /// looks plausible. <b>Nothing about the geometry is reopened here.</b> What does change is
+    /// that the board starts empty: <see cref="Show"/> builds the rig and puts <i>nothing</i> on
+    /// the mounting sheet, and <see cref="Lay"/>, <see cref="Seat"/> and <see cref="Remove"/>
+    /// are the only ways a slab arrives or leaves. This class holds no input and no UGUI, so the
+    /// same board can be driven by a test, a bench or a pointer.</para>
     ///
     /// <para><b>The sheet list arrives through <see cref="ISheetSource"/> and never through the
-    /// ledger.</b> §4.3 states that rule in bold and it is not a preference: a single
-    /// <c>ledger.IssuedSheets(seed)</c> in a view makes the eventual swap to a
-    /// <c>FolderSheetSource</c> a silent hunt through the UI, because the wrong call still
-    /// compiles and still returns sheets. The default source is built here from
-    /// <c>generator.Ledger</c> — one line, at what is for this POC the composition root — and
-    /// can be replaced from the inspector or from code before <see cref="Show"/>.</para>
+    /// ledger</b> (§4.3). A single <c>ledger.IssuedSheets(seed)</c> in a view makes the eventual
+    /// swap to a <c>FolderSheetSource</c> a silent hunt through the UI, because the wrong call
+    /// still compiles and still returns sheets. The default source is built here from
+    /// <c>generator.Ledger</c> and can be replaced before <see cref="Show"/>.</para>
     ///
     /// <para><b>Rendering is off the main thread and uploads one texture per frame</b> (C5.6).
-    /// <c>MapCrate</c> already learned both halves of this the hard way and its comments are the
-    /// authority: island generation is a third of a second of pure, engine-free C# that must not
-    /// happen inline, and several <c>Texture2D.Apply</c> calls in one frame are a visible hitch.
-    /// T5's "quiet" survives neither. So the island is resolved on a worker, the rig appears the
-    /// moment its bounds are known (C5.7: the view opens on the mounting sheet and fills in),
-    /// the rasters are produced one at a time by a second worker into a queue, and the coroutine
-    /// drains exactly one per frame. Producing them one at a time rather than as a batch is what
-    /// gets the first thumbnail on screen inside A2's 500 ms — a batch would hand back all N
-    /// only after the last one finished.</para>
+    /// Island generation is a third of a second of engine-free C# that must not happen inline,
+    /// and several <c>Texture2D.Apply</c> calls in one frame are a visible hitch —
+    /// <c>MapCrate</c>'s comments are the authority on both. So the island resolves on a worker,
+    /// the rig appears the moment its bounds are known (C5.7), the rasters are produced one at a
+    /// time into a queue, and the coroutine drains exactly one per frame. One at a time rather
+    /// than as a batch is what gets the first thumbnail on screen inside A2's 500 ms.</para>
     ///
-    /// <para><b>One render and one upload per sheet, and this class owns it.</b> C5.5 asks for a
-    /// single texture per <see cref="SheetId"/> serving both the board slab and the cabinet
-    /// thumbnail, and that is what happens: the <c>IslandRenderer</c> pass runs once into a
-    /// cached <see cref="SheetRender"/>, the upload runs once into <c>textures</c>, and slabs are
-    /// built through <c>BoardSheetView</c>'s <b>borrowing</b> overload — the one that takes a
-    /// <c>Texture2D</c> and does not destroy it.
+    /// <para><b>One render and one upload per sheet, and this class owns it</b> (C5.5). The
+    /// <c>IslandRenderer</c> pass runs once into a cached <see cref="SheetRender"/>, the upload
+    /// runs once into <c>textures</c>, and slabs are built through <c>BoardSheetView</c>'s
+    /// <b>borrowing</b> overload — the one that takes a <c>Texture2D</c> and does not destroy
+    /// it. Uploading twice so each object owns what it draws costs about 36 MB of duplicate
+    /// VRAM across a 48-sheet board (F-S1.3); one texture with two owners and one
+    /// <c>Destroy</c> is worse still, because the first <see cref="Remove"/> would blank every
+    /// thumbnail on screen. <c>ownsTexture</c> is what makes the third option possible.</para>
     ///
-    /// <para>The first attempt uploaded twice, once for the cache and once inside the slab, so
-    /// that each object owned what it drew. That is a tidy ownership rule and it costs about
-    /// 36 MB of duplicate VRAM across a 48-sheet board (F-S1.3: 49 sheets on a solved board) —
-    /// paying real memory for pixels that already exist. The alternative it was avoiding, one
-    /// texture with two owners and one <c>Destroy</c>, is genuinely worse: the first
-    /// <see cref="Remove"/> would blank every thumbnail still on screen. <c>ownsTexture</c> on
-    /// the slab is what makes the third option possible — borrow, draw, and leave the lifetime
-    /// to whoever cached it.</para></para>
+    /// <para><b>Nothing here is an asset.</b> Every mesh, material and texture is created at
+    /// runtime with <c>HideFlags.DontSave</c> and destroyed in <see cref="Hide"/> and
+    /// <c>OnDestroy</c>. A cached texture is owned by nobody else: the cabinet borrows it while
+    /// the table is open and must not hold it across a close.</para>
     ///
-    /// <para><b>Nothing here is an asset.</b> Every mesh, material and texture the board makes is
-    /// created at runtime with <c>HideFlags.DontSave</c>, so the board destroys all of it — in
-    /// <see cref="Hide"/> and again in <c>OnDestroy</c>. A cached texture in particular is owned
-    /// by nobody else: the cabinet borrows it for as long as the table is open and must not hold
-    /// it across a close.</para>
-    ///
-    /// <para><b>Groups (S3) live in a <see cref="BoardStore"/> this view owns, and the two halves
-    /// of a pose are not the same kind of fact.</b> For a <i>loose</i> sheet the transform IS the
-    /// pose (C4.6): the drag layer writes it every frame and deliberately does not call
-    /// <see cref="Lay"/> at 60 Hz, and a release that fits nothing calls nothing at all (C6.6),
-    /// so the store's <c>Placement.GroundX/Y</c> is a record of the last committed pose and not
-    /// the live one. For a <i>grouped</i> sheet the frame is the model and the transform is
-    /// derived (G1.3, G4.3): members carry no pose, one <see cref="MoveGroup"/> moves the whole
-    /// assembly, and this class rewrites their transforms from G3.1. <see cref="TryPoseOf"/> is
-    /// the one place that knows which of those two a given sheet is, which is why nothing else
-    /// may compose a frame with a truth.</para>
+    /// <para><b>Groups (S3) live in a <see cref="BoardStore"/> this view owns, and the two
+    /// halves of a pose are not the same kind of fact.</b> For a <i>loose</i> sheet the
+    /// transform IS the pose (C4.6): the drag layer writes it every frame, deliberately does not
+    /// call <see cref="Lay"/> at 60 Hz, and a release that fits nothing calls nothing (C6.6), so
+    /// <c>Placement.GroundX/Y</c> is the last committed pose and not the live one. For a
+    /// <i>grouped</i> sheet the frame is the model and the transform is derived (G1.3, G4.3):
+    /// members carry no pose, one <see cref="MoveGroup"/> moves the assembly, and this class
+    /// rewrites their transforms from G3.1. <see cref="TryPoseOf"/> is the one place that knows
+    /// which of the two a sheet is, which is why nothing else may compose a frame with a
+    /// truth.</para>
     ///
     /// <para><b>Why the store is here rather than in <c>CartographyTable</c>.</b> The derivation
     /// needs <c>Sheet.CentreGround</c> — the island — and <see cref="BoardStore"/> has never
-    /// regenerated anything and must not start; its own class comment says so and leaves G3.1
-    /// out on purpose. This class already resolves the island and holds <see cref="TrySheet"/>,
-    /// so it is the seam where a frame and a truth may meet. The store is keyed by a per-instance
-    /// id because nothing is persisted yet (§9 is S6, and it writes one archive for the ledger
-    /// and every board together); when persistence arrives the store moves up to whoever owns
-    /// the furniture's GUID (§4.1) and only that key changes.</para>
+    /// regenerated anything and must not start. This class already resolves the island and holds
+    /// <see cref="TrySheet"/>, so it is the seam where a frame and a truth may meet. The store is
+    /// keyed by a per-instance id because nothing is persisted yet; when §9 arrives the store
+    /// moves up to whoever owns the furniture's GUID (§4.1) and only that key changes.</para>
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BoardView : MonoBehaviour
@@ -197,15 +175,13 @@ namespace Archivist.Building.Table
         /// one invariant — <i>a member is on the board exactly when its group is</i> — is true
         /// of a real board rather than of a store nobody drives.
         ///
-        /// <para>Mirrored rather than made authoritative for the placements themselves: the
-        /// store keeps a pose per laid sheet and this view keeps a transform, and C4.6 says the
-        /// transform is the pose. Making the store the pose authority would mean a
-        /// <see cref="Lay"/> per drag frame — the re-sort and the <c>Changed</c> the class
-        /// comment refuses at 60 Hz — so the mirror is deliberately one-directional: every
-        /// <i>committed</i> mutation goes both places, and the pose the store then holds for a
-        /// loose sheet is a memo. What the store <b>is</b> authoritative about is membership,
-        /// the frame, and which group a sheet is in; none of those change at pointer speed
-        /// except the frame, which <see cref="MoveGroup"/> writes directly.</para>
+        /// <para>Mirrored rather than made authoritative for the placements: C4.6 says the
+        /// transform is the pose, and making the store the pose authority would mean a
+        /// <see cref="Lay"/> per drag frame. The mirror is one-directional — every
+        /// <i>committed</i> mutation goes both places, and the store's pose for a loose sheet is
+        /// a memo. What it <b>is</b> authoritative about is membership, the frame and which group
+        /// a sheet is in, none of which change at pointer speed except the frame, which
+        /// <see cref="MoveGroup"/> writes directly.</para>
         /// </summary>
         readonly BoardStore state = new BoardStore();
         string stateId;
@@ -385,14 +361,14 @@ namespace Archivist.Building.Table
         /// an explicit pose has by definition just been placed by hand. A caller that wants the
         /// true pose wants <see cref="Seat"/>.</para>
         ///
-        /// <para><b>Laying a member takes it out of its group</b>, because a placement carries
-        /// one derivation or none (G4.1) and this one hands it a pose of its own. <b>The
-        /// interaction layer must never reach this path for a member</b>: G1.6 makes the group
-        /// the unit of interaction, so dragging a member drags the group and the write is
-        /// <see cref="MoveGroup"/>. The path still exists for the callers <see cref="Remove"/>
-        /// names — tooling, a repaired save, a bug — and it is safe here in a way it is not in
-        /// the store, because <see cref="NoteDissolution"/> puts the survivor of a dissolved
-        /// pair back where it was standing instead of at the island origin.</para>
+        /// <para><b>Laying a member takes it out of its group</b>: a placement carries one
+        /// derivation or none (G4.1) and this hands it a pose of its own. <b>The interaction
+        /// layer must never reach this path for a member</b> — G1.6 makes the group the unit of
+        /// interaction, so dragging a member drags the group and the write is
+        /// <see cref="MoveGroup"/>. The path exists for the callers <see cref="Remove"/> names,
+        /// and is safe here in a way it is not in the store, because
+        /// <see cref="NoteDissolution"/> puts the survivor of a dissolved pair back where it was
+        /// standing instead of at the island origin.</para>
         /// </summary>
         public BoardSheetView Lay(SheetId id, V2 groundPos, double rotationDeg)
         {
@@ -531,22 +507,20 @@ namespace Archivist.Building.Table
         /// is in the drawer.
         ///
         /// <para><b>This is the one place G3.1's derivation lives.</b> A grouped sheet's pose is
-        /// <c>frame.PositionOf(truth)</c> / <c>frame.RotationOf(truth)</c> and a loose sheet's
-        /// pose is its transform, and telling those two apart is the whole content of this
-        /// method. <see cref="BoardStore"/> deliberately does not offer it: composing a frame
-        /// with a truth needs <c>Sheet.CentreGround</c>, which needs the island, and that store
-        /// has never regenerated anything. <b>A second copy of this derivation anywhere is a
-        /// second place for the frame to be applied wrongly</b> — mirrored, or to the wrong
-        /// sheet's rotation, or once too often — and G-A2 is the only check that would catch
-        /// it. Call this; do not re-derive.</para>
+        /// <c>frame.PositionOf(truth)</c> / <c>frame.RotationOf(truth)</c>, a loose sheet's is
+        /// its transform, and telling the two apart is the whole content of this method.
+        /// <see cref="BoardStore"/> cannot offer it: composing a frame with a truth needs the
+        /// island. <b>A second copy of this derivation anywhere is a second place for the frame
+        /// to be applied wrongly</b> — mirrored, to the wrong sheet's rotation, or once too
+        /// often — and G-A2 is the only check that would catch it. Call this; do not
+        /// re-derive.</para>
         ///
         /// <para><b>The transform, for a loose sheet, and not the store's copy</b> (C4.6). The
-        /// drag layer moves a slab without telling the board (that would be a re-sort and a
-        /// <c>Changed</c> at 60 Hz) and a release that fits nothing tells it nothing at all
-        /// (C6.6), so <c>Placement.GroundX/Y</c> is the last <i>committed</i> pose and can be a
-        /// whole drag out of date. Reading it here would make the fuse test judge a sheet
-        /// against where it used to be. A seated sheet is read the same way and gives the same
-        /// answer, because <see cref="Seat"/> writes the truth onto the transform.</para>
+        /// drag layer moves a slab without telling the board, and a release that fits nothing
+        /// tells it nothing (C6.6), so <c>Placement.GroundX/Y</c> can be a whole drag out of
+        /// date and reading it would make the fuse test judge a sheet against where it used to
+        /// be. A seated sheet reads the same way and gives the same answer, because
+        /// <see cref="Seat"/> writes the truth onto the transform.</para>
         /// </summary>
         public bool TryPoseOf(SheetId id, out V2 groundPos, out double rotationDeg)
         {
@@ -649,15 +623,12 @@ namespace Archivist.Building.Table
         /// Moves the whole assembly: one frame is written and every member's transform is
         /// re-derived from it (G5.4). False when there is no such group.
         ///
-        /// <para><b>This does not raise <see cref="Changed"/>, and that is the same argument the
-        /// drag layer makes about <see cref="Lay"/>.</b> It is called every frame of a group
-        /// drag and every frame of a group settle, and <c>Changed</c> is what the cabinet
-        /// rebuilds a 48-row accordion from. Nothing in that audience draws where a group is —
-        /// the Groups row shows the survey, the count and a thumbnail (G6.3) — so firing here
-        /// would rebuild the chrome sixty times a second for a fact nobody reads. The model is
-        /// not lied to: the frame is written through immediately, and every mutation that
-        /// changes what a group <i>is</i> — created, joined, merged, dissolved — goes through a
-        /// path that does raise.</para>
+        /// <para><b>This does not raise <see cref="Changed"/></b>, the same argument the drag
+        /// layer makes about <see cref="Lay"/>: it runs every frame of a group drag and settle,
+        /// and <c>Changed</c> is what rebuilds a 48-row accordion. Nothing in that audience draws
+        /// where a group is — the Groups row shows the survey, the count and a thumbnail (G6.3).
+        /// The model is not lied to: the frame is written through immediately, and every mutation
+        /// that changes what a group <i>is</i> goes through a path that does raise.</para>
         ///
         /// <para>It does not <see cref="Resort"/> either, for the second half of the same
         /// reason: a move changes no draw key, and a re-sort mid-drag would flatten the tiers
@@ -684,24 +655,19 @@ namespace Archivist.Building.Table
         /// office row show (G6.1, G6.2, C7.4), so parking is one of the mutations the accordion
         /// exists to redraw.</para>
         ///
-        /// <para>The slabs are destroyed rather than hidden, which is <see cref="Remove"/>'s
-        /// argument applied to nine sheets at once: <c>BoardSheetView</c> owns its mesh and
-        /// material, the raster stays cached, and retrieving costs an upload rather than a
-        /// render. Nothing here touches the group table beyond the one flag —
-        /// <see cref="BoardStore.SetGroupOnTable"/> takes the members off the board and puts
-        /// them back, and it is the only thing that may, because a member is on the board
-        /// exactly when its group is.</para>
+        /// <para>The slabs are destroyed rather than hidden — <see cref="Remove"/>'s argument
+        /// applied to nine sheets at once: the raster stays cached, so retrieving costs an
+        /// upload rather than a render. Nothing here touches the group table beyond the one flag;
+        /// <see cref="BoardStore.SetGroupOnTable"/> is the only thing that may take members off
+        /// the board, because a member is on the board exactly when its group is.</para>
         ///
         /// <para><b>WHAT IS PARKED DOES NOT SURVIVE CLOSING THE TABLE.</b>
         /// <see cref="Teardown"/> calls <c>BoardStore.Clear</c>, so <see cref="Hide"/> destroys
-        /// every group — parked ones included — along with every loose sheet's pose. Board state
-        /// has never been persisted; <c>spec.md</c> §9 is the slice that writes it, and it is
-        /// unbuilt. So this is consistent with the rest of the board and it is still a real
-        /// loss, because the Groups drawer <i>reads</i> as storage: a player who parks a
-        /// nine-sheet assembly, closes the table and reopens it finds the assembly gone and the
-        /// nine sheets back in their office sections. <b>Do not paper over this with a cache
-        /// here.</b> The fix is §9 and nothing smaller — a group that outlived one board and not
-        /// the archive would be a second, private persistence with its own rules.</para>
+        /// every group, parked ones included. That is consistent with the rest of the board — no
+        /// board state has ever been persisted — and still a real loss, because the Groups drawer
+        /// <i>reads</i> as storage. <b>Do not paper over this with a cache here.</b> The fix is
+        /// <c>spec.md</c> §9 and nothing smaller: a group that outlived one board but not the
+        /// archive would be a second, private persistence with its own rules.</para>
         /// </summary>
         public bool ParkGroup(int groupId)
         {
@@ -733,33 +699,28 @@ namespace Archivist.Building.Table
         /// G6.5: lays a parked assembly back on the board, at the frame it was parked with.
         /// False when there is no such group; true and idempotent for one already down.
         ///
-        /// <para><b>φ is preserved, and that is the point of the requirement.</b> This
-        /// deliberately differs from the drag layer's <c>BeginPlace</c>, which lays a single
-        /// sheet at rotation 0 <i>"never at its true rotation"</i> because resolving orientation
-        /// is part of placing a sheet (POC-03 P2.6, C6.3). A group has already had its
-        /// orientation resolved — that is what made it a group — and with absolute correctness
-        /// out of scope (G1.9) its φ carries no remaining puzzle. Resetting it would destroy
-        /// work the player has done, to no end.</para>
+        /// <para><b>φ is preserved</b>, unlike <c>BeginPlace</c>, which lays a single sheet at
+        /// rotation 0 because resolving orientation is part of placing a <i>sheet</i> (POC-03
+        /// P2.6, C6.3). A group has already had its orientation resolved — that is what made it a
+        /// group — and with absolute correctness out of scope (G1.9) its φ carries no remaining
+        /// puzzle.</para>
         ///
         /// <para><b>Where the assembly lands is not decided here.</b> This restores it at the
         /// frame it was parked with; G6.5's "under the pointer" is a translation of that frame,
-        /// and a translation of a frame is <see cref="MoveGroup"/>. Splitting it that way keeps
-        /// one writer of a group's pose and means this method has no opinion about pointers —
-        /// which it could not have, since it does not know where one is.</para>
+        /// which is <see cref="MoveGroup"/>. That split keeps one writer of a group's pose and
+        /// leaves this method with no opinion about pointers, which it could not have anyway.
+        /// </para>
         ///
-        /// <para>Members are laid provisionally and then derived, rather than composed here:
+        /// <para>Members are laid provisionally and then derived rather than composed here:
         /// <see cref="Put"/> needs a pose to write and <see cref="TryPoseOf"/> needs a slab to
-        /// read, so the slab is made at the frame's own offset and <see cref="Derive"/>
-        /// immediately overwrites it through the <b>one</b> G3.1 derivation this class allows.
-        /// Nothing is drawn in between. A second copy of that composition here is the exact
-        /// mistake <see cref="TryPoseOf"/>'s comment forbids.</para>
+        /// read, so the slab is made at the frame's offset and <see cref="Derive"/> immediately
+        /// overwrites it through the <b>one</b> G3.1 derivation this class allows. Nothing is
+        /// drawn in between.</para>
         ///
-        /// <para>They come back in join order at the top of the stack, which is G5.6's
-        /// contiguous run and is also true: the player has just put that paper down. A member
-        /// whose raster has not landed yet (C5.7) is skipped by <c>Put</c> with a warning and
-        /// the rest still arrive — the store's invariant already says the group is on the table,
-        /// and a partly-drawn assembly is recoverable where a refused retrieval is not
-        /// (R6.5).</para>
+        /// <para>They come back in join order at the top of the stack — G5.6's contiguous run. A
+        /// member whose raster has not landed (C5.7) is skipped with a warning and the rest still
+        /// arrive: the store's invariant already says the group is on the table, and a
+        /// partly-drawn assembly is recoverable where a refused retrieval is not (R6.5).</para>
         ///
         /// <para>See <see cref="ParkGroup"/> for the loss at <see cref="Hide"/>: there is
         /// nothing to retrieve after the table has been closed.</para>
@@ -813,12 +774,10 @@ namespace Archivist.Building.Table
         /// compose one from.
         ///
         /// <para><see cref="BoardStore.Remove"/> dissolves a group that falls below two members
-        /// and leaves the survivor at <c>Placement.Laid(0,0,0)</c> — the island origin, visibly
-        /// and deliberately wrong, because the store cannot compute the right pose without the
-        /// island. Its comment hands that fix to the caller. This is the caller, and it is the
-        /// only one: every path that can take a sheet out of a group — <see cref="Lay"/>,
-        /// <see cref="Seat"/>, <see cref="Remove"/> — goes through here, so no call site can
-        /// forget the rule and no future one can be added that does not know it.</para>
+        /// and leaves the survivor at the island origin, visibly and deliberately wrong, handing
+        /// the fix to the caller. This is that caller and the only one: every path that can take
+        /// a sheet out of a group — <see cref="Lay"/>, <see cref="Seat"/>,
+        /// <see cref="Remove"/> — goes through here.</para>
         ///
         /// <para>Nothing to do for a group of three or more: the survivors keep the frame and
         /// their poses do not move.</para>
@@ -964,22 +923,18 @@ namespace Archivist.Building.Table
 
         /// <summary>The board camera of §5.1: orthographic, looking down −Y.
         ///
-        /// <para><b>No longer framing the whole board, and no longer fixed.</b> C8.13 said it
-        /// always did both, and the reason was absolute seating: the mounting sheet's extent was
-        /// the player's only clue to where a sheet belonged, so cropping it removed the one
-        /// reference on screen. G1.9 took absolute correctness out of scope and groups are
-        /// placed relative to each other, so the far corners carry no information any more — and
-        /// at the old framing a Land Survey slab was 35% of the viewport height, which is small
-        /// paper to read a map on. G10.1 lifted the zoom half on that argument and recorded the
-        /// pan half as owed; <b>both halves are lifted now</b> and C8.13 is superseded outright.
-        /// <see cref="BoardViewport"/> holds the framing, <see cref="TableOptions.BoardZoom"/>
-        /// is only where it starts, and <see cref="MoveView"/> / <see cref="ZoomViewAbout"/> are
-        /// the whole of what may move it.</para>
+        /// <para><b>No longer framing the whole board, and no longer fixed</b> (G10.1,
+        /// superseding C8.13). C8.13 existed for absolute seating — the mounting sheet's extent
+        /// was the player's only clue to where a sheet belonged — and G1.9 takes that out of
+        /// scope, so the far corners carry no information, while at the old framing a Land Survey
+        /// slab was 35% of the viewport height. <see cref="BoardViewport"/> holds the framing,
+        /// <see cref="TableOptions.BoardZoom"/> is only where it starts, and
+        /// <see cref="MoveView"/> / <see cref="ZoomViewAbout"/> are the whole of what may move
+        /// it.</para>
         ///
-        /// <para>The viewport is made <b>here</b>, with the rig, so it dies with the rig: a
-        /// board that reopened on the last player's zoom would be view state outliving the view
-        /// it belongs to, which is the shape of a persistence bug even though nothing is
-        /// persisted.</para></summary>
+        /// <para>The viewport is made <b>here</b>, with the rig, so it dies with the rig: a board
+        /// reopening on the last player's zoom would be view state outliving its view.</para>
+        /// </summary>
         void BuildCamera(Transform parent, int layer)
         {
             var go = new GameObject("BoardCamera");
@@ -1014,29 +969,23 @@ namespace Archivist.Building.Table
 
             if (layer >= 0) cam.cullingMask = 1 << layer;
 
-            // The board is drawn ONLY where the board is, which is the screen minus the
-            // cabinet column. It used to render full-bleed with the cream column laid over the
-            // right 22% of it, and that made two things wrong that looked like one.
-            //
-            // The framing was a lie: C8.13's floor is "the whole mounting sheet in view", and
-            // at zoom 1 the right 22% of it sat behind an opaque panel. And BoardViewport's pan
-            // clamp — travel = max(0, boardHalf - viewHalf) — believed that band was on screen,
-            // so it refused to pan toward it. On a board no wider than the viewport that made
-            // horizontal panning impossible at every zoom: the view "already contained" a strip
-            // of board the player could not see and could not bring out.
+            // The board is drawn ONLY where the board is: the screen minus the cabinet column.
+            // Rendering full-bleed with the cream column laid over the right 22% made the
+            // framing a lie — C8.13's floor is "the whole mounting sheet in view", and that 22%
+            // sat behind an opaque panel — and it broke panning, because BoardViewport's clamp
+            // (travel = max(0, boardHalf - viewHalf)) believed the hidden band was on screen and
+            // refused to pan toward it.
             //
             // Narrowing the rect fixes both at the source rather than by adding an overscroll
-            // margin to the clamp: cam.aspect follows the rect, so the arithmetic in
-            // BoardViewport is unchanged and simply now describes the rectangle the player is
-            // actually looking at. ScreenPointToRay and WorldToScreenPoint both account for a
-            // camera rect, so hit-testing and the corner handles need no adjustment.
+            // margin: cam.aspect follows the rect, so BoardViewport's arithmetic is unchanged
+            // and now describes the rectangle the player is actually looking at.
+            // ScreenPointToRay and WorldToScreenPoint both account for a camera rect.
             //
-            // The fraction is CabinetStyle's because that is the one place the column's width
-            // is stated (C7.1), and a second copy here is how the two would drift apart. The
-            // header band is NOT subtracted: it is 96 reference pixels whose screen height
-            // depends on the CanvasScaler's match, so it cannot be turned into a viewport
-            // fraction without asking the canvas — and vertical travel is non-zero at any zoom
-            // above 1 anyway, so nothing is unreachable behind it. Recorded, not fixed.
+            // The fraction is CabinetStyle's, the one place the column's width is stated (C7.1).
+            // The header band is NOT subtracted: it is 96 reference pixels whose screen height
+            // depends on the CanvasScaler's match, so it cannot become a viewport fraction
+            // without asking the canvas — and vertical travel is non-zero above zoom 1 anyway.
+            // Recorded, not fixed.
             cam.rect = new Rect(0f, 0f, 1f - CabinetStyle.CabinetWidthFraction, 1f);
 
             BoardCamera = cam;
@@ -1208,13 +1157,11 @@ namespace Archivist.Building.Table
         /// the board itself draws.
         ///
         /// <para><b>The one vertical flip, again.</b> <see cref="ImageBuffer"/> is RGBA32,
-        /// row-major, TOP-LEFT origin, and <c>Texture2D</c> is BOTTOM-LEFT, so raw bytes come out
-        /// upside down — genuinely easy to miss on a roughly symmetric island, which is why
-        /// <c>SheetTexture.Compose</c> and <c>BoardSheetView</c> both say so where they do it.
-        /// This is a third copy of four lines, and it is a copy on purpose: sharing it would mean
-        /// either a helper in <c>Archivist.Render</c>, which is engine-free by design and may not
-        /// be pulled toward UnityEngine, or widening a private on a component this file does not
-        /// own. Four lines with a comment beat either.</para>
+        /// row-major, TOP-LEFT origin and <c>Texture2D</c> is BOTTOM-LEFT, so raw bytes come out
+        /// upside down — easy to miss on a roughly symmetric island. A third copy of four lines
+        /// on purpose: sharing would mean a helper in <c>Archivist.Render</c>, which is
+        /// engine-free by design, or widening a private on a component this file does not
+        /// own.</para>
         /// </summary>
         static Texture2D UploadMap(ImageBuffer map, string name)
         {
@@ -1323,10 +1270,9 @@ namespace Archivist.Building.Table
         /// the board is being assembled, so this runs after every mutation rather than only when
         /// something is added.</para>
         ///
-        /// <para>Tiers 3 and 4 — selected topmost, dragged above that — are not applied here.
-        /// They are properties of a pointer, not of the board, and a view that owned them would
-        /// need to be told about selection to compute a position, which is the interaction
-        /// layer's state leaking into the model. The drag layer lifts its own slab.</para>
+        /// <para>Tiers 3 and 4 — selected topmost, dragged above that — are not applied here:
+        /// they are properties of a pointer, and a view that owned them would need to be told
+        /// about selection. The drag layer lifts its own slab.</para>
         /// </summary>
         void Resort()
         {
@@ -1353,11 +1299,10 @@ namespace Archivist.Building.Table
         /// group's paper.
         ///
         /// <para><b>The run sits where its oldest member sat</b> — the smallest
-        /// <see cref="Laid.LaidAt"/> in the group. The alternative, anchoring on the newest, was
-        /// considered and rejected: it lifts the whole assembly to the top of the pile every
-        /// time one sheet joins it, which moves paper the player never touched. <c>BoardStore</c>
-        /// makes the same argument about not reshuffling its lay order on a fuse, and this is
-        /// the drawing half of it: joining a sheet moves that sheet and nothing else.</para>
+        /// <see cref="Laid.LaidAt"/> in the group. Anchoring on the newest lifts the whole
+        /// assembly to the top of the pile every time one sheet joins it, moving paper the player
+        /// never touched. This is the drawing half of <c>BoardStore</c>'s rule that a fuse does
+        /// not reshuffle lay order.</para>
         ///
         /// <para>Both keys stay total. A group's anchor is one of its members' <c>LaidAt</c>
         /// values and those are unique across the board, so a loose sheet can never tie with a
@@ -1493,27 +1438,21 @@ namespace Archivist.Building.Table
             placed.Clear();
             layOrder.Clear();
 
-            // Groups go with the board, parked ones included — BoardStore.Clear is explicit
-            // that this is the one place G5.5's "membership never shrinks" is overruled rather
-            // than honoured, because an assembly that outlived its binding would list sheets
-            // the table will not accept.
+            // Groups go with the board, parked ones included — BoardStore.Clear is the one
+            // place G5.5's "membership never shrinks" is overruled, because an assembly that
+            // outlived its binding would list sheets the table will not accept.
             //
             // ---- THIS LINE LOSES PARKED WORK, AND KNOWINGLY. -------------------------------
-            // S5 built park and retrieve (G6.4, G6.5) and they are a WITHIN-SESSION facility
-            // only: this Clear destroys every group, on-table and parked alike, so Hide() takes
-            // a nine-sheet assembly with it. That is consistent with the rest of the board —
-            // loose sheets lose their poses here too, and board state has never been persisted
-            // — but it is NOT the same to a player, because the Groups drawer reads as storage.
-            // Parking a nine-sheet assembly, closing the table and reopening it gives back nine
-            // loose rows in their office sections and no group.
+            // Park and retrieve (G6.4, G6.5) are a WITHIN-SESSION facility: this Clear destroys
+            // every group, so Hide() takes a nine-sheet assembly with it. Consistent with the
+            // rest of the board — loose sheets lose their poses here too — but not the same to a
+            // player, because the Groups drawer reads as storage.
             //
-            // The slice that fixes it is spec.md §9, which writes the ledger and every board
-            // into one archive; §4.4 of groups_spec.md already says what a group costs there —
-            // one frame and a GroupId per placement, both primitives, no geometry. Until §9
-            // exists this line stays as it is. Do NOT keep parked groups alive here, or in a
-            // static beside this class, or across a Show of the same seed: a group that
-            // outlived one board but not the archive would be a second persistence mechanism
-            // with its own rules, and choosing one is above this file.
+            // The slice that fixes it is spec.md §9. Until it exists this line stays as it is.
+            // Do NOT keep parked groups alive here, in a static beside this class, or across a
+            // Show of the same seed: a group that outlived one board but not the archive would
+            // be a second persistence mechanism with its own rules, and choosing one is above
+            // this file.
             state.Clear(StateId);
             nextLaidAt = 0;
             onTable.Clear();

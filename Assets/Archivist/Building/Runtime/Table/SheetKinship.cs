@@ -6,12 +6,10 @@ namespace Archivist.Building.Table
     /// <summary>
     /// Which two sheets are allowed to join, and which two are edge to edge (G3.4, G3.5).
     ///
-    /// <para><b>Same survey only</b> (G1.2). Cross-office fusing is refused because the
-    /// difference between two offices' sheets of one hillside is the game (CLAUDE.md), and
-    /// fusing them would erase exactly that. It is refused for a mechanical reason as well: two
-    /// offices work at different scales and different rotations, so co-located sheets would
-    /// satisfy a relative fit whenever they were roughly on top of one another, and one group
-    /// would swallow the board.</para>
+    /// <para><b>Same survey only</b> (G1.2). The difference between two offices' sheets of one
+    /// hillside is the game (CLAUDE.md), and fusing them erases it. Mechanically too: offices
+    /// work at different scales and rotations, so co-located sheets would satisfy a relative fit
+    /// whenever roughly on top of one another and one group would swallow the board.</para>
     ///
     /// <para><b>Neither test may touch the island.</b> Everything read here is already on the
     /// <see cref="Sheet"/> the caller is holding, so a candidate is rejected without a
@@ -29,39 +27,28 @@ namespace Archivist.Building.Table
     /// reservation out of the crate draw.</para>
     ///
     /// <para><b>Detail sheets are deliberately NOT refused here.</b> Four Antiquarian sheets of
-    /// one island share an office, a year and a scale, so they are fusable, and §6 is explicit
-    /// that they still never group: <c>DetailSheetCutter</c> gives "one small sheet per
-    /// qualifying POI, centred on it, seeded rotation, no walking and no tiling", POI
-    /// suppression keeps them apart, so two 275 m sheets essentially never overlap and their
-    /// relative fit poses are far apart. Adding <c>!IsDetail</c> here would look like a helpful
-    /// tightening and would quietly replace that measured finding — held as G-A6 so that a
-    /// change to the cutter is noticed — with an assertion. POC-03 P2.3 is the reason the
-    /// finding is welcome: placing a detail sheet is the activity that comes <i>after</i> the
-    /// survey sheets are assembled, and it is a different activity from joining them.</para>
+    /// one island share an office, year and scale, so they are fusable, and §6 is explicit that
+    /// they still never group: POI suppression keeps them apart, so two 275 m sheets essentially
+    /// never overlap. Adding <c>!IsDetail</c> would look like a helpful tightening and would
+    /// quietly replace that measured finding — held as G-A6 so a change to the cutter is
+    /// noticed — with an assertion.</para>
     ///
-    /// <para><b>The overlap test G3.5 specified was wrong, and this is what it was.</b> G3.5
-    /// says <c>A.FrameRect intersects B.FrameRect</c>, justified on the grounds that "all
-    /// sheets of one survey share one rotation, so in frame space both rects are axis-aligned
-    /// and the test is a plain Rect2 intersection". The first clause is only true of the
-    /// lattice offices. <b>Frame space is per sheet whenever rotation is per sheet:</b>
-    /// <see cref="Sheet.FrameRect"/> is built by rotating the centre through
-    /// <c>-RotationDeg</c>, so two sheets cut at different angles produce two rects expressed
-    /// in two <i>different</i> spaces, and intersecting them compares coordinates that do not
-    /// share an origin's orientation. That is not a tolerance question to be waved through, it
-    /// is a category error, and it fails in <b>both</b> directions — reporting overlaps that do
-    /// not exist and missing ones that do. It would have broken the Hydrographic coast walk
-    /// (D-H2), which is 11 of island 0's 31 sheets and the largest survey on that seed, and the
-    /// Antiquarian detail sheets, whose rotation is seeded per sheet — half the offices, and
-    /// the half whose geometry §6 leans on. Land Survey and Garrison would have worked
-    /// perfectly, which is exactly what makes the mistake worth writing down: it is invisible
-    /// on the two surveys a developer reaches for first.</para>
+    /// <para><b>G3.5's specified overlap test is wrong and is not used.</b> G3.5 says
+    /// <c>A.FrameRect intersects B.FrameRect</c>, on the grounds that all sheets of one survey
+    /// share one rotation — true only of the lattice offices. <b>Frame space is per sheet
+    /// whenever rotation is per sheet:</b> <see cref="Sheet.FrameRect"/> rotates the centre
+    /// through <c>-RotationDeg</c>, so two sheets cut at different angles give rects in two
+    /// <i>different</i> spaces, and intersecting them compares coordinates that do not share an
+    /// orientation. It fails in <b>both</b> directions, and would break the Hydrographic coast
+    /// walk (D-H2) and the Antiquarian detail sheets — half the offices — while Land Survey and
+    /// Garrison worked perfectly, which is what makes it worth writing down: invisible on the
+    /// two surveys a developer reaches for first.</para>
     ///
-    /// <para><b>So the test is a separating-axis test on the ground-space rects</b>, which is
-    /// exact for all four offices and cares nothing about whether rotations agree. It costs two
-    /// corner arrays and at most four projections, only on pairs that already passed
-    /// <see cref="Fusable"/>. The cheap frame-space test is not kept as a fast path for the
-    /// lattice: two overlap tests means two answers to one question, and the one that is only
-    /// sometimes right is the one that would be reached for.</para>
+    /// <para><b>So the test is a separating-axis test on the ground-space rects</b>, exact for
+    /// all four offices and indifferent to whether rotations agree, costing two corner arrays
+    /// and at most four projections on pairs that already passed <see cref="Fusable"/>. The
+    /// cheap frame-space test is not kept as a lattice fast path: two overlap tests means two
+    /// answers to one question, and the sometimes-right one is what gets reached for.</para>
     ///
     /// <para>Engine-free, like <see cref="SheetFit"/> and <see cref="BoardFrame"/>, so G-A4
     /// through G-A6 run in the headless harness.</para>
@@ -102,12 +89,10 @@ namespace Archivist.Building.Table
         /// few hundred ordered pairs on a whole island, and far fewer on a table.</para>
         ///
         /// <para><b>Ground space, not frame space, and not <see cref="Sheet.GroundBounds"/>.</b>
-        /// See the class comment for what the specified frame-space test got wrong.
-        /// <c>GroundBounds</c> is the other tempting shortcut and is wrong in the opposite,
-        /// gentler way: it is the AABB <i>of</i> the rotated rect, so for any rotation that is
-        /// not a multiple of 90° it carries four corner wedges the sheet does not cover and
-        /// strictly over-reports — <see cref="Sheet.Contains"/> carries that warning already.
-        /// The rotated rects themselves are the only honest answer.</para>
+        /// See the class comment for what the frame-space test gets wrong. <c>GroundBounds</c> is
+        /// the AABB <i>of</i> the rotated rect, so at any rotation off a multiple of 90° it
+        /// carries four corner wedges the sheet does not cover and strictly over-reports. The
+        /// rotated rects themselves are the only honest answer.</para>
         /// </summary>
         public static bool Neighbours(Sheet a, Sheet b)
         {
@@ -128,23 +113,19 @@ namespace Archivist.Building.Table
         /// the comparison is unaffected, so this costs no square root and no division.</para>
         ///
         /// <para><b>Touching counts as overlapping.</b> The interval test is strict
-        /// (<c>maxA &lt; minB</c> separates), so a shared edge with zero-width overlap answers
-        /// yes. Two reasons. Lattice sheets are cut to overlap by design (C1.2, 20%), so an
-        /// exactly-abutting pair is a degenerate case the hint has no reason to be fussy about
-        /// — and the consumer is a glow that changes nothing the game accepts (G7.1), so the
-        /// generous answer costs nothing. And it matches
-        /// <see cref="Archivist.Generation.Geometry.Rect2.Intersects"/>, which also counts
-        /// touching as intersecting; two overlap predicates in one codebase disagreeing on the
-        /// boundary is a bug waiting for whoever compares their results.</para>
+        /// (<c>maxA &lt; minB</c> separates), so a shared edge answers yes. Lattice sheets are cut
+        /// to overlap by 20% (C1.2), so an exactly-abutting pair is a degenerate case not worth
+        /// being fussy about; and it matches
+        /// <see cref="Archivist.Generation.Geometry.Rect2.Intersects"/>, because two overlap
+        /// predicates disagreeing on the boundary is a bug waiting for whoever compares
+        /// them.</para>
         ///
-        /// <para><see cref="Sheet.GroundCorners"/> is the one place the corner order and the
-        /// rotation sense are written down, so it is called rather than reproduced here. It
-        /// allocates a four-element array per sheet per call, which the frame-space test did
-        /// not; with the assist on that is a few dozen small arrays a frame (G7.3), well inside
-        /// what the drag loop already does. If a profile ever objects, the fix is the
-        /// centre-difference form of the same test — half-extents projected on the four axes,
-        /// no corners at all — and not caching corners on a slab, which would put a second copy
-        /// of the truth beside the sheet that owns it.</para>
+        /// <para><see cref="Sheet.GroundCorners"/> is the one place the corner order and rotation
+        /// sense are written down, so it is called rather than reproduced. It allocates a
+        /// four-element array per sheet per call — a few dozen small arrays a frame with the
+        /// assist on, well inside what the drag loop already does. If a profile objects, the fix
+        /// is the centre-difference form of the same test, not caching corners on a slab, which
+        /// would put a second copy of the truth beside the sheet that owns it.</para>
         /// </summary>
         static bool QuadsOverlap(V2[] a, V2[] b)
         {

@@ -19,13 +19,11 @@ namespace Archivist.Building.Collection
     /// slot is binary because issuance is.</para>
     ///
     /// <para><b>It also answers questions, not just enforces one.</b> The ledger is the only
-    /// thing that knows what the archive has met, so it is where a list of islands and their
-    /// progress has to come from; see <see cref="IslandHolding"/>. Two derived scalars —
-    /// an island's name and its sheet count — are <i>memos</i>, written by
-    /// <see cref="Describe"/> when an island is generated anyway. They are pure functions of
-    /// the seed, so they are never authoritative, never worth persisting, and always safe to
-    /// recompute; they exist only so that listing thirty islands does not cost thirty
-    /// generations. Everything else here is fact.</para>
+    /// thing that knows what the archive has met, so a list of islands and their progress comes
+    /// from here (<see cref="IslandHolding"/>). Two derived scalars — an island's name and its
+    /// sheet count — are <i>memos</i> written by <see cref="Describe"/> when an island is
+    /// generated anyway: pure functions of the seed, never authoritative, never worth persisting,
+    /// and there only so that listing thirty islands does not cost thirty generations.</para>
     ///
     /// <para><b>Order is kept on purpose.</b> Islands come back in the order they were drawn
     /// and sheets in the order they were issued, because a screen that reordered itself
@@ -35,15 +33,13 @@ namespace Archivist.Building.Collection
     /// <para><b>Not thread-safe.</b> Reads and writes happen on the main thread; the picker
     /// runs on a worker and gets <see cref="Snapshot"/> instead.</para>
     ///
-    /// <para><b>Not yet: how many sheets are filed correctly.</b> That count belongs here,
-    /// per island, beside issuance — it is the same shape of fact (a set of
-    /// <see cref="SheetId"/>, this time the ones in their right slot) and it will arrive with
-    /// the racks. See <see cref="IslandHolding"/> for why it is absent rather than stubbed.</para>
+    /// <para><b>Not yet: how many sheets are filed correctly.</b> That count belongs here, per
+    /// island, beside issuance — the same shape of fact, a set of <see cref="SheetId"/> — and it
+    /// arrives with the racks.</para>
     ///
-    /// <para>Deliberately free of UnityEngine — this is the half that can move to a headless
-    /// assembly and be covered by <c>Tools/run-acceptance.sh</c> the day it needs tests.
-    /// <see cref="SheetLedger"/> is the scene-facing component around it, and holds the
-    /// serialised state; everything that is actually logic lives here.</para>
+    /// <para>Deliberately free of UnityEngine, so it can move to a headless assembly and be
+    /// covered by <c>Tools/run-acceptance.sh</c>. <see cref="SheetLedger"/> is the scene-facing
+    /// component around it and holds the serialised state.</para>
     /// </summary>
     public sealed class SheetLedgerStore
     {
