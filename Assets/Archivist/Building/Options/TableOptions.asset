@@ -19,7 +19,8 @@ MonoBehaviour:
   boardZoomMin: 1
   boardZoomMax: 4
   boardZoomStep: 1.15
-  boardWheelSensitivity: 0.03
+  wheelSensitivity: 0.03
+  cabinetScrollPixelsPerNotch: 40
   boardPixelsPerPaperMm: 0.6
   positionTolerance: 0.12
   rotationToleranceDeg: 8

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Archivist.Building.Table
 {
@@ -113,26 +114,39 @@ namespace Archivist.Building.Table
         public const float DefaultBoardZoomStep = 1.15f;
 
         /// <summary>
-        /// How many zoom notches one raw unit of wheel travel is worth, after
-        /// <see cref="BoardInteractor"/> has bucketed the reading into notches.
+        /// How many notches one raw unit of wheel travel is worth, after <see cref="Wheel"/>
+        /// has bucketed the reading. <b>The device dial, and it is one dial for both wheels</b>
+        /// — the board's zoom and the cabinet's accordion are turned by the same hand on the
+        /// same hardware, so a table that needed two numbers for that would be stating the same
+        /// fact twice and drifting.
         ///
-        /// <para><b>Why a second dial rather than a smaller step.</b> The Input System does not
-        /// normalise scroll: a Windows wheel detent reports 120, a macOS one reports about 1,
-        /// and a trackpad reports a continuous stream of whatever the OS thought your fingers
-        /// did — several "notches" in a single frame. <see cref="DefaultBoardZoomStep"/> is the
-        /// ratio one notch is worth and is argued from the range (about ten notches stop to
-        /// stop); this is how much of a notch the hardware actually delivered. Folding the two
-        /// together would mean tuning the device on the field that documents the range.</para>
+        /// <para><b>Why a dial at all rather than a smaller zoom step.</b> The Input System
+        /// does not normalise scroll: a Windows detent reports 120, a macOS one about 1, and a
+        /// trackpad a continuous stream of whatever the OS thought your fingers did — several
+        /// "notches" inside one frame. <see cref="DefaultBoardZoomStep"/> is what one notch is
+        /// worth and is argued from the range (about ten notches stop to stop); this is how
+        /// much of a notch the hardware actually delivered. Folding them together would mean
+        /// tuning a trackpad on the field that documents how far the zoom reaches.</para>
         ///
         /// <para><b>0.03 is measured, not reasoned</b> — settled with a hand on a macOS
-        /// trackpad, where the raw reading turns out to be roughly thirty units per notch's
-        /// worth of intent. That is a device fact and nothing else: on hardware that reports
-        /// one clean unit per detent this makes a detent worth three hundredths of a notch and
-        /// wants to go back up toward 1. It is on <c>TableOptions</c> precisely so it can be
-        /// dragged in play mode with the wheel in your hand, which is the only way this number
-        /// is ever settled.</para>
+        /// trackpad, where the raw reading is roughly thirty units per notch's worth of intent.
+        /// That is a device fact and nothing else: on hardware that reports one clean unit per
+        /// detent it wants to go back up toward 1. It is a serialised field precisely so it can
+        /// be dragged in play mode with the wheel in your hand, which is the only way this
+        /// number is ever settled.</para>
         /// </summary>
-        public const float DefaultBoardWheelSensitivity = 0.03f;
+        public const float DefaultWheelSensitivity = 0.03f;
+
+        /// <summary>
+        /// How far one notch scrolls the cabinet, in canvas pixels — the accordion's half of
+        /// <see cref="DefaultWheelSensitivity"/>, which supplies the notches.
+        ///
+        /// <para>40 is a little over half a row (<c>CabinetStyle.RowHeight</c> is 74), so a
+        /// notch moves the list by an amount the eye can follow back to where it was. A whole
+        /// row per notch was tried on paper and rejected: rows are tall, and a list that jumps a
+        /// full row loses the sense of a continuous column of paper.</para>
+        /// </summary>
+        public const float DefaultCabinetScrollPixelsPerNotch = 40f;
 
         public const float DefaultBoardPixelsPerPaperMm = 0.6f;
 
@@ -185,11 +199,17 @@ namespace Archivist.Building.Table
                  "from stop to stop.")]
         [SerializeField, Min(1.001f)] float boardZoomStep = DefaultBoardZoomStep;
 
-        [Tooltip("How much of a notch one raw unit of wheel travel is worth. The Input System " +
-                 "does not normalise scroll — a Windows detent reports 120, a macOS one about " +
-                 "1, a trackpad a continuous stream — so this is the device dial and " +
-                 "BoardZoomStep is the range one. Lower it if the board zooms too fast.")]
-        [SerializeField, Min(0.001f)] float boardWheelSensitivity = DefaultBoardWheelSensitivity;
+        [Tooltip("How much of a notch one raw unit of wheel travel is worth — the DEVICE dial, " +
+                 "shared by the board's zoom and the cabinet's accordion. The Input System does " +
+                 "not normalise scroll: a Windows detent reports 120, a macOS one about 1, a " +
+                 "trackpad a continuous stream. Lower it if both wheels feel too fast.")]
+        [FormerlySerializedAs("boardWheelSensitivity")]
+        [SerializeField, Min(0.001f)] float wheelSensitivity = DefaultWheelSensitivity;
+
+        [Tooltip("Canvas pixels the cabinet scrolls per notch. A row is 74, so 40 is a little " +
+                 "over half a row. Raise this, not WheelSensitivity, if only the column is " +
+                 "sluggish — WheelSensitivity moves the board's zoom with it.")]
+        [SerializeField, Min(1f)] float cabinetScrollPixelsPerNotch = DefaultCabinetScrollPixelsPerNotch;
 
         [Header("Textures")]
         [Tooltip("Pixels per millimetre of paper for a table render. Serves the board slab " +
@@ -227,7 +247,8 @@ namespace Archivist.Building.Table
         public float BoardZoomMin { get { return boardZoomMin; } }
         public float BoardZoomMax { get { return boardZoomMax; } }
         public float BoardZoomStep { get { return boardZoomStep; } }
-        public float BoardWheelSensitivity { get { return boardWheelSensitivity; } }
+        public float WheelSensitivity { get { return wheelSensitivity; } }
+        public float CabinetScrollPixelsPerNotch { get { return cabinetScrollPixelsPerNotch; } }
         public float BoardPixelsPerPaperMm { get { return boardPixelsPerPaperMm; } }
         public float PositionTolerance { get { return positionTolerance; } }
         public float RotationToleranceDeg { get { return rotationToleranceDeg; } }

@@ -6,6 +6,7 @@ using Archivist.Generation;
 using Archivist.Generation.Sheets;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Archivist.Building.Table
@@ -698,7 +699,9 @@ namespace Archivist.Building.Table
     /// section that re-opens after being closed teaches the player that closing it does not
     /// stick.</para>
     /// </summary>
-    public sealed class CabinetPanel : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+    public sealed class CabinetPanel : MonoBehaviour,
+                                   IPointerEnterHandler, IPointerExitHandler,
+                                   IScrollHandler, IDragHandler
     {
         sealed class Section
         {
@@ -770,6 +773,17 @@ namespace Archivist.Building.Table
         RectTransform content;
         Island island;
         BoardView board;
+
+        /// <summary>The masked rectangle <see cref="content"/> slides behind. Kept because the
+        /// scroll limit is <c>content height − viewport height</c> and nothing else on this
+        /// panel knows the second number.</summary>
+        RectTransform viewport;
+
+        /// <summary>Where the accordion is scrolled to, and where it is heading, in canvas
+        /// pixels below the top. Two numbers rather than one because the wheel sets a target
+        /// and <see cref="Update"/> eases toward it — see <see cref="OnScroll"/>.</summary>
+        float scrollOffset;
+        float scrollTarget;
 
         /// <summary>Forwarded from every row — see <see cref="CabinetRow.Clicked"/>. C7.6: a
         /// click on a row selects its sheet.</summary>
@@ -884,7 +898,7 @@ namespace Archivist.Building.Table
 
             var viewportGo = new GameObject("Viewport", typeof(RectTransform));
             viewportGo.transform.SetParent(scrollRt, false);
-            var viewport = (RectTransform)viewportGo.transform;
+            viewport = (RectTransform)viewportGo.transform;
             CabinetStyle.Stretch(viewport);
             viewportGo.AddComponent<RectMask2D>();     // no Image needed, unlike Mask
 
@@ -904,13 +918,7 @@ namespace Archivist.Building.Table
             var fitter = contentGo.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            var scroll = scrollGo.AddComponent<ScrollRect>();
-            scroll.viewport = viewport;
-            scroll.content = content;
-            scroll.horizontal = false;
-            scroll.vertical = true;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.scrollSensitivity = 30f;
+            // No ScrollRect. See OnScroll for why the wheel is handled here instead.
 
             BuildFooter(rt);
         }
@@ -963,6 +971,7 @@ namespace Archivist.Building.Table
         {
             this.island = island;
             this.board = board;
+            ResetScroll();
             Rebuild();
         }
 
@@ -975,6 +984,7 @@ namespace Archivist.Building.Table
             island = null;
             board = null;
             hoveredGroup = 0;
+            ResetScroll();
             Teardown();
             built.Clear();
             builtGroups.Clear();
@@ -1448,6 +1458,197 @@ namespace Archivist.Building.Table
         {
             var handler = PointerOverChanged;
             if (handler != null) handler(false);
+        }
+
+        /// <summary>
+        /// The wheel, over any part of the column: header band, a row, or the bare cream
+        /// between two sections. The pointer being inside this rectangle is the whole gate,
+        /// which is why the handler is on the panel and not on the scroll view — the event
+        /// system runs it up the hierarchy from whatever was hit, so one implementation covers
+        /// every child without any of them knowing about scrolling.
+        ///
+        /// <para><b>Why this is not a <see cref="ScrollRect"/> any more.</b> It was one, and it
+        /// scrolled intermittently on a trackpad — sometimes moving, sometimes not, sometimes
+        /// the wrong way. The cause is four lines of <c>ScrollRect.OnScroll</c>, and they are
+        /// not a bug in this project:</para>
+        ///
+        /// <code>
+        /// delta.y *= -1;
+        /// if (vertical &amp;&amp; !horizontal) {
+        ///     if (Mathf.Abs(delta.x) &gt; Mathf.Abs(delta.y)) delta.y = delta.x;   // &lt;-- here
+        ///     delta.x = 0;
+        /// }
+        /// </code>
+        ///
+        /// <para>A vertical-only <c>ScrollRect</c> substitutes the <b>horizontal</b> reading
+        /// whenever it is the larger one, so that a horizontal-only device can still drive a
+        /// vertical list. A mouse wheel has no horizontal reading and never trips it. A trackpad
+        /// has one constantly — a two-finger swipe drifts sideways at the start and end of every
+        /// stroke — so on exactly those frames the column moved by the sideways drift instead of
+        /// the intended travel, and since <c>delta.x</c> is substituted <i>after</i>
+        /// <c>delta.y</c> was negated, it also arrives with the opposite sign. That is precisely
+        /// "sometimes it works and sometimes it doesn't", and no sensitivity can fix it: the
+        /// number being scaled is the wrong axis. Lowering <c>scrollSensitivity</c> made it
+        /// worse, because it shrank the honest frames and left the drift frames as a larger
+        /// share of what the player felt.</para>
+        ///
+        /// <para><b>So: y only, and read from the device.</b> The x reading is discarded rather
+        /// than borrowed — a column of paper does not scroll sideways, and there is no device
+        /// this table is played with that cannot report y. The magnitude comes from
+        /// <c>Mouse.scroll</c> rather than from <c>eventData.scrollDelta</c> so that it is in
+        /// the same units the board's zoom reads (see <see cref="Wheel"/>); the event supplies
+        /// only the fact that the pointer is here.</para>
+        ///
+        /// <para><b>The wheel sets a target, it does not move the list.</b> A trackpad delivers
+        /// its travel in bursts — several notches in one frame, then nothing for three — and
+        /// applying each burst directly is a column that lurches. <see cref="Update"/> eases the
+        /// real offset toward the target, so a burst becomes a glide and the per-frame cap that
+        /// the board needs is not needed here: over-scrolling a list is recoverable in a way
+        /// that crossing the whole zoom range is not.</para>
+        /// </summary>
+        void IScrollHandler.OnScroll(PointerEventData eventData)
+        {
+            if (content == null || viewport == null) return;
+
+            // The device where it exists, the event as a fallback: eventData.scrollDelta has
+            // been through InputSystemUIInputModule's own normalisation, so it is multiplied
+            // back up into Wheel's units rather than fed in as-is.
+            Mouse mouse = Mouse.current;
+            float raw = mouse != null
+                ? mouse.scroll.ReadValue().y
+                : eventData.scrollDelta.y * Wheel.Delta;
+            if (raw == 0f) return;
+
+            // Up the wheel is toward the top of the list, so travel and offset run opposite.
+            scrollTarget = Mathf.Clamp(scrollTarget - Wheel.Notches(raw) * WheelSensitivity * PixelsPerNotch,
+                                       0f, MaxScroll());
+        }
+
+        /// <summary>
+        /// Eases the accordion toward <see cref="scrollTarget"/>, and does nothing at all on
+        /// every frame the two agree — which is almost all of them, since a cabinet is scrolled
+        /// in short bursts and then read.
+        ///
+        /// <para>Exponential rather than a fixed speed or a smoothstep over a duration: a
+        /// smoothstep needs a start, an end and a clock, and the end here moves while the
+        /// animation is running (that is what a second notch <i>is</i>). <c>1 − e^(−k·dt)</c>
+        /// has no state beyond the current value, absorbs a moving target without restarting,
+        /// and is frame-rate independent, which <c>Lerp(a, b, k · dt)</c> is not.</para>
+        /// </summary>
+        void Update()
+        {
+            if (content == null) return;
+
+            float max = MaxScroll();
+            scrollTarget = Mathf.Clamp(scrollTarget, 0f, max);
+
+            // A rebuild or a collapsed section can shorten the list under a scrolled column.
+            if (scrollOffset > max) scrollOffset = max;
+
+            float gap = scrollTarget - scrollOffset;
+            if (Mathf.Abs(gap) < 0.5f)
+                scrollOffset = scrollTarget;                 // below half a pixel, just arrive
+            else
+                scrollOffset += gap * (1f - Mathf.Exp(-ScrollEasePerSecond * Time.unscaledDeltaTime));
+
+            // Compared rather than assigned unconditionally: a settled column writes nothing,
+            // and writing anchoredPosition dirties the transform whether or not it changed.
+            // The comparison also covers the case the ease cannot — a rebuild that shortened
+            // the list clamps scrollOffset above without any gap to close.
+            Vector2 p = content.anchoredPosition;
+            if (p.y != scrollOffset) content.anchoredPosition = new Vector2(p.x, scrollOffset);
+        }
+
+        /// <summary>
+        /// Drag-to-scroll, over anything in the column that is not a row. <c>CabinetRow</c>
+        /// takes the drags that start on a row — that gesture carries paper (C7.4) — so what
+        /// reaches here is a drag on a section header or on the bare cream between two
+        /// sections, which is exactly what the enclosing <c>ScrollRect</c> used to receive.
+        /// It is kept because <c>CabinetRow</c>'s refusal to drag-scroll a gold row is argued
+        /// on "the section headers still drag-scroll, so nothing is unreachable", and removing
+        /// the component underneath that sentence would have quietly falsified it.
+        ///
+        /// <para><b>Direct, not eased.</b> <see cref="OnScroll"/> eases because a wheel arrives
+        /// in bursts; a drag arrives once per frame with the pointer already where the player
+        /// put it, and easing it would make the paper lag the finger. So both the target and
+        /// the offset are set, which lands the ease on its own target and leaves it idle.</para>
+        ///
+        /// <para><c>eventData.delta</c> is in screen pixels and the offset is in canvas pixels,
+        /// so it is divided by the scale factor — on a 1440-tall screen with a 1080-tall
+        /// reference those differ by a third, and a drag that moved the list 33% further than
+        /// the finger would read as a slippery column rather than as a wrong constant.</para>
+        /// </summary>
+        void IDragHandler.OnDrag(PointerEventData eventData)
+        {
+            if (content == null) return;
+
+            Canvas canvas = GetComponentInParent<Canvas>();
+            float scale = canvas != null && canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
+
+            scrollTarget = Mathf.Clamp(scrollTarget + eventData.delta.y / scale, 0f, MaxScroll());
+            scrollOffset = scrollTarget;
+        }
+
+        /// <summary>How far the column can travel: the list's height less the window's, never
+        /// negative. Zero when the accordion fits, which is the common case early on and is why
+        /// nothing here needs to know whether a scrollbar would be drawn.</summary>
+        float MaxScroll()
+        {
+            if (content == null || viewport == null) return 0f;
+            return Mathf.Max(0f, content.rect.height - viewport.rect.height);
+        }
+
+        /// <summary><c>Time.unscaledDeltaTime</c>-based decay constant for the ease. 22 settles
+        /// a notch in about a tenth of a second — fast enough not to feel like the column is
+        /// catching up, slow enough that the travel is visible and the eye keeps its place.
+        /// </summary>
+        const float ScrollEasePerSecond = 22f;
+
+        /// <summary>The tuning asset, found once and kept. <see cref="OnScroll"/> runs on every
+        /// frame of a swipe, and <c>Resources.FindObjectsOfTypeAll</c> walks every loaded object
+        /// of the type — cheap once, not cheap sixty times a second. Play-mode edits still take
+        /// effect: what is cached is the asset, not the numbers on it.</summary>
+        TableOptions options;
+
+        TableOptions Options
+        {
+            get
+            {
+                if (options == null) options = TableOptions.FindLoaded();
+                return options;
+            }
+        }
+
+        float WheelSensitivity
+        {
+            get
+            {
+                TableOptions o = Options;
+                return o != null ? o.WheelSensitivity : TableOptions.DefaultWheelSensitivity;
+            }
+        }
+
+        float PixelsPerNotch
+        {
+            get
+            {
+                TableOptions o = Options;
+                return o != null ? o.CabinetScrollPixelsPerNotch
+                                 : TableOptions.DefaultCabinetScrollPixelsPerNotch;
+            }
+        }
+
+        /// <summary>Back to the top of the list, hierarchy included. An opening is a new island
+        /// and a new accordion; where the last one was scrolled to is not a fact about this
+        /// one.</summary>
+        void ResetScroll()
+        {
+            scrollOffset = 0f;
+            scrollTarget = 0f;
+
+            if (content == null) return;
+            Vector2 p = content.anchoredPosition;
+            content.anchoredPosition = new Vector2(p.x, 0f);
         }
 
         // --------------------------------------------------------------------

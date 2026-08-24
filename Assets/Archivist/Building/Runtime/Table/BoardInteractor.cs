@@ -160,8 +160,9 @@ namespace Archivist.Building.Table
     /// carrying a sheet to a neighbour that was off screen when you picked it up.</para>
     ///
     /// <para><b>The cabinet's wheel wins over the board's</b> (C7.5). <c>CabinetPanel</c> owns a
-    /// <c>ScrollRect</c> and a 48-row accordion that has to be scrollable, so a notch delivered
-    /// over the column must scroll it and must not also zoom the board underneath. The gate is
+    /// 48-row accordion that has to be scrollable — and, since G10.4, handles its own wheel —
+    /// so a notch delivered over the column must scroll it and must not also zoom the board
+    /// underneath. The gate is
     /// <see cref="ReleaseOverCabinet"/> — whose name is about releasing and whose <i>content</i>
     /// is "the pointer is over the cabinet", set live from the panel's pointer enter/exit
     /// through <c>TableCanvas</c>. Right-drag is gated on the same flag and for the same
@@ -198,22 +199,6 @@ namespace Archivist.Building.Table
         /// </summary>
         const float HandleRadiusPixels = 14f;
         const float HandleGrabRadiusPixels = 22f;
-
-        /// <summary>
-        /// One mouse wheel detent, as the Input System reports it on Windows: WHEEL_DELTA, 120.
-        /// macOS and Linux report units of about 1 instead, and a trackpad reports a continuous
-        /// stream of small values — the Input System does not normalise any of this, and a zoom
-        /// that took the raw number would be 120 notches per click on one platform and a
-        /// fraction of one on another.
-        ///
-        /// <para>So the reading is bucketed rather than scaled: anything at or above half a
-        /// detent is treated as a Windows-style delta and divided, anything below is taken as a
-        /// count of notches directly. It is a heuristic and it is written down as one; the
-        /// alternative — a per-platform constant — is a number that is wrong on the platform
-        /// nobody is testing on.</para>
-        /// </summary>
-        const float WheelDelta = 120f;
-        const float WheelDeltaThreshold = 60f;
 
         /// <summary>Ceiling on how much zoom one frame may apply, in notches. A trackpad flick
         /// or a frame that swallowed several events can otherwise cross the whole range between
@@ -489,7 +474,7 @@ namespace Archivist.Building.Table
         /// enter and exit, through <c>TableCanvas.OnPointerOverCabinet</c>, and is therefore
         /// true whenever the pointer is over the column with no button involved at all. So
         /// <see cref="View"/> reads it as what it is: the wheel over the cabinet belongs to the
-        /// accordion's <c>ScrollRect</c> (C7.5) and a right-drag started there is not aimed at
+        /// accordion's own wheel handling (C7.5, G10.4) and a right-drag started there is not aimed at
         /// the board. Renaming it would touch <c>TableCanvas</c> and <c>CabinetPanel</c>, which
         /// this change does not own; recording it here is the cheaper half of the same
         /// honesty.</para>
@@ -503,7 +488,7 @@ namespace Archivist.Building.Table
         float SettleSeconds { get { return options != null ? options.SettleSeconds      : TableOptions.DefaultSettleSeconds; } }
         float TurnRate      { get { return options != null ? options.SheetTurnDegreesPerSecond : TableOptions.DefaultSheetTurnDegreesPerSecond; } }
         float ZoomStep      { get { return options != null ? options.BoardZoomStep     : TableOptions.DefaultBoardZoomStep; } }
-        float WheelSensitivity { get { return options != null ? options.BoardWheelSensitivity : TableOptions.DefaultBoardWheelSensitivity; } }
+        float WheelSensitivity { get { return options != null ? options.WheelSensitivity  : TableOptions.DefaultWheelSensitivity; } }
 
         /// <summary>
         /// The rig's root, and therefore the plane the pointer is projected onto and the space
@@ -825,7 +810,7 @@ namespace Archivist.Building.Table
         /// neither computes a pixels-per-unit factor of its own. A second copy of that factor is
         /// how a zoom and a pan end up disagreeing by a fraction of a unit per frame.</para>
         ///
-        /// <para>Both are refused over the cabinet: the accordion's <c>ScrollRect</c> owns the
+        /// <para>Both are refused over the cabinet: the accordion owns the
         /// wheel there (C7.5) and a right-drag that started on the chrome is not aimed at the
         /// board. <b>Only the start</b> of a pan is gated, though — dragging out over the column
         /// mid-pan keeps panning, because interrupting a drag at a rectangle's edge is the kind
@@ -864,12 +849,10 @@ namespace Archivist.Building.Table
             float raw = mouse.scroll.ReadValue().y;
             if (raw == 0f || ReleaseOverCabinet) return;
 
-            // Bucket first (the platform's units), scale second (this table's feel), clamp
-            // last. WheelSensitivity is the device dial and ZoomStep the range one — see
-            // TableOptions.DefaultBoardWheelSensitivity for why they are two numbers.
-            float bucketed = Mathf.Abs(raw) >= WheelDeltaThreshold ? raw / WheelDelta : raw;
-            float notches = Mathf.Clamp(bucketed * WheelSensitivity,
-                                        -MaxNotchesPerFrame, MaxNotchesPerFrame);
+            // Bucket, scale, cap — all three in Wheel, which is also what the cabinet's
+            // accordion reads, so the two wheels on this table cannot disagree about the
+            // hardware. WheelSensitivity is the device dial; ZoomStep is the range one.
+            float notches = Wheel.Notches(raw, WheelSensitivity, MaxNotchesPerFrame);
             if (notches == 0f) return;
 
             // Multiplicative, and about the pointer rather than the board centre — the two

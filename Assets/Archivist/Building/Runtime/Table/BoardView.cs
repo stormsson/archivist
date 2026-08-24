@@ -1014,6 +1014,31 @@ namespace Archivist.Building.Table
 
             if (layer >= 0) cam.cullingMask = 1 << layer;
 
+            // The board is drawn ONLY where the board is, which is the screen minus the
+            // cabinet column. It used to render full-bleed with the cream column laid over the
+            // right 22% of it, and that made two things wrong that looked like one.
+            //
+            // The framing was a lie: C8.13's floor is "the whole mounting sheet in view", and
+            // at zoom 1 the right 22% of it sat behind an opaque panel. And BoardViewport's pan
+            // clamp — travel = max(0, boardHalf - viewHalf) — believed that band was on screen,
+            // so it refused to pan toward it. On a board no wider than the viewport that made
+            // horizontal panning impossible at every zoom: the view "already contained" a strip
+            // of board the player could not see and could not bring out.
+            //
+            // Narrowing the rect fixes both at the source rather than by adding an overscroll
+            // margin to the clamp: cam.aspect follows the rect, so the arithmetic in
+            // BoardViewport is unchanged and simply now describes the rectangle the player is
+            // actually looking at. ScreenPointToRay and WorldToScreenPoint both account for a
+            // camera rect, so hit-testing and the corner handles need no adjustment.
+            //
+            // The fraction is CabinetStyle's because that is the one place the column's width
+            // is stated (C7.1), and a second copy here is how the two would drift apart. The
+            // header band is NOT subtracted: it is 96 reference pixels whose screen height
+            // depends on the CanvasScaler's match, so it cannot be turned into a viewport
+            // fraction without asking the canvas — and vertical travel is non-zero at any zoom
+            // above 1 anyway, so nothing is unreachable behind it. Recorded, not fixed.
+            cam.rect = new Rect(0f, 0f, 1f - CabinetStyle.CabinetWidthFraction, 1f);
+
             BoardCamera = cam;
 
             // After BoardCamera is set, because ApplyView writes through it — and after the

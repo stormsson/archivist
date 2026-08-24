@@ -54,7 +54,7 @@ player can actually generate is the one the rule ignores.
 | G1.6 | A group is the **unit of interaction**: clicking any member selects the group; drag and `Q`/`E` move all of it. |
 | G1.7 | The cabinet gains a **Groups** section. Office sections keep listing every sheet, so the inventory stays honest; a grouped sheet's row is marked and inert. |
 | G1.8 | `gameplay.assistedSnap` **widens capture**. It shows the slot a sheet would drop into and lets a release inside the hint range take it. Superseded G7.1's feedback-only rule — see §8.6, which records why. |
-| G1.9 | **Absolute correctness is out of scope.** See §15. |
+| G1.9 | **Absolute correctness is out of scope.** See §16. |
 
 ---
 
@@ -902,20 +902,90 @@ one notch.
   1.75x, so the ceiling only ever caught the pathological case on a wheel and
   never the ordinary one on a trackpad.
 
-**The cabinet column is the same bug and is NOT fixed.** Its `ScrollRect` reads
-the same unnormalised wheel, so the accordion scrolls at trackpad speed too. An
-attempt to move `scrollSensitivity` out of `CabinetPanel.Build` and onto this
-asset was **reverted**: with a lower number the column scrolled intermittently —
-sometimes moving, sometimes not — which is a worse failure than a fast one,
-because a control that ignores you reads as broken where a fast one reads as
-badly tuned. The literal 30 in `CabinetPanel.Build` stands until that is
-understood. Note that `ScrollRect` is fed by `InputSystemUIInputModule`, not by
-`BoardInteractor`, so it is **not** the same reading path and must not be
-assumed to want the same constant.
+```
+G10.4  The cabinet has no ScrollRect. CabinetPanel handles the wheel
+       itself, takes the Y reading only, and eases toward a target.
+
+           TableOptions.WheelSensitivity            (shared with zoom)
+           TableOptions.CabinetScrollPixelsPerNotch (default 40)
+```
+
+**Why the component was removed, which is not a matter of taste.** The column
+scrolled intermittently on a trackpad — sometimes moving, sometimes not,
+sometimes the wrong way — and lowering `scrollSensitivity` made it worse rather
+than slower. The cause is in `ScrollRect.OnScroll`, in the UGUI this project
+ships with:
+
+```csharp
+delta.y *= -1;
+if (vertical && !horizontal) {
+    if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y)) delta.y = delta.x;   // <-- here
+    delta.x = 0;
+}
+```
+
+A vertical-only `ScrollRect` substitutes the **horizontal** reading whenever it
+is the larger one, so that a horizontal-only device can still drive a vertical
+list. A mouse wheel has no horizontal reading and never trips it; a trackpad has
+one constantly, because a two-finger swipe drifts sideways at the start and end
+of every stroke. On exactly those frames the column moved by the drift instead
+of the intent — and, since `delta.x` is substituted *after* `delta.y` was
+negated, in the opposite direction. No sensitivity fixes that: the number being
+scaled is the wrong axis, and a smaller one shrinks the honest frames while
+leaving the drift frames as a larger share of what the player feels.
+
+So `CabinetPanel` implements `IScrollHandler` on the column root — the event
+system runs it up from whatever was hit, so header, row and bare cream are all
+covered — discards X outright, and reads the magnitude from `Mouse.scroll`
+rather than from `eventData.scrollDelta`, so both wheels on this table are in
+the same units and share one device dial. The wheel sets a **target** and
+`Update` eases toward it with `1 − e^(−k·dt)`: a trackpad delivers its travel in
+bursts, and a burst applied directly is a column that lurches. Over-scrolling a
+list is recoverable in a way that crossing the whole zoom range is not, so the
+board's per-frame cap is deliberately not repeated here.
+
+`RectMask2D` on the viewport was always what clipped the column; it is
+untouched. Nothing else referenced the `ScrollRect`.
 
 ---
 
-## 14. Persistence — required, and needing its own analysis
+## 14. The board camera owns its own rectangle
+
+```
+G10.5  The board camera renders the screen MINUS the cabinet column:
+
+           cam.rect = (0, 0, 1 - CabinetWidthFraction, 1)
+```
+
+**Two faults that looked like one.** The camera rendered full-bleed with the
+opaque cream column laid over the right 22% of it. So C8.13's floor — *"the
+whole mounting sheet in view"* — was false at zoom 1, since 22% of the mounting
+sheet was behind a panel. And `BoardViewport`'s clamp, `travel = max(0,
+boardHalf − viewHalf)`, believed that band was on screen and refused to pan
+toward it. On a board no wider than the viewport that made **horizontal panning
+impossible at every zoom**: the view "already contained" a strip of board the
+player could neither see nor bring out. It presents as a pan that works
+vertically and does nothing horizontally, which reads as a broken axis rather
+than as a clamp being right about the wrong rectangle.
+
+Narrowing the rect fixes both at the source. `cam.aspect` follows the rect, so
+the arithmetic in `BoardViewport` is unchanged and now describes the rectangle
+the player is actually looking at; `ScreenPointToRay` and `WorldToScreenPoint`
+both account for a camera rect, so hit-testing (§8) and the corner handles need
+no adjustment. The alternative — an overscroll margin on the clamp — was
+rejected for the reason `BoardViewport` already gives about margins: it is a
+second tuning value doing a job a real measurement can do, and it would leave
+the framing claim false while making the symptom go away.
+
+**The header band is not subtracted, and that is recorded rather than fixed.**
+It is 96 reference pixels whose screen height depends on the `CanvasScaler`'s
+match, so it cannot become a viewport fraction without asking the canvas —
+where the column's width is an anchor fraction and is exact. Nothing is
+unreachable behind it: vertical travel is non-zero at every zoom above 1.
+
+---
+
+## 15. Persistence — required, and needing its own analysis
 
 **The table's state must be saved.** This is not a new requirement and not a
 consequence of groups: `spec.md` C1.8 already lists it as settled, §9 already
@@ -935,7 +1005,7 @@ noticed.
 follows is only what this document can already see, so that the analysis starts
 from something rather than nothing.
 
-### 13.1 What groups add to the save
+### 15.1 What groups add to the save
 
 Nothing that changes the shape of §9's format — which was the point of G4.3.
 
@@ -951,7 +1021,7 @@ Every field is a primitive, a `SheetId`, or a flat collection of them, so
 assembly costs **one** pose on disk, not nine — R1.11 is upheld more strongly
 after groups than before.
 
-### 13.2 What the analysis has to settle
+### 15.2 What the analysis has to settle
 
 - **C9.1's ordering invariant extends.** A group naming a `SheetId` the ledger
   never issued must be dropped like any other stale reference — and a group that
@@ -979,7 +1049,7 @@ says so at both `Teardown` and the park path.
 
 ---
 
-## 15. Deferred, and deliberately absent
+## 16. Deferred, and deliberately absent
 
 **Absolute correctness is deferred.** Nothing in this document makes a pose on
 the table right or wrong in island terms; a group's frame is a player fact and

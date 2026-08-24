@@ -492,7 +492,8 @@ namespace Archivist.Building.Table
         /// the flag underneath a live drag and half a drag is worse than none.</para>
         ///
         /// <para><b>Why a refused drag does not scroll the cabinet instead.</b> It could —
-        /// forwarding the drag up to the enclosing <c>ScrollRect</c> is three lines. It is not
+        /// forwarding the drag up to <c>CabinetPanel</c>, which owns the column's scrolling
+        /// since G10.4, is three lines. It is not
         /// done because it would make the two states of C7.4 differ in a way the mockup never
         /// promises: an identical gesture would scroll on a gold row and carry paper on a plain
         /// one. The wheel scrolls over any row, and the section headers still drag-scroll, so
