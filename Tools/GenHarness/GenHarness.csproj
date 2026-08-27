@@ -1,7 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Headless harness. Compiles the Generation assembly outside Unity so the §13
        acceptance tests can run without the Editor. Possible only because §14 forbids
-       Generation from referencing UnityEngine. -->
+       Generation from referencing UnityEngine.
+
+       The eight Building files below are named one by one, and that is the rule: ONLY files
+       that reference no UnityEngine may be added, because the whole assembly does. They are
+       the archive file's engine-free half (cartography table spec.md §9) — the stores, their
+       identities and the format — and compiling them here is what lets SaveAcceptance run a
+       save through without an editor. It is also the enforcement: a `using UnityEngine` in
+       any of them stops being a comment somebody may disbelieve and becomes a broken build. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
@@ -17,6 +24,14 @@
   <ItemGroup>
     <Compile Include="../../Assets/Archivist/Generation/**/*.cs" />
     <Compile Include="../../Assets/Archivist/Render/**/*.cs" />
+    <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/SheetId.cs" />
+    <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/IslandHolding.cs" />
+    <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/SheetLedgerStore.cs" />
+    <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/RoomSnapshot.cs" />
+    <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/Json.cs" />
+    <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/ArchiveFormat.cs" />
+    <Compile Include="../../Assets/Archivist/Building/Runtime/Table/BoardStore.cs" />
+    <Compile Include="../../Assets/Archivist/Building/Runtime/Table/BoardSnapshot.cs" />
     <Compile Include="*.cs" />
   </ItemGroup>
 </Project>

@@ -111,6 +111,10 @@ namespace Archivist.Building.Table
         /// <summary>The island the open board shows. Meaningless while closed.</summary>
         public ulong IslandSeed { get; private set; }
 
+        /// <summary>Which table's board is open (§4.1), or null when it was opened by something
+        /// with no identity to give.</summary>
+        public string BoardId { get; private set; }
+
         void Awake()
         {
             scene = this;
@@ -284,6 +288,17 @@ namespace Archivist.Building.Table
         /// </summary>
         public void Open(ulong islandSeed, ISheetSource source)
         {
+            Open(islandSeed, source, null);
+        }
+
+        /// <summary>
+        /// The same, for a table that has an identity (§4.1). <paramref name="boardId"/> is which
+        /// stored board is laid back out and which one the save writes (§9); the room's tables
+        /// pass their own id, and a caller with none — the <c>C</c> shortcut, a bench — gets a
+        /// board that lives as long as the session.
+        /// </summary>
+        public void Open(ulong islandSeed, ISheetSource source, string boardId)
+        {
             if (islandSeed == 0)
             {
                 Debug.LogWarning("[TableSession] Refusing to open on seed 0 — no island.", this);
@@ -300,6 +315,7 @@ namespace Archivist.Building.Table
                 ApplySource(source);
 
                 IslandSeed = islandSeed;
+                BoardId = boardId;
                 ShowContents();
                 return;
             }
@@ -311,6 +327,7 @@ namespace Archivist.Building.Table
             }
 
             IslandSeed = islandSeed;
+            BoardId = boardId;
             open = true;
             active = this;
 
@@ -370,7 +387,7 @@ namespace Archivist.Building.Table
                 // BoardView enables its own camera as it builds it. Reaching for
                 // `board.BoardCamera` here read null every time: Show is a coroutine, so the
                 // camera does not exist on the line after the call.
-                board.Show(IslandSeed);
+                board.Show(IslandSeed, BoardId);
             }
 
             if (tableCanvas != null)
@@ -387,6 +404,11 @@ namespace Archivist.Building.Table
         public void Close()
         {
             if (!open) return;
+
+            // Before the rig comes down, though nothing here depends on the order: the board's
+            // model outlives Hide (§9) and this is C9.2's first save point. Closing the table is
+            // the one moment the player is certain to reach.
+            Archive.Note();
 
             open = false;
             if (active == this) active = null;

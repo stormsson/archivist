@@ -987,6 +987,10 @@ unreachable behind it: vertical travel is non-zero at every zoom above 1.
 
 ## 15. Persistence — required, and needing its own analysis
 
+> The analysis happened and the slice is built: **`persistence.md`**, beside this
+> file, answers §15.2's five questions and records what the save holds. This
+> section stands as written.
+
 **The table's state must be saved.** This is not a new requirement and not a
 consequence of groups: `spec.md` C1.8 already lists it as settled, §9 already
 specifies it in full (C9.1–C9.5), and C9.3 already ties it to T6 — *"the player

@@ -58,7 +58,9 @@ quietly picking one.
 ## Working here
 
 - Where the POC stands: POC-01 generator, POC-02 renderer, POC-03 POIs,
-  POC-04 the room, POC-05 interaction. One scene: `POC04_Room.unity`.
+  POC-04 the room, POC-05 interaction. The game's scene is
+  `POC04_Room.unity`; `Debug_Generator.unity` is the crate on its own, for
+  generation work.
 - Determinism is a hard contract. New randomness goes through a **named
   sub-stream** (`StreamNames`) so an unrelated draw cannot move an island.
 - Tuning constants live in one place per assembly: `Tuning`, `RenderTuning`,

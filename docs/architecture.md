@@ -61,7 +61,11 @@ and POC-05 (interaction).
 |---|---|
 | `IslandGenerator` | The scene's one source of islands. Owns the cache and the ledger as two children. |
 | `IslandCache` | Generated islands, kept so a seed is not rebuilt twice. Disposable; losing it costs time, never correctness. |
-| `SheetLedger` / `SheetLedgerStore` | Which islands the archive has met and which of their sheets have been *issued*, in the order both happened. Component + engine-free store. Also the collection's own account of itself: holdings, counts, progress. Not yet persisted. |
+| `SheetLedger` / `SheetLedgerStore` | Which islands the archive has met and which of their sheets have been *issued*, in the order both happened. Component + engine-free store. Also the collection's own account of itself: holdings, counts, progress. Saved by `Archive`. |
+| `Archive` | The save file as a thing in the scene: the ledger and every board, in one file, written at the points `UI/cartography_table/spec.md` §9 names. Finds itself after the scene loads; nothing has to be wired to it. |
+| `ArchiveFormat` | That file as JSON, in and out. Engine-free, so a save can be read, edited by hand, and exercised headlessly. |
+| `Json` | Just enough JSON for it: a one-pass pretty-printing writer and a parser that never throws. Hand-written because `JsonUtility` is UnityEngine, and because the file is a format rather than a mirror of the classes. |
+| `RoomPaper` / `RoomSnapshot` | Every piece of paper in the room, read off the scene and put back into it: binders, what is filed in them, where each one lies, loose sheets, and what the player is carrying. Component + engine-free record. `RoomSnapshot.Audit` checks the invariant the ledger needs — every issued sheet is somewhere, and somewhere once. |
 | `IslandHolding` | One island's row as a value: seed, index, name, issued / total, percent. A snapshot of the ledger, for whatever screen lists the collection. |
 | `SheetId` | A sheet's identity as a value: island, office, whole-island flag, number. Outlives every regeneration. |
 | `SheetLookup` | The walk back: `SheetId` → the `Sheet` it names, by regenerating the island. |
@@ -114,17 +118,23 @@ spec §13, D-C1). A crate delivers one binder, not a pile of paper.
 |---|---|
 | `Editor/IslandDebugWindow` + `IslandPane`, `SheetPane`, `TexturePane`, `ComparePane` | Look at an island, its sheets, its raster, and two offices side by side. |
 | `Editor/SheetContent`, `VectorDraw`, `FeatureLabels`, `OfficeStyle`, `SvgExport` | How the debug window draws and exports. |
-| `Building/Editor/RoomBuilder` | Builds the POC-04 room from the constants in `space/requirements.md`. Geometry as a function of the spec. |
+| `Building/Editor/SceneParts` | The player, the prompt, the collection and the crate, built the same way for every scene. Shared so a second scene is the same rig, not a copy of one. |
+| `Building/Editor/RoomBuilder` | Builds the POC-04 room from the constants in `space/requirements.md`. Geometry as a function of the spec; everything that is not room comes from `SceneParts`. |
+| `Building/Editor/GeneratorSceneBuilder` | Builds `Debug_Generator`: the crate, the collection and a player on a bare platform, for working on generation with nothing else in the scene. |
 | `Building/Editor/SheetTestBench` | Summons a named case — `LandSurvey:7` — on demand. Drives the shipping path, not a parallel one. |
 | `Building/Editor/SheetSceneGuard` | Strips spawned sheets — and the binders holding them — before a scene is written to disk. |
 | `Building/Editor/GlbImporterSetup` | Points every `.glb` under `Assets/Models` at glTFast's importer. Re-run after adding a model. |
 
 ## 6. Scenes and assets
 
-- `Building/Scenes/POC04_Room.unity` — the only scene.
+- `Building/Scenes/POC04_Room.unity` — the game's scene.
+- `Building/Scenes/Debug_Generator.unity` — the crate alone, rebuilt by
+  `GeneratorSceneBuilder`. Editable only through its builder: re-running overwrites it.
 - `Building/Options/HandlingOptions.asset` — the tuning asset.
 - `Models/Placeholders/*.glb` — placeholder art. Imported through glTFast; see `GlbImporterSetup`.
 - `Tools/run-acceptance.sh`, `Tools/GenHarness/` — headless generation + render checks.
+- `<persistentDataPath>/archive.json` — the save. Not in the project; see
+  `docs/UI/cartography_table/persistence.md` for what is in it and what is not.
 
 ### Prefabs — authored assets, edited in the Inspector
 

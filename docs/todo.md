@@ -6,3 +6,4 @@
 
 # Shelf mesh
 - edit mesh to add anchors on where the binders can be setup
+

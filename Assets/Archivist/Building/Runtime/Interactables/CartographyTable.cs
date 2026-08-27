@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Archivist.Building.Binders;
+using Archivist.Building.Collection;
 using Archivist.Building.Handling;
 using Archivist.Building.Interaction;
 using Archivist.Building.Sheets;
@@ -21,15 +22,18 @@ namespace Archivist.Building.Interactables
     /// tables accept any binder, the first fixes the island, a bound table takes only that
     /// island, and taking the last binder off returns it to unbound.</para>
     ///
-    /// <para><b>If a serialised <c>tableId</c> is ever needed</b> (it will be, the day board
-    /// state is persisted), it needs <c>EditorSceneManager.IsPreviewSceneObject</c> alongside
-    /// the prefab-asset and prefab-stage checks, plus a manual mint as an escape hatch.
+    /// <para><b>It does carry a serialised <c>tableId</c></b> (§4.1), which is a different fact
+    /// from its binding: the id says <i>which table this is</i> so its board and its binders can
+    /// be found again after the game is closed (§9), while the binding says which island is on it
+    /// today. It is <b>derived</b> from this table's place in the scene rather than drawn, so an
+    /// unsaved scene and a saved one agree — see <see cref="TableId"/> for why a drawn GUID is
+    /// the wrong mechanism here. Written to the field on first validate in a real scene only:
     /// <c>PrefabUtility.LoadPrefabContents</c> loads into a <i>preview scene</i> where
-    /// <c>IsPartOfPrefabAsset</c> is false and <c>GetCurrentPrefabStage</c> is null, so an id
-    /// gets minted into the prefab asset itself and every instance inherits it and shares one
-    /// board; and <c>OnValidate</c> never fires on an instance created through scripting. Both
-    /// paths fail silently, and the symptom — two tables quietly sharing a board — does not look
-    /// like an identity bug.</para>
+    /// <c>IsPartOfPrefabAsset</c> is false and <c>GetCurrentPrefabStage</c> is null, so without
+    /// <c>EditorSceneManager.IsPreviewSceneObject</c> an id gets written into the prefab asset
+    /// and every instance inherits it and shares one board. Both failures are silent, and the
+    /// symptom — two tables quietly sharing a board, or a binder standing on an anchor its table
+    /// has never heard of — does not look like an identity bug.</para>
     ///
     /// <para><b>What the verb is depends on what is in the player's hands</b>, and this is the
     /// one interactable where that is true of the <i>label</i> and not only of availability.
@@ -68,6 +72,12 @@ namespace Archivist.Building.Interactables
         /// so a table built by a script or reverted to prefab still works.</summary>
         public const string AnchorRootName = "BindingAnchors";
 
+        [Header("Identity")]
+        [Tooltip("§4.1: which table this is, so its board can be found again next session. " +
+                 "Minted once and never regenerated — changing it hands this table somebody " +
+                 "else's board, and clearing it loses this one's.")]
+        [SerializeField] string tableId;
+
         [Header("Where binders land")]
         [Tooltip("The empty whose children are the binder anchors, lowest first. Capacity is " +
                  "its child count — adding a slot is a prefab edit, made by eye with the " +
@@ -89,6 +99,102 @@ namespace Archivist.Building.Interactables
         // Set by CanInteract, read by Label. See Label for why this is a field and not an
         // argument.
         string verb = DefaultLabel;
+
+        // ---- identity ------------------------------------------------------------------------
+
+        /// <summary>
+        /// The key this table's board and its binders are stored under (§4.1, C1.7).
+        ///
+        /// <para><b>Never empty, and never a fresh answer.</b> An unminted table derives the same
+        /// id its <c>OnValidate</c> would have minted, from where it sits in the scene — so a
+        /// table works before anybody has saved the scene, and works the same way after. That
+        /// property is the whole point: a <see cref="System.Guid.NewGuid"/> that is minted into a
+        /// component and never written to disk is a <i>different</i> id on the next domain
+        /// reload, and the symptom is not "my table has no id" but a binder standing on its
+        /// anchor that the table has never heard of, and a board nothing can open.</para>
+        ///
+        /// <para>The serialised field still wins when it is set, which is what makes the id
+        /// survive the table later being renamed or reparented — and it is why saving the scene
+        /// after adding a table is worth doing rather than required.</para>
+        /// </summary>
+        public string TableId
+        {
+            get { return string.IsNullOrEmpty(tableId) ? Derived() : tableId; }
+        }
+
+        /// <summary>
+        /// This table's place in the scene, as 32 hex characters — a GUID's shape, from a hash
+        /// rather than a draw, so two runs of the same scene agree without anything being
+        /// written down.
+        ///
+        /// <para>FNV-1a, twice, and deliberately not <c>string.GetHashCode</c>: that is
+        /// randomised per process on modern runtimes, which would make this the very thing it
+        /// exists to stop being — a different answer every time the game starts.</para>
+        /// </summary>
+        string Derived()
+        {
+            Transform t = transform;
+            string path = t.name;
+            while (t.parent != null)
+            {
+                t = t.parent;
+                path = t.name + "/" + path;
+            }
+
+            UnityEngine.SceneManagement.Scene scene = gameObject.scene;
+            string where = (string.IsNullOrEmpty(scene.path) ? scene.name : scene.path) + ":" + path;
+
+            return Hash(where, 14695981039346656037UL).ToString("x16")
+                 + Hash(where, 0xCBF29CE484222325UL ^ 0x9E3779B97F4A7C15UL).ToString("x16");
+        }
+
+        static ulong Hash(string text, ulong basis)
+        {
+            ulong hash = basis;
+            for (int i = 0; i < text.Length; i++)
+            {
+                hash ^= text[i];
+                hash *= 1099511628211UL;
+            }
+            return hash;
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// Writes the derived id into the field, in a real scene only, so that it is pinned
+        /// against this table later being renamed or reparented. Every guard here is a way an id
+        /// ends up shared: a prefab asset's instances all inherit one, and a preview scene looks
+        /// like neither a prefab asset nor a prefab stage — see the class comment.
+        ///
+        /// <para><b>The value is derived, not drawn.</b> Marking the component dirty does not
+        /// save the scene, and nothing makes anybody save it; a drawn GUID that never reached
+        /// disk would be re-drawn on the next domain reload and the table's whole history would
+        /// move with it. Writing the same value this table would have derived anyway means the
+        /// unsaved case and the saved case agree.</para>
+        /// </summary>
+        void OnValidate()
+        {
+            if (!string.IsNullOrEmpty(tableId)) return;
+            if (UnityEditor.PrefabUtility.IsPartOfPrefabAsset(this)) return;
+            if (UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage() != null) return;
+            if (UnityEditor.SceneManagement.EditorSceneManager.IsPreviewSceneObject(this)) return;
+            if (!gameObject.scene.IsValid()) return;
+
+            tableId = Derived();
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+
+        /// <summary>For the one case the rule above cannot serve: two tables that must not share
+        /// a board and do — a table duplicated in the Hierarchy arrives holding its original's
+        /// serialised id. This is also how a table is deliberately given somebody else's history:
+        /// paste the id in by hand.</summary>
+        [ContextMenu("Mint a new table id")]
+        void MintTableId()
+        {
+            tableId = System.Guid.NewGuid().ToString("N");
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+#endif
 
         // ---- what is on the table ----------------------------------------------------------
 
@@ -270,7 +376,11 @@ namespace Archivist.Building.Interactables
             bool binding = placed.Count == 0;
             placed.Add(binder);
 
-            if (!hands.HandOver(anchor.position, rotation, item => Seat(item, anchor)))
+            // C9.2 on arrival rather than on the gesture: the anchor is reserved when the binder
+            // leaves the hands, and the pose the file wants exists a third of a second later.
+            // On the landing and not inside Seat, because Restore seats too and a save taken
+            // during a load would write a room that is halfway back.
+            if (!hands.HandOver(anchor.position, rotation, item => { Seat(item, anchor); Archive.Note(); }))
             {
                 placed.Remove(binder);
                 return false;
@@ -279,6 +389,40 @@ namespace Archivist.Building.Interactables
             if (logHandling)
                 Debug.Log($"[Table] placed {binder.Summary} on anchor {placed.Count}/{Capacity}" +
                           $"{(binding ? " — table now laid out for " + BoundIslandName : "")}", this);
+
+            return true;
+        }
+
+        /// <summary>
+        /// A binder read back out of the save, onto the anchor it was lying on (§9).
+        ///
+        /// <para><b>Not <see cref="Place"/>.</b> Place takes the binder out of the player's
+        /// hands, reserves the next free anchor and glides it there over a third of a second,
+        /// rolling a fresh jitter on the way — three things that are right for a gesture and
+        /// wrong for a restore, the last of them because the angle it lay at is in the file and
+        /// a new roll would not be it. The pile is rebuilt in the order the file lists, so the
+        /// anchor is taken as given rather than counted.</para>
+        ///
+        /// <para>The island check is <see cref="Add"/>-shaped and deliberate: C4.3 says a table
+        /// carries one island, and a save that claimed otherwise is a save that would bind this
+        /// table to whichever binder happened to be written first.</para>
+        /// </summary>
+        public bool Restore(BinderView binder, int anchorIndex, Vector3 position, Quaternion rotation)
+        {
+            Prune();
+
+            if (binder == null) return false;
+            if (placed.Count > 0 && binder.IslandSeed != placed[0].IslandSeed) return false;
+
+            Transform anchor = AnchorAt(anchorIndex);
+            if (anchor == null) return false;
+
+            binder.transform.SetPositionAndRotation(position, rotation);
+            Seat(binder, anchor);
+            placed.Add(binder);
+
+            if (logHandling)
+                Debug.Log($"[Table] restored {binder.Summary} on anchor {anchorIndex + 1}/{Capacity}", this);
 
             return true;
         }
@@ -334,10 +478,10 @@ namespace Archivist.Building.Interactables
         /// It also keeps occupancy hole-free, which is what lets "the next free anchor" simply be
         /// the count. C4.3 means the pile is never mixed anyway.</para>
         ///
-        /// <para>Taking the last one returns the table to unbound (C4.4). C4.4 also says the
-        /// board state is discarded, which costs nothing today and must be honoured the day it
-        /// does: <c>BoardStore</c> is still wired to nothing, so no board state is persisted at
-        /// all and closing the table already loses it.</para>
+        /// <para>Taking the last one returns the table to unbound and <b>discards its board</b>
+        /// (C4.4) — the arrangement, the assemblies and the parked assemblies, saved or not.
+        /// Emptying a table is the deliberate act of clearing it, and it is the only one: closing
+        /// the table keeps everything (§9).</para>
         /// </summary>
         public bool TakeTop(PlayerHands hands)
         {
@@ -354,11 +498,27 @@ namespace Archivist.Building.Interactables
 
             placed.RemoveAt(placed.Count - 1);
 
+            if (placed.Count == 0) Discard();
+
             if (logHandling)
                 Debug.Log($"[Table] took {top.Summary}; {placed.Count} left" +
                           $"{(placed.Count == 0 ? " — table unbound" : "")}", this);
 
             return true;
+        }
+
+        /// <summary>
+        /// C4.4's second half: an unbound table has no board. A saved arrangement of one island's
+        /// paper left on a table that will next be bound elsewhere is not a board with nothing on
+        /// it — it is a board with no table under it, listing sheets this table would refuse.
+        /// </summary>
+        void Discard()
+        {
+            Archive archive = Archive.InScene;
+            BoardStore boards = archive != null ? archive.Boards : null;
+            if (boards != null) boards.Clear(TableId);
+
+            Archive.Note();
         }
 
         // ---- the board ---------------------------------------------------------------------
@@ -384,7 +544,7 @@ namespace Archivist.Building.Interactables
             ulong seed = BoundSeed;
             if (seed == 0) return;   // CanInteract has already said so, in words.
 
-            session.Open(seed, new BinderSheetSource(this));
+            session.Open(seed, new BinderSheetSource(this), TableId);
         }
 
         // ---- anchors -------------------------------------------------------------------------
@@ -472,6 +632,10 @@ namespace Archivist.Building.Interactables
 
             if (Application.isPlaying) Destroy(view.gameObject);
             else DestroyImmediate(view.gameObject);
+
+            // Filing moves a sheet from the floor into a binder and destroys the paper — the one
+            // gesture that changes both halves of the room at once, and irreversible in-world.
+            Archive.Note();
         }
 
         static PlayerHands HandsOf(PlayerInteractor by)

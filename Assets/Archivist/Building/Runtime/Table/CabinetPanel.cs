@@ -23,7 +23,7 @@ namespace Archivist.Building.Table
     /// the panel cream three stops off it with no diff to review.</para>
     ///
     /// <para><b>Reference space is 1920 × 1080</b>, the same as the room's canvas in
-    /// <c>RoomBuilder.BuildInteractionUi</c>. The mockups were rendered at 1442 wide, so every
+    /// <c>SceneParts.BuildInteractionUi</c>. The mockups were rendered at 1442 wide, so every
     /// pixel measured off them is multiplied by about 1.33 before it lands here. Where a number
     /// looked arbitrary in the mockup it has been rounded to something a human can hold.</para>
     ///
@@ -375,6 +375,32 @@ namespace Archivist.Building.Table
         /// the moment it stops being needed.</para></summary>
         public const float GhostDrop = 0.85f;
 
+        // ---- the filter strip (⟨proposed⟩) ----
+        //
+        // NO MOCKUP COVERS ANY OF THIS. 1b-empty-table.png starts the accordion directly under
+        // the header band, so these are a starting position and the first playtest is their
+        // authority.
+
+        /// <summary>The filter's label. It names what checking the box <i>does</i>, not what
+        /// the column then holds — a control is read before it is used, so it has to describe
+        /// the action and not the outcome.</summary>
+        public const string HidePlacedLabel = "Hide already placed";
+
+        /// <summary>Height of the strip pinned above the scroll view. It is taken off the list
+        /// rather than overlaid on it: a row half-covered by a control is a worse column than a
+        /// shorter one.</summary>
+        public const float FilterHeight = 34f;
+
+        public const float FilterBoxSize = 16f;
+        public const float FilterBoxGap = 12f;
+        public const float FilterLabelSize = 12;
+
+        /// <summary>How far the checked mark is inset in its box. <b>The mark is a filled gold
+        /// square and never a ✓.</b> D-C4 dropped the tick from rows so the cabinet could not
+        /// read as a score sheet; drawing one three pixels above the first section carries that
+        /// reading straight back in.</summary>
+        public const float FilterMarkInset = 4f;
+
         // ---- footer ----
 
         public const float FooterHeight = 92f;
@@ -433,7 +459,7 @@ namespace Archivist.Building.Table
             return serif;
         }
 
-        /// <summary>The built-in face, as <c>RoomBuilder.BuiltinFont</c> resolves it. Used for
+        /// <summary>The built-in face, as <c>SceneParts.BuiltinFont</c> resolves it. Used for
         /// labels, codes, counts and hints — everything set in faked small caps, where the
         /// spacing does more work than the letterform.</summary>
         public static Font Sans()
@@ -642,6 +668,16 @@ namespace Archivist.Building.Table
     /// and a numbered requirement, so the better-evidenced one governs. If the island total is
     /// wanted it is one expression in <see cref="HeldOfSurvey"/>.</para>
     ///
+    /// <para><b>"Hide already placed" is a filter, not a second inventory (⟨proposed⟩, no
+    /// mockup).</b> The strip above the accordion withholds every office row whose sheet is out
+    /// on the table or joined into a group — the rows for paper the player has already dealt
+    /// with — leaving the drawer showing what is still to place. It never touches the Groups
+    /// section, which is where an assembly is picked up, and it never edits a count: a section
+    /// still counts every sheet it <i>holds</i> (C7.2, D-C3), because an inventory that shrinks
+    /// when paper is moved is not one. An office left with no visible rows is withheld whole,
+    /// header and gold and count together — see <see cref="ApplyVisibility"/> — which is the
+    /// filter's doing and not C7.1's, and lasts only as long as the box is checked.</para>
+    ///
     /// <para><b>Collapse survives a <see cref="Clear"/>, Groups included</b> — a preference about
     /// a section of a column, not a fact about a board. <b>The section does not open itself when
     /// the first group appears:</b> nothing else in the accordion moves on its own, and a section
@@ -662,6 +698,12 @@ namespace Archivist.Building.Table
 
             public GameObject Root;
             public GameObject Rows;
+
+            /// <summary>The hairline above this section, or null on the one built first.
+            /// Kept because which section is first can change after the build: the filter can
+            /// withhold the top one, and the rule then has to move down to whichever section is
+            /// drawn first instead.</summary>
+            public GameObject TopRule;
             public Image HeaderPlate;
             public Text Chevron;
             public Text Title;
@@ -712,6 +754,15 @@ namespace Archivist.Building.Table
         /// keeping it as a field rather than inventing a nullable key is what makes the absence
         /// of an office a compile-time fact instead of a convention.</summary>
         bool groupsCollapsed;
+
+        /// <summary>The filter of the strip above the accordion: with it set, an office row
+        /// whose sheet is out on the table or joined into a group is not drawn. A preference
+        /// about this column, so it survives a <see cref="Clear"/> exactly as the collapse flags
+        /// do, and like them it is never set by anything but the player.</summary>
+        bool hidePlaced;
+
+        Image filterMark;
+        Text filterLabel;
 
         /// <summary>The group under the pointer, or 0 (G6.3). Panel state, not row state: a row
         /// knows which group it belongs to but cannot know which one is hovered, and the answer
@@ -837,7 +888,8 @@ namespace Archivist.Building.Table
             var scrollRt = (RectTransform)scrollGo.transform;
             CabinetStyle.Stretch(scrollRt);
             scrollRt.offsetMin = new Vector2(0f, CabinetStyle.FooterHeight);
-            scrollRt.offsetMax = new Vector2(0f, -CabinetStyle.CabinetPadTop);
+            scrollRt.offsetMax = new Vector2(
+                0f, -CabinetStyle.CabinetPadTop - CabinetStyle.FilterHeight);
 
             var viewportGo = new GameObject("Viewport", typeof(RectTransform));
             viewportGo.transform.SetParent(scrollRt, false);
@@ -863,7 +915,65 @@ namespace Archivist.Building.Table
 
             // No ScrollRect. See OnScroll for why the wheel is handled here instead.
 
+            BuildFilter(rt);
             BuildFooter(rt);
+        }
+
+        /// <summary>
+        /// The filter strip, above the scroll view and outside it, so it stays put while the
+        /// accordion runs under it — a filter whose state cannot be seen from the bottom of a
+        /// long list is a filter the player has to scroll to trust.
+        ///
+        /// <para>The whole strip is the button, not the box: a 16 px square is a small target,
+        /// and the label is the part being read when the player decides to click.</para>
+        /// </summary>
+        void BuildFilter(RectTransform parent)
+        {
+            var go = new GameObject("Filter", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(CabinetStyle.CabinetPadX,
+                                       -CabinetStyle.CabinetPadTop - CabinetStyle.FilterHeight);
+            rt.offsetMax = new Vector2(-CabinetStyle.CabinetPadX, -CabinetStyle.CabinetPadTop);
+
+            var plate = CabinetStyle.Plate(rt, "Plate", Color.clear);
+            plate.raycastTarget = true;
+
+            var boxGo = new GameObject("Box", typeof(RectTransform));
+            boxGo.transform.SetParent(rt, false);
+            var boxRt = (RectTransform)boxGo.transform;
+            boxRt.anchorMin = boxRt.anchorMax = new Vector2(0f, 0.5f);
+            boxRt.pivot = new Vector2(0f, 0.5f);
+            boxRt.sizeDelta = new Vector2(CabinetStyle.FilterBoxSize, CabinetStyle.FilterBoxSize);
+            boxRt.anchoredPosition = Vector2.zero;
+
+            // Border, then fill one hairline in: the row plate's construction, so the box reads
+            // as a piece of the same drawer rather than as a widget dropped on it.
+            CabinetStyle.Plate(boxRt, "Border", CabinetStyle.RowBorder);
+            Image fill = CabinetStyle.Plate(boxRt, "Fill", CabinetStyle.RowPlate);
+            CabinetStyle.Inset(fill.rectTransform, CabinetStyle.HairlineWidth);
+
+            filterMark = CabinetStyle.Plate(boxRt, "Mark", CabinetStyle.Gold);
+            CabinetStyle.Inset(filterMark.rectTransform, CabinetStyle.FilterMarkInset);
+
+            filterLabel = CabinetStyle.Label(rt, "Label",
+                                             CabinetStyle.Spaced(CabinetStyle.HidePlacedLabel),
+                                             CabinetStyle.Sans(), CabinetStyle.FilterLabelSize,
+                                             CabinetStyle.Muted);
+            CabinetStyle.LeftBlock(filterLabel.rectTransform,
+                                   CabinetStyle.FilterBoxSize + CabinetStyle.FilterBoxGap, 0f,
+                                   CabinetStyle.FilterHeight, 0f);
+
+            var button = go.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.targetGraphic = plate;
+            button.onClick.AddListener(() => SetHidePlaced(!hidePlaced));
+
+            SetHidePlaced(hidePlaced);
         }
 
         void BuildFooter(RectTransform parent)
@@ -993,6 +1103,9 @@ namespace Archivist.Building.Table
 
                 ApplyHeaderState(section, onTable);
             }
+
+            // Last, because it reads the row states the loop above has just written.
+            ApplyVisibility();
         }
 
         void OnDestroy() { board = null; }
@@ -1205,9 +1318,10 @@ namespace Archivist.Building.Table
             // A rule above every section but the first, as in 1b-empty-table.png. Not below:
             // a rule under the last section would draw a line across empty cream.
             if (!first)
-                CabinetStyle.Hairline(rt, "TopRule", CabinetStyle.Rule,
-                                      new Vector2(0f, 1f), new Vector2(1f, 1f),
-                                      new Vector2(0f, CabinetStyle.HairlineWidth));
+                section.TopRule = CabinetStyle.Hairline(
+                    rt, "TopRule", CabinetStyle.Rule,
+                    new Vector2(0f, 1f), new Vector2(1f, 1f),
+                    new Vector2(0f, CabinetStyle.HairlineWidth)).gameObject;
 
             section.Chevron = CabinetStyle.Label(rt, "Chevron", CabinetStyle.ChevronOpen,
                                                  CabinetStyle.Sans(), CabinetStyle.SectionCountSize,
@@ -1374,6 +1488,95 @@ namespace Archivist.Building.Table
 
             if (next == hoveredGroup) return;
             hoveredGroup = next;
+            ApplyKin();
+        }
+
+        /// <summary>
+        /// Sets the filter and redraws the strip. The mark is a filled gold square inside the
+        /// box (never a ✓ — see <see cref="CabinetStyle.FilterMarkInset"/>); the label goes from
+        /// muted to ink, so the state reads at a glance from across the column and not only from
+        /// the 16 px box.
+        /// </summary>
+        void SetHidePlaced(bool value)
+        {
+            hidePlaced = value;
+
+            if (filterMark != null) filterMark.enabled = value;
+            if (filterLabel != null)
+                filterLabel.color = value ? CabinetStyle.Ink : CabinetStyle.Muted;
+
+            ApplyVisibility();
+        }
+
+        /// <summary>
+        /// Draws or withholds each office row per <see cref="hidePlaced"/>. <b>A row is
+        /// deactivated, never destroyed:</b> it stays in its section's <c>RowList</c>, so
+        /// C7.2's count is still the count of sheets the section holds and cannot quietly become
+        /// "what is left in the drawer" — an inventory that shrinks when paper is moved is not
+        /// one (D-C3). The layout excludes an inactive child on its own, so this is a layout
+        /// pass and not a rebuild, and toggling the box costs nothing an accordion rebuild would
+        /// cost.
+        ///
+        /// <para><b>Grouped rows go too, on-table or parked.</b> G6.2 keeps a grouped sheet's
+        /// office row so the count still reads as inventory, and the count is exactly what the
+        /// row list is no longer being asked to carry here: an assembled sheet is filed — it is
+        /// picked up from its Groups row, and its office row reports nothing. The Groups section
+        /// is never filtered, so nothing hidden here is unreachable.</para>
+        ///
+        /// <para><b>A section with nothing left to show goes with its rows</b> — header, count
+        /// and gold alike. A header over no rows states an inventory the player did not ask to
+        /// see: the filter was set to be shown what is still to place, and an office with
+        /// nothing still to place is not part of that answer. This is a <i>filter</i> suppressing
+        /// a section and not C7.1's rule, which is about an office that issued nothing and still
+        /// holds with the box clear — the section comes straight back when it does. The Groups
+        /// section is exempt, being the one place a hidden row can still be reached.</para>
+        ///
+        /// <para><b>The hover has to be cleared by hand.</b> A row deactivated under the pointer
+        /// gets no <c>OnPointerExit</c>, so G6.3's highlight would stay lit on a group whose
+        /// rows have just gone.</para>
+        /// </summary>
+        void ApplyVisibility()
+        {
+            bool hoverLost = false;
+            bool anyDrawn = false;
+
+            for (int s = 0; s < sections.Count; s++)
+            {
+                Section section = sections[s];
+                int shown = 0;
+
+                for (int r = 0; r < section.RowList.Count; r++)
+                {
+                    CabinetRow row = section.RowList[r];
+                    bool hide = hidePlaced && !row.IsGroupRow && (row.OnTable || row.Inert);
+                    if (!hide) shown++;
+
+                    if (row.gameObject.activeSelf != !hide)
+                    {
+                        if (hide && hoveredGroup != 0 && row.GroupId == hoveredGroup)
+                            hoverLost = true;
+
+                        row.gameObject.SetActive(!hide);
+                    }
+                }
+
+                // Counted off the rows and not off the board, so a collapsed section is judged
+                // by what it holds rather than by what it is currently showing — collapsing a
+                // section must not make it disappear.
+                bool draw = !hidePlaced || section.IsGroups || shown > 0;
+                if (section.Root.activeSelf != draw) section.Root.SetActive(draw);
+                if (!draw) continue;
+
+                // A rule above every section but the first drawn. Decided here rather than at
+                // build because which section is first is now the filter's to change, and a
+                // hairline across the top of the column reads as the list having a lid.
+                if (section.TopRule != null) section.TopRule.SetActive(anyDrawn);
+                anyDrawn = true;
+            }
+
+            if (!hoverLost) return;
+
+            hoveredGroup = 0;
             ApplyKin();
         }
 

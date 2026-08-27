@@ -247,9 +247,12 @@ namespace Archivist.Building.Table
         /// smoothstep. An assisted release picks the same <i>kind</i> of join; it just stops
         /// requiring that you aimed.</para>
         ///
-        /// <para><b>The meeting member is the selected slab, not a search</b> (G3.6) — the slab
-        /// the ghost was computed for. Grounding the join anywhere else would settle the
-        /// assembly onto a pose the player was never shown.</para>
+        /// <para><b>The meeting member is the ghost's, not a search</b> (G3.6) — the slab the
+        /// ghost was computed for, which <c>SnapHint.NearestPair</c> chose by the same
+        /// nearest-fusable-pair rule <see cref="TryCandidate"/> uses. Searching again here would
+        /// be a second opinion about a question already answered and drawn; grounding it on the
+        /// <i>selection</i> instead — the slab the player happens to be holding the assembly by
+        /// — would settle onto a pose the ghost never showed.</para>
         ///
         /// <para><b><see cref="SheetKinship.Fusable"/> is re-asked.</b> <c>SnapHint.Nearest</c>
         /// already gates on <see cref="SheetKinship.Neighbours"/>, which calls it first, so G3.4
@@ -270,7 +273,7 @@ namespace Archivist.Building.Table
             target = default(Target);
             if (!candidate.Any || board == null) return false;
 
-            BoardSheetView meeting = BoardSlabs.ViewOf(board, selected);
+            BoardSheetView meeting = BoardSlabs.ViewOf(board, candidate.Meeting);
             if (meeting == null) return false;
 
             Sheet theirs;

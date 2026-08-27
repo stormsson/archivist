@@ -193,6 +193,36 @@ namespace Archivist.Building.Handling
             if (logHandling)
                 Debug.Log($"[Hands] took {item.CarryName} from {cameFrom} -> anchor {holdAnchor.position}", this);
 
+            // C9.2 for the room: paper leaving the floor is a change worth keeping, and where the
+            // item is once it is held is not a pose but a fact about the hands.
+            Collection.Archive.Note();
+            return true;
+        }
+
+        /// <summary>
+        /// Puts an item straight into the hands, with no journey — what the save does with
+        /// whatever the player was carrying when they stopped (§9).
+        ///
+        /// <para><b>Deliberately not <see cref="Take"/>.</b> Take animates the item from wherever
+        /// it was lying to the hold anchor, because picking a thing up is a movement the player
+        /// made. A restored item was never anywhere else: it would fly in from the world origin
+        /// on the first frame of the session, which reads as the room throwing paper at the
+        /// player.</para>
+        /// </summary>
+        public bool Adopt(ICarryable item)
+        {
+            if (item == null || item.Root == null || held != null || holdAnchor == null) return false;
+
+            held = item;
+            if (item.Body != null) item.Body.enabled = false;
+
+            Transform t = item.Root;
+            t.SetParent(holdAnchor, worldPositionStays: false);
+            t.localPosition = Vector3.zero;
+            t.localRotation = item.CarriedRotation;
+            arriving = false;
+
+            if (logHandling) Debug.Log($"[Hands] restored {item.CarryName} into the hands", this);
             return true;
         }
 
@@ -312,6 +342,11 @@ namespace Archivist.Building.Handling
 
             if (item.Body != null) item.Body.enabled = true;
             item.Settled();
+
+            // The save point for a drop is HERE and not at the release (C9.2). The resting pose
+            // is decided at release (R5.6) but the transform only holds it once the fall is over,
+            // and the file records where things are standing.
+            Collection.Archive.Note();
 
             if (logHandling)
                 Debug.Log($"[Hands] {item.CarryName} settled at {item.Root.position}", this);

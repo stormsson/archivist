@@ -20,7 +20,7 @@ namespace Archivist.Building.Table
     /// <see cref="CabinetStyle"/>; none in this file.</para>
     ///
     /// <para><b>UGUI, not UI Toolkit.</b> <c>InteractionPrompt</c> and
-    /// <c>RoomBuilder.BuildInteractionUi</c> are already legacy UGUI, and the assembly definition
+    /// <c>SceneParts.BuildInteractionUi</c> are already legacy UGUI, and the assembly definition
     /// already references <c>UnityEngine.UI</c>. A second UI stack would mean two event systems,
     /// two ways to say "cream", and two places to look when the header is wrong.</para>
     ///
@@ -73,7 +73,7 @@ namespace Archivist.Building.Table
     [RequireComponent(typeof(GraphicRaycaster))]
     public sealed class TableCanvas : MonoBehaviour
     {
-        /// <summary>Reference resolution, matching <c>RoomBuilder.BuildInteractionUi</c> so the
+        /// <summary>Reference resolution, matching <c>SceneParts.BuildInteractionUi</c> so the
         /// prompt and this view scale together.</summary>
         public const float ReferenceWidth = 1920f;
         public const float ReferenceHeight = 1080f;

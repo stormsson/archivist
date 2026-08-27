@@ -97,12 +97,21 @@ namespace Archivist.Building.Table
     /// is near something related; telling it only once aligned defeats the assist, because by
     /// then the player has solved the problem the hint was meant to help with.</para>
     ///
-    /// <para><b>G7.4: exactly two slabs carry a halo, however large the group grows.</b> When the
-    /// best candidate is a member of an assembly, only that member is lit — never the union,
+    /// <para><b>G7.4: exactly two slabs carry a halo, however large either group grows.</b> When
+    /// the best candidate is a member of an assembly, only that member is lit — never the union,
     /// which is what <c>BoardInteractor.PlaceOutline</c> draws for a <i>selection</i>. The halo
     /// names the <b>edge</b> you are about to join, not the mass you are joining, and so also
     /// tells you which way round you are. Nothing shaped like <c>TryUnion</c> is called here.
     /// </para>
+    ///
+    /// <para><b>That holds on the dragged side too, and it is a pair that is searched for.</b>
+    /// An assembly is dragged by grabbing one of its sheets, and the grabbed sheet says nothing
+    /// about which end of the run is approaching anything. So <see cref="NearestPair"/> ranks
+    /// <i>pairs</i> across both runs and every answer here — the lit slab, the slot's pose, the
+    /// member <c>BoardFusing.TryAt</c> grounds the join on — is the <b>meeting</b> member's, the
+    /// same G3.6 rule the strict path applies in <c>BoardFusing.TryCandidate</c>. Grounding any
+    /// of them on the selection instead makes group-to-group snapping a function of where the
+    /// player clicked to pick the assembly up.</para>
     ///
     /// <para><b>Not a MonoBehaviour.</b> The caller drives it from inside its drag loop, in a
     /// known order relative to its own outline placement; an <c>Update</c> of its own would put
@@ -160,6 +169,22 @@ namespace Archivist.Building.Table
         /// single candidate, so a second slot could only ever be drawn by inventing a second
         /// answer — see the class comment on why a ghost per neighbour is a lightshow.</summary>
         readonly Slot slot = new Slot("SnapHintGhost");
+
+        /// <summary>
+        /// The dragged run — every member of the assembly in hand, or the one loose slab —
+        /// refilled at the top of each search and never held across one, for the reason
+        /// <c>BoardFusing</c>'s two lists give: a slab in it can be refiled by the frame after.
+        ///
+        /// <para><b>The whole run, and not the slab under the pointer.</b> An assembly is
+        /// dragged by grabbing one of its sheets, and which sheet that is says nothing about
+        /// which end of the assembly is approaching anything (G5.6 drags the run rigidly). A
+        /// search grounded on the grabbed slab makes the candidate depend on where the player
+        /// happened to click, so a group brought edge-on to another finds nothing unless the
+        /// sheet in hand is itself within range of it and overlaps its ground. That is what the
+        /// strict path has always avoided by walking both runs
+        /// (<c>BoardFusing.TryCandidate</c>), and the assist now does it the same way.</para>
+        /// </summary>
+        readonly List<BoardSheetView> run = new List<BoardSheetView>();
 
         /// <summary>The ghost's bars all share one material, because they are one line bent
         /// round a rectangle and must therefore be one alpha by construction rather than by four
@@ -223,13 +248,21 @@ namespace Archivist.Building.Table
         /// <c>frame.PositionOf(truth)</c> and <c>frame.RotationOf(truth)</c>. No fit maths, no
         /// tolerance, no <c>SheetFit</c>.</para>
         ///
-        /// <para><b>For a dragged GROUP, <paramref name="dragged"/> is the selected member and
-        /// the ghost is that member's landing pose</b>, not the assembly's. That is the honest
-        /// drawing: <c>BoardInteractor.Settle</c> moves the group by handing its frame to the
-        /// target's, which puts every member where the target's frame says — and for the
-        /// selected member, that is exactly the pose drawn here. One slot still means one place
-        /// the paper goes; the rest of the assembly follows it rigidly, which is what a frame
-        /// is.</para>
+        /// <para><b>For a dragged GROUP the search runs over every member</b> (see
+        /// <see cref="run"/>), and the ghost is the <b>meeting</b> member's landing pose — the
+        /// member that came nearest something related, not the one under the pointer.
+        /// <paramref name="dragged"/> is then read only for its slab size, which every member of
+        /// an assembly shares: a group is one survey by construction, since every join is gated
+        /// on <see cref="SheetKinship.Fusable"/> and that demands the same office, year and
+        /// scale.</para>
+        ///
+        /// <para>One member's pose is the honest drawing of a group's landing:
+        /// <c>BoardInteractor.Settle</c> moves the assembly by handing its frame to the target's,
+        /// which puts every member where that frame says — and for the meeting member, that is
+        /// exactly the pose drawn here. One slot still means one place the paper goes; the rest
+        /// of the run follows it rigidly, which is what a frame is. Drawing a slot per member
+        /// would be the lightshow the class comment rejects, and the meeting member is the one
+        /// the player is aiming with.</para>
         ///
         /// <para><b>The range is <c>max</c> of the slab's two sides, and G7.3 said <c>min</c>
         /// until this class was measured</b> (§8.3 carries the correction and its table).
@@ -276,11 +309,14 @@ namespace Archivist.Building.Table
             // one too.
             if (!(range > 0.0)) return false;
 
-            BoardSheetView best = Nearest(board, dragged, (float)(range * range));
+            Fill(board, dragged);
+
+            BoardSheetView meeting;
+            BoardSheetView best = NearestPair(board, (float)(range * range), out meeting);
             if (best == null) return false;
 
             Sheet mine;
-            if (!board.TrySheet(dragged.Id, out mine)) return false;
+            if (!board.TrySheet(meeting.Id, out mine)) return false;
 
             // The candidate's frame, by G3.1's two bullets and nothing else.
             int group = board.GroupIdOf(best.Id);
@@ -301,7 +337,8 @@ namespace Archivist.Building.Table
                 frame = BoardFrame.ForSheet(truth, pose, rotation);
             }
 
-            ghost = new Ghost(best.Id, group, frame, frame.PositionOf(mine), frame.RotationOf(mine));
+            ghost = new Ghost(meeting.Id, best.Id, group, frame,
+                              frame.PositionOf(mine), frame.RotationOf(mine));
             return true;
         }
 
@@ -319,6 +356,14 @@ namespace Archivist.Building.Table
         /// <para><see cref="Position"/> and <see cref="RotationDeg"/> are in <b>ground</b>
         /// space, like every other pose that crosses a seam in this folder. The drawing converts
         /// through <c>BoardSpace.ToBoard</c>; the settle consumes them as they are.</para>
+        ///
+        /// <para><see cref="Meeting"/> is the member of the DRAGGED run the answer was computed
+        /// for — G3.6's meeting member, found here by the same nearest-fusable-pair rule
+        /// <c>BoardFusing.TryCandidate</c> uses on the strict path. Everything downstream is
+        /// grounded on it and not on the selection: the halo (G7.4 names the edge, and the edge
+        /// is this member), the slot's pose, and the error <c>BoardFusing.TryAt</c> reports. For
+        /// a loose sheet it is that sheet, which is why the loose path needed no special
+        /// case.</para>
         /// </summary>
         public readonly struct Ghost
         {
@@ -327,16 +372,18 @@ namespace Archivist.Building.Table
             /// keeping a parallel bool that can disagree with it.</summary>
             public readonly bool Any;
 
+            public readonly SheetId Meeting;
             public readonly SheetId Target;
             public readonly int TargetGroup;
             public readonly BoardFrame Frame;
             public readonly V2 Position;
             public readonly double RotationDeg;
 
-            public Ghost(SheetId target, int targetGroup, BoardFrame frame, V2 position,
-                         double rotationDeg)
+            public Ghost(SheetId meeting, SheetId target, int targetGroup, BoardFrame frame,
+                         V2 position, double rotationDeg)
             {
                 Any = true;
+                Meeting = meeting;
                 Target = target;
                 TargetGroup = targetGroup;
                 Frame = frame;
@@ -371,11 +418,20 @@ namespace Archivist.Building.Table
         /// per-drag stopwatch either: the shared phase is what makes the pulse look like a
         /// property of the board rather than an animation that restarts.</para>
         /// </summary>
-        public bool Show(BoardView board, BoardSheetView dragged, Ghost ghost, float time)
+        public bool Show(BoardView board, Ghost ghost, float time)
         {
-            if (!ghost.Any || board == null || dragged == null) { Clear(); return false; }
+            if (!ghost.Any || board == null) { Clear(); return false; }
 
-            Mesh mesh = MeshOf(dragged);
+            // Everything below is drawn on the MEETING member, which is the selection only when
+            // a loose sheet is dragged. G7.4 puts the halo on the edge being joined, and the
+            // slot is that member's landing pose; drawing either on the grabbed slab would name
+            // one sheet in the halo and land the slot against another. THAT IS WHY NO DRAGGED
+            // SLAB IS PASSED IN: the ghost already names the only member any of this is about,
+            // and a parameter holding the selection is an invitation to draw on it.
+            BoardSheetView meeting = Slab(board, ghost.Meeting);
+            if (meeting == null) { Clear(); return false; }
+
+            Mesh mesh = MeshOf(meeting);
             Transform root = RootOf(board);
             if (mesh == null || root == null) { Clear(); return false; }
 
@@ -385,7 +441,7 @@ namespace Archivist.Building.Table
             // at any other value they are not, and a halo naming one slab while the slot lands
             // against another is precisely the kind of disagreement this change exists to
             // remove. One candidate, one halo, one slot.
-            if (!Draw(board, dragged, Slab(board, ghost.Target), mesh,
+            if (!Draw(board, meeting, Slab(board, ghost.Target), mesh,
                       CabinetStyle.SeatedColour, CabinetStyle.SeatedAlphaPeak,
                       CabinetStyle.SeatedBleed))
                 return false;                                   // Draw() has already cleared
@@ -397,7 +453,7 @@ namespace Archivist.Building.Table
             ghostMaterial.color = c;
 
             slot.Ensure(root, ghostMaterial);
-            slot.Place(board, dragged.transform, mesh, ghost, Separation);
+            slot.Place(board, meeting.transform, mesh, ghost, Separation);
             return true;
         }
 
@@ -433,8 +489,8 @@ namespace Archivist.Building.Table
         /// Turning the assist off must remove the help, not the report that a release will
         /// land.</para>
         ///
-        /// <para><b>The mate is found by <see cref="Nearest"/> at a fixed range, not by asking
-        /// what the fuse chose.</b> The range here is the slab's own long side —
+        /// <para><b>The mate is found by <see cref="NearestPair"/> at a fixed range, not by
+        /// asking what the fuse chose.</b> The range here is the slab's own long side —
         /// <c>GlowingHintRange</c> deliberately <i>not</i> applied — so a player who has tuned the
         /// hint's reach down, or off, still gets this drawn at full. §8.3's table proves a fitting
         /// mate is always inside it. If no mate can be identified the dragged slab is lit on its
@@ -449,10 +505,24 @@ namespace Archivist.Building.Table
             if (draggedMesh == null) { Clear(); return false; }
 
             double range = RangeOf(draggedMesh);
-            BoardSheetView best = null;
-            if (range > 0.0) best = Nearest(board, dragged, (float)(range * range));
 
-            return Draw(board, dragged, best, draggedMesh,
+            BoardSheetView meeting = null;
+            BoardSheetView best = null;
+
+            if (range > 0.0)
+            {
+                Fill(board, dragged);
+                best = NearestPair(board, (float)(range * range), out meeting);
+            }
+
+            // The meeting member when there is one, the grabbed slab when there is not — the
+            // degenerate case this method already had, and the caller has said a release will
+            // land, so lighting nothing would be worse than lighting the sheet in hand.
+            BoardSheetView lit = meeting != null ? meeting : dragged;
+            Mesh litMesh = lit == dragged ? draggedMesh : MeshOf(lit);
+            if (litMesh == null) { Clear(); return false; }
+
+            return Draw(board, lit, best, litMesh,
                         CabinetStyle.SeatedColour, CabinetStyle.SeatedAlphaPeak,
                         CabinetStyle.SeatedBleed);
         }
@@ -470,39 +540,63 @@ namespace Archivist.Building.Table
         }
 
         /// <summary>
-        /// G7.3's loop: the nearest slab on the table that this one is related to, within range,
-        /// or null.
+        /// Fills <see cref="run"/> with what is being dragged: the whole assembly when
+        /// <paramref name="dragged"/> belongs to one, otherwise the slab itself.
+        ///
+        /// <para>Falls back to the one slab when a group resolves to no slabs at all — a store
+        /// invariant says it cannot, and an empty run would silently turn the search off rather
+        /// than fail where anyone would look.</para>
+        /// </summary>
+        void Fill(BoardView board, BoardSheetView dragged)
+        {
+            run.Clear();
+
+            int group = board.GroupIdOf(dragged.Id);
+            if (group != 0) BoardSlabs.MembersOf(board, group, run);
+
+            if (run.Count == 0) run.Add(dragged);
+        }
+
+        /// <summary>
+        /// G7.3's loop over G3.6's pairs: across every member of <see cref="run"/> and every
+        /// slab on the table, the nearest related pair within range — the slab that won, and
+        /// through <paramref name="meeting"/> the member that met it. Null when nothing
+        /// qualifies.
+        ///
+        /// <para><b>The pair, not the slab, is what is ranked</b>, which is the whole of G3.6
+        /// and is exactly what <c>BoardFusing.TryCandidate</c> does on the strict path. Ranking
+        /// candidates by their distance to the <i>grabbed</i> slab instead makes the answer a
+        /// function of where the player clicked to pick the assembly up, which is not a fact
+        /// about the board.</para>
         ///
         /// <para><b>The two cheap tests run before the expensive one, and the answer is
         /// unchanged.</b> G7.3 writes the loop as "reject non-neighbours, keep the nearest, then
         /// compare the winner against the range", which runs
         /// <see cref="SheetKinship.Neighbours"/> — a separating-axis test that allocates two
         /// corner arrays — against every slab on a 48-sheet table, every frame of every drag.
-        /// Here the distance is taken first and a candidate dropped when it is beyond the range
-        /// or no closer than the best so far. <b>Same result, not an approximation:</b> both
-        /// filters only remove slabs that cannot be the answer. Ties still keep the first and the
-        /// range boundary is still inclusive.</para>
+        /// Here the distance is taken first and a pair dropped when it is beyond the range or no
+        /// closer than the best so far. <b>Same result, not an approximation:</b> both filters
+        /// only remove pairs that cannot be the answer. Ties still keep the first and the range
+        /// boundary is still inclusive.</para>
         ///
-        /// <para><b>Members of the dragged sheet's own group are skipped</b> — a deviation from
-        /// G7.3's "B != dragged". G5.6 drags an assembly rigidly, so a mate keeps a board
-        /// distance of roughly zero for the whole gesture while remaining an overlapping
-        /// same-survey sheet: a permanent winner. Without this the hint would be on continuously,
-        /// at full range, pointing at a sheet that is already joined. Candidates in <i>other</i>
-        /// groups stay eligible — that is G7.4's case.</para>
+        /// <para><b>The dragged run itself is skipped</b> — a deviation from G7.3's
+        /// "B != dragged". G5.6 drags an assembly rigidly, so a mate keeps a board distance of
+        /// roughly zero for the whole gesture while remaining an overlapping same-survey sheet:
+        /// a permanent winner. Without this the hint would be on continuously, at full range,
+        /// pointing at a sheet that is already joined. Candidates in <i>other</i> groups stay
+        /// eligible — that is G7.4's case, and the one this search exists to reach.</para>
         ///
         /// <para>Distance is between slab CENTRES, on X and Z of the board root's local space;
         /// both slabs are children of that root, so no hierarchy is walked. Y is ignored: it is
         /// §3.3's draw-order stack and lifted tiers, facts about painting order rather than about
         /// where anything is on the table.</para>
         /// </summary>
-        BoardSheetView Nearest(BoardView board, BoardSheetView dragged, float rangeSq)
+        BoardSheetView NearestPair(BoardView board, float rangeSq, out BoardSheetView meeting)
         {
+            meeting = null;
+
             IReadOnlyList<BoardSheetView> onTable = board.OnTable;
             if (onTable == null) return null;
-
-            int ownGroup = board.GroupIdOf(dragged.Id);
-
-            Vector3 from = dragged.transform.localPosition;
 
             BoardSheetView best = null;
             float bestSq = float.MaxValue;
@@ -510,22 +604,32 @@ namespace Archivist.Building.Table
             for (int i = 0; i < onTable.Count; i++)
             {
                 BoardSheetView other = onTable[i];
-                if (other == null || other == dragged) continue;
+
+                // Membership by slab and not by group id: `run` IS the set of slabs being
+                // dragged, so this covers the loose sheet and the assembly in one test.
+                if (other == null || run.Contains(other)) continue;
 
                 Vector3 to = other.transform.localPosition;
-                float dx = to.x - from.x, dz = to.z - from.z;
-                float sq = dx * dx + dz * dz;
 
-                if (sq > rangeSq || sq >= bestSq) continue;
-                if (ownGroup != 0 && board.GroupIdOf(other.Id) == ownGroup) continue;
+                for (int m = 0; m < run.Count; m++)
+                {
+                    BoardSheetView mine = run[m];
 
-                // The island question, and the only one asked here. Same island, same office,
-                // same year, same scale, neither of them the whole-island sheet, and their true
-                // ground rects overlap (G3.4, G3.5).
-                if (!SheetKinship.Neighbours(dragged.Sheet, other.Sheet)) continue;
+                    Vector3 from = mine.transform.localPosition;
+                    float dx = to.x - from.x, dz = to.z - from.z;
+                    float sq = dx * dx + dz * dz;
 
-                bestSq = sq;
-                best = other;
+                    if (sq > rangeSq || sq >= bestSq) continue;
+
+                    // The island question, and the only one asked here. Same island, same
+                    // office, same year, same scale, neither of them the whole-island sheet, and
+                    // their true ground rects overlap (G3.4, G3.5).
+                    if (!SheetKinship.Neighbours(mine.Sheet, other.Sheet)) continue;
+
+                    bestSq = sq;
+                    best = other;
+                    meeting = mine;
+                }
             }
 
             return best;

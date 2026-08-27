@@ -135,6 +135,55 @@ namespace Archivist.Building.Binders
         }
 
         /// <summary>
+        /// A binder read back out of the save: same number, same island, and no claim on the
+        /// counter. <see cref="Create"/> mints the next number because a new binder is new; this
+        /// one already has a name on its spine, and minting a second would put two
+        /// <c>Binder_4</c>s in one room.
+        ///
+        /// <para>Nothing is filed into it and it is not placed — the caller does both, because
+        /// only the caller knows what the file said. It is not registered on the floor either:
+        /// a restored binder may be on a table or in the player's hands.</para>
+        /// </summary>
+        public BinderView Recreate(int number, ulong islandSeed, string islandName)
+        {
+            if (binderPrefab == null)
+            {
+                Debug.LogError("[BinderSpawner] No binder prefab wired.", this);
+                return null;
+            }
+
+            GameObject instance = Instantiate(binderPrefab);
+
+            BinderView binder = instance.GetComponent<BinderView>();
+            if (binder == null)
+            {
+                Debug.LogError($"[BinderSpawner] {binderPrefab.name} has no BinderView.", this);
+
+                if (Application.isPlaying) Destroy(instance);
+                else DestroyImmediate(instance);
+                return null;
+            }
+
+            binder.Bind(number, islandSeed, islandName);
+
+            int layer = LayerMask.NameToLayer(binderLayer);
+            if (layer >= 0) SetLayerRecursive(instance, layer);
+
+            return binder;
+        }
+
+        /// <summary>
+        /// Where the counter is after a load. Never rewinds it — a number that has been on a
+        /// spine is spent, whatever the file says — and the caller has already restored every
+        /// binder the file named, so this only has to cover the numbers that are gone: a binder
+        /// filed away, or one from a save older than the sheet that named it.
+        /// </summary>
+        public void AdoptNextNumber(int next)
+        {
+            if (next > nextNumber) nextNumber = next;
+        }
+
+        /// <summary>
         /// Puts a binder down beside <paramref name="anchor"/> — where a crate's delivery
         /// lands. The offset keeps it clear of the sheet pile rather than in it.
         /// </summary>

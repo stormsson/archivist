@@ -86,6 +86,11 @@ namespace Archivist.Building.Interactables
                  "quality; a sheet read from standing height needs far less.")]
         [SerializeField] double pixelsPerPaperMm = 1.2;
 
+        /// <summary>What paper this crate delivers is drawn at. Read by <c>RoomPaper</c> so a
+        /// sheet restored from a save is the same paper as the one that came out of here, and
+        /// not a second, sharper copy of it.</summary>
+        public double PixelsPerPaperMm { get { return pixelsPerPaperMm; } }
+
         [Tooltip("On: every opening is a new island. Off: keep drawing from the last one, " +
                  "which is what makes the ledger's exclusion visible — sheets never repeat.")]
         [SerializeField] bool openNewIslandEachTime = true;
@@ -216,6 +221,10 @@ namespace Archivist.Building.Interactables
 
             if (opening.Loose != null && generator.Ledger.MarkIssued(opening.Loose.Id))
                 spawner.Place(opening.Loose, 0, 1, anchor);
+
+            // C9.1: the ledger is saved the moment sheets are issued and before any of them can
+            // reach a table, so no board can ever name a sheet the save says was never issued.
+            Archive.Note();
 
             IslandHolding holding;
             generator.Ledger.TryGetHolding(seed, out holding);

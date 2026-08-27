@@ -20,16 +20,27 @@ namespace Archivist.Building.Collection
     /// questions are answered here rather than by walking the room and guessing from paper on
     /// the floor.</para>
     ///
-    /// <para><b>Not yet persisted.</b> The store is rebuilt empty on every load, which is only
-    /// safe because spawned sheets are never written into a scene either (see
-    /// <c>SheetSpawner</c>). The two must be saved and loaded as one unit, or a sheet exists
-    /// with nothing recording it and R2.10 breaks silently. The memos —
-    /// <see cref="Describe(Island)"/> — need no saving either way: they are pure functions of
-    /// a seed and can always be recomputed.</para>
+    /// <para><b>Persisted by <see cref="Archive"/></b>, first and in the same file as the boards
+    /// (C9.1, C9.5), so no board can name a sheet this ledger says was never issued. The memos —
+    /// <see cref="Describe(Island)"/> — are saved only to spare thirty generations when thirty
+    /// islands are listed; they are pure functions of a seed and are recomputed over on the next
+    /// drawing.</para>
+    ///
+    /// <para><b>The room is saved with it</b>, in the same file and after it (<c>RoomPaper</c>,
+    /// <c>RoomSnapshot</c>). That is what makes this ledger mean something across a session: it
+    /// says a sheet has entered the world, and the room says where it went. The invariant the
+    /// pair keeps is <i>every issued sheet is somewhere</i> — in one binder, on the floor, or in
+    /// the hands — and <c>RoomSnapshot.Audit</c> is what says so out loud when it is not.</para>
     /// </summary>
     public sealed class SheetLedger : MonoBehaviour
     {
         readonly SheetLedgerStore store = new SheetLedgerStore();
+
+        /// <summary>The store itself, for <see cref="Archive"/> and nothing else. Reading and
+        /// writing a whole ledger is what a save does, and giving it the pass-through methods
+        /// this component is otherwise made of would be a second copy of the ledger's shape,
+        /// kept in step by hand.</summary>
+        public SheetLedgerStore Store { get { return store; } }
 
         // ---- recording -------------------------------------------------------------------
 

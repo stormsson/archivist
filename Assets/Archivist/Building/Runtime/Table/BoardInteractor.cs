@@ -638,7 +638,15 @@ namespace Archivist.Building.Table
             // C8.12: with nothing selected they do nothing. Checked after the read so the edge
             // flag below cannot be left armed by a key held across a deselect.
             BoardSheetView view = selected.HasValue ? ViewOf(selected.Value) : null;
-            if (turn == 0f || view == null) { keyTurning = false; return; }
+            if (turn == 0f || view == null)
+            {
+                // C9.2's third point, for the one verb with no release: letting go of Q/E ends
+                // an adjustment as much as letting go of the mouse does, and a turn nobody let
+                // go of is saved by the table closing.
+                if (keyTurning) Keep(selected);
+                keyTurning = false;
+                return;
+            }
 
             // E (positive) increases the ground rotation, which is counter-clockwise on screen:
             // board +X is screen right and board +Z is screen up, and a ground rotation takes
@@ -964,16 +972,16 @@ namespace Archivist.Building.Table
                 // This is also what makes G5.5 tolerable — R6.5's "nothing is ever stuck" is
                 // honoured by parking rather than by a detach gesture.
                 //
-                // Parked is NOT saved: BoardView.Hide clears the group table, so an assembly
-                // parked here is lost when the table closes (spec.md §9).
                 if (group != 0)
                 {
                     board.ParkGroup(group);
+                    Keep(null);
                     Deselect();
                     return;
                 }
 
                 board.Remove(id);
+                Keep(null);
                 Deselect();
                 return;
             }
@@ -1003,15 +1011,31 @@ namespace Archivist.Building.Table
             //    assist off.
             if (!wasLanding && TryBest(out target)) { Settle(target); return; }
 
-            // C6.6, a deliberate absence of code: the sheet stays where it was released and
-            // this class calls NOTHING. No error state, no colour, no message (R6.5).
+            // C6.6, a deliberate absence of feedback: the sheet stays where it was released.
+            // No error state, no colour, no message (R6.5).
             //
-            // Not even Lay. The sheet was unseated when the gesture began and its transform IS
-            // its pose (C4.6), so a Lay would restate a fact the board holds, at the cost of a
-            // re-sort and a 48-row cabinet rebuild — fired by the one outcome the spec says
-            // produces no feedback at all. For a group the frame was written through on every
-            // drag frame (G4.3), and a Lay would additionally take the member under the pointer
-            // out of the assembly the player just spent the drag moving.
+            // Not Lay, though — Lay re-sorts the draw order and raises Changed, which is a
+            // 48-row cabinet rebuilt to report "this sheet moved 3 mm", fired by the one outcome
+            // the spec says produces no feedback at all. Keep writes the pose the sheet already
+            // has into the model silently, which is what C9.2 needs saved and C9.3 explains: a
+            // near miss is a resting state (R6.5), not unfinished work, and losing it to an
+            // unclean exit is the failure T6 was written against.
+            Keep(id);
+        }
+
+        /// <summary>
+        /// C9.2's save point, at the end of a gesture: the model catches up with the transform,
+        /// and the archive is written (§9). <paramref name="id"/> is the loose sheet whose pose
+        /// is now a fact, or null when the gesture moved no single sheet — a group, whose frame
+        /// was written through on every drag frame (G4.3), or paper that went back to the drawer.
+        ///
+        /// <para>One call per gesture, never per frame (C9.4). A drag writes the file once, on
+        /// release, and a board is a few dozen structs.</para>
+        /// </summary>
+        void Keep(SheetId? id)
+        {
+            if (board != null && id.HasValue) board.CommitPose(id.Value);
+            Archive.Note();
         }
 
         // -------------------------------------------------------------- the verbs
@@ -1137,6 +1161,7 @@ namespace Archivist.Building.Table
             // but one can be fused onto while the row event is in flight. Retrieving it is then
             // a no-op that drags it anyway, which is the right outcome.
             if (!board.RetrieveGroup(groupId)) return;
+            Archive.Note();                                     // G15.2
 
             // Read from the slabs RetrieveGroup just derived, not composed again from the
             // truths: TryUnion is the one implementation of "where is this assembly's middle",
@@ -1191,6 +1216,7 @@ namespace Archivist.Building.Table
             if (remove && id.HasValue && board != null)
             {
                 board.Remove(id.Value);
+                Keep(null);
                 Deselect();
                 return;
             }
@@ -1354,6 +1380,10 @@ namespace Archivist.Building.Table
             // with SettleSeconds at 0, before the field exists to be refreshed. Asking again is
             // one dictionary lookup and removes the ordering question.
             if (selected.HasValue) selectedGroup = board.GroupIdOf(selected.Value);
+
+            // The join is the release, finished (C9.2, G15.2): saving at Release would have
+            // written the board as it was 0.18 s before the assembly existed.
+            Keep(null);
         }
 
         // ------------------------------------------------------------- board space
@@ -1646,7 +1676,7 @@ namespace Archivist.Building.Table
 
                 if (hint != null)
                 {
-                    if (ghost.Any) hint.Show(board, view, ghost, Time.unscaledTime);
+                    if (ghost.Any) hint.Show(board, ghost, Time.unscaledTime);
                     else hint.ShowSeated(board, view);
                 }
             }

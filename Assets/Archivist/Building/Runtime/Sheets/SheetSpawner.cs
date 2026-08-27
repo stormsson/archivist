@@ -164,6 +164,34 @@ namespace Archivist.Building.Sheets
         }
 
         /// <summary>
+        /// A sheet read back out of the save, at exactly the pose it was left at.
+        ///
+        /// <para><b>Not <see cref="Place"/>, and not <see cref="LayOnFloor"/>.</b> Place scatters
+        /// by batch index and stacks by how much paper is already down, which is right for a
+        /// delivery and wrong for a restore — the pile it computes is the pile it is halfway
+        /// through rebuilding. LayOnFloor probes downward for what is already lying there, which
+        /// is the same problem: restoring five sheets that were in one pile would put each on top
+        /// of the last four and grow the stack by a centimetre. The file has the answer; this
+        /// writes it.</para>
+        ///
+        /// <para>Everything else a sheet in the world needs is the same as
+        /// <see cref="Place"/>'s: the layer, and the verb that lets it be picked up.</para>
+        /// </summary>
+        public SheetView Restore(SheetRender render, Vector3 position, Quaternion rotation)
+        {
+            SheetView view = SheetView.Create(render, sheetMaterial, paperTint, mapTextureProperty);
+
+            int layer = LayerMask.NameToLayer(sheetLayer);
+            if (layer >= 0) SetLayerRecursive(view.gameObject, layer);
+
+            view.gameObject.AddComponent<SheetPickup>();
+            view.transform.SetPositionAndRotation(position, rotation);
+
+            spawned.Add(view);
+            return view;
+        }
+
+        /// <summary>
         /// Lays a sheet flat at a point on the floor — where a carried sheet goes when it is
         /// dropped (R4.7). Unlike <see cref="Place"/> this takes a position rather than a
         /// slot in a batch, because the player chose it.

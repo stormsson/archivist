@@ -32,9 +32,9 @@ namespace Archivist.Building.Table
     /// nothing produces it now, and the day absolute correctness returns it is the right
     /// shape.</para>
     ///
-    /// <para><b>An int, not a reference to the group.</b> This struct is a save-file row in
-    /// waiting (§4.2, G4.4), and a reference would make the saved board a graph instead of a
-    /// table of primitives. It also means no call site can quietly start reading the group
+    /// <para><b>An int, not a reference to the group.</b> This struct is a save-file row (§4.2,
+    /// G4.4), and a reference would make the saved board a graph instead of a table of
+    /// primitives. It also means no call site can quietly start reading the group
     /// through the placement and end up with two paths to the frame.</para>
     ///
     /// <para><b>Not four structs.</b> Separate types with a common interface would make "seated
@@ -293,9 +293,9 @@ namespace Archivist.Building.Table
     /// lifetime, shape and serialisation story, so the day either is persisted both are, in one
     /// move (§4.2). Every field is a primitive, a <see cref="SheetId"/> or a flat collection of
     /// them, which is what keeps that a move and not a rewrite; a nine-sheet assembly saves as
-    /// one pose instead of nine (G4.4). <b>No persistence code lives here yet</b> — §9 writes
-    /// one archive file holding the ledger and every board together (C9.5), a decision that
-    /// belongs above both stores.</para>
+    /// one pose instead of nine (G4.4). <see cref="Snapshot"/> and <see cref="Restore"/> are the
+    /// two ends of that; the file itself belongs above both stores, because §9 writes the ledger
+    /// and every board together (C9.5) — <c>Archive</c>.</para>
     ///
     /// <para><b>What is deliberately not here.</b> G3.1's derivation needs
     /// <c>Sheet.CentreGround</c>, which means the island, and this store has never regenerated
@@ -837,6 +837,164 @@ namespace Archivist.Building.Table
         /// rather than boards that stopped existing. The live list: read it, do not keep
         /// it.</summary>
         public IReadOnlyList<string> KnownTables { get { return knownOrder; } }
+
+        // ---- saving and loading ----------------------------------------------------------
+
+        /// <summary>
+        /// One board as a flat value, for the save (§9). Null for a table this store has never
+        /// heard of — which is not the same as an empty board, and the file should not carry a
+        /// row for furniture nobody has used.
+        ///
+        /// <para>Lay order is the order, not the dictionary's (C4.7). A parked group's members
+        /// appear in <see cref="BoardSnapshot.Groups"/> and nowhere else, because they are in
+        /// the drawer and C4.5 has two states.</para>
+        /// </summary>
+        public BoardSnapshot Snapshot(string tableId)
+        {
+            Board board;
+            if (!IsUsableId(tableId) || !boards.TryGetValue(tableId, out board)) return null;
+
+            var placed = new List<BoardSnapshot.Entry>(board.LayOrder.Count);
+            for (int i = 0; i < board.LayOrder.Count; i++)
+            {
+                SheetId id = board.LayOrder[i];
+                Placement placement;
+                if (!board.Placed.TryGetValue(id, out placement)) continue;
+                placed.Add(new BoardSnapshot.Entry(id, placement));
+            }
+
+            var groups = new List<GroupRecord>(board.GroupOrder.Count);
+            for (int i = 0; i < board.GroupOrder.Count; i++)
+                groups.Add(RecordOf(board.Groups[board.GroupOrder[i]]));
+
+            return new BoardSnapshot(board.TableId, board.IslandSeed, placed, groups,
+                                     board.NextGroupId);
+        }
+
+        /// <summary>
+        /// A board read back from the file, replacing whatever this table held. The report says
+        /// what could not be put back; this class may not log, and a save that lost paper must
+        /// not lose it quietly (C9.1).
+        ///
+        /// <para><b>It builds the board directly rather than replaying the gestures that made
+        /// it.</b> <see cref="CreateGroup"/> mints a fresh id and <see cref="Lay"/> appends to
+        /// the lay order, so a replay would renumber every assembly and reshuffle the pile — the
+        /// two things G4.2 and C4.7 exist to prevent.</para>
+        ///
+        /// <para><b>Groups go in first</b>, because a placement may name one and never the other
+        /// way round, and <b>a group below two members is dissolved on the way in</b> — with its
+        /// remaining member's placement dropped, so that sheet comes back in the cabinet. The
+        /// alternative is inventing a pose for it: a survivor's pose is composed from the frame
+        /// and the island (G3.1), which this store has never had, and load runs before any board
+        /// is shown. A sheet in the drawer is a state the player undoes with one drag; a sheet at
+        /// an invented pose is one they cannot tell from a real one. Under C9.1's ordering the
+        /// case does not arise; it is handled anyway, because a file outlives the reasoning that
+        /// made it safe.</para>
+        ///
+        /// <para>The invariant is re-established at the end rather than trusted: a member is on
+        /// the board exactly when its group is, whatever the file said about either.</para>
+        /// </summary>
+        public BoardRestoreReport Restore(BoardSnapshot snapshot)
+        {
+            if (snapshot == null || !IsUsableId(snapshot.TableId))
+                return new BoardRestoreReport(0, 0);
+
+            Clear(snapshot.TableId);
+            Board board = Ensure(snapshot.TableId);
+            board.IslandSeed = snapshot.IslandSeed;
+
+            int dropped = 0;
+            int dissolved = 0;
+            int highest = 0;
+
+            var claimed = new HashSet<SheetId>();
+
+            for (int i = 0; i < snapshot.Groups.Count; i++)
+            {
+                GroupRecord record = snapshot.Groups[i];
+                if (record.GroupId <= 0 || board.Groups.ContainsKey(record.GroupId))
+                {
+                    dissolved++;
+                    continue;
+                }
+
+                var members = new List<SheetId>();
+                for (int m = 0; record.Members != null && m < record.Members.Count; m++)
+                {
+                    SheetId id = record.Members[m];
+
+                    // The same three refusals AddToGroup makes (C4.3, G3.4, G5.5), asked of a
+                    // file instead of a gesture.
+                    if (board.IslandSeed != 0UL && id.IslandSeed != board.IslandSeed) { dropped++; continue; }
+                    if (id.Office != record.Office || id.WholeIsland != record.WholeIsland) { dropped++; continue; }
+                    if (!claimed.Add(id)) { dropped++; continue; }
+
+                    members.Add(id);
+                }
+
+                if (members.Count < 2)
+                {
+                    dissolved++;
+                    dropped += members.Count;
+                    for (int m = 0; m < members.Count; m++) claimed.Remove(members[m]);
+                    continue;
+                }
+
+                var group = new Group(record.GroupId, record.Office, record.WholeIsland,
+                                      record.RotationDeg, record.OffsetX, record.OffsetY);
+                group.OnTable = record.OnTable;
+                group.Members.AddRange(members);
+
+                board.Groups[group.Id] = group;
+                board.GroupOrder.Add(group.Id);
+                if (group.Id > highest) highest = group.Id;
+            }
+
+            for (int i = 0; i < snapshot.Placed.Count; i++)
+            {
+                BoardSnapshot.Entry entry = snapshot.Placed[i];
+                SheetId id = entry.Id;
+                Placement placement = entry.Placement;
+
+                if (board.IslandSeed != 0UL && id.IslandSeed != board.IslandSeed) { dropped++; continue; }
+                if (board.Placed.ContainsKey(id)) { dropped++; continue; }
+
+                if (placement.Grouped)
+                {
+                    Group group;
+                    if (!board.Groups.TryGetValue(placement.GroupId, out group)
+                        || !group.OnTable
+                        || !group.Members.Contains(id))
+                    {
+                        dropped++;
+                        continue;
+                    }
+
+                    board.LayOrder.Add(id);
+                    board.Placed[id] = Placement.InGroup(group.Id);
+                    continue;
+                }
+
+                if (board.IslandSeed == 0UL) board.IslandSeed = id.IslandSeed;   // C4.2
+
+                board.LayOrder.Add(id);
+                board.Placed[id] = placement.Seated
+                    ? Placement.SeatedAtTruth()
+                    : Placement.Laid(placement.GroundX, placement.GroundY, placement.RotationDeg);
+            }
+
+            for (int i = 0; i < board.GroupOrder.Count; i++)
+            {
+                Group group = board.Groups[board.GroupOrder[i]];
+                for (int m = 0; m < group.Members.Count; m++) SyncMember(board, group, group.Members[m]);
+            }
+
+            board.NextGroupId = snapshot.NextGroupId;
+            if (board.NextGroupId <= highest) board.NextGroupId = highest + 1;
+            if (board.NextGroupId < 1) board.NextGroupId = 1;
+
+            return new BoardRestoreReport(dropped, dissolved);
+        }
 
         // ---- internals -------------------------------------------------------------------
 

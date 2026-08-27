@@ -72,9 +72,15 @@ namespace Archivist.Building.Table
     /// <para><b>Why the store is here rather than in <c>CartographyTable</c>.</b> The derivation
     /// needs <c>Sheet.CentreGround</c> — the island — and <see cref="BoardStore"/> has never
     /// regenerated anything and must not start. This class already resolves the island and holds
-    /// <see cref="TrySheet"/>, so it is the seam where a frame and a truth may meet. The store is
-    /// keyed by a per-instance id because nothing is persisted yet; when §9 arrives the store
-    /// moves up to whoever owns the furniture's GUID (§4.1) and only that key changes.</para>
+    /// <see cref="TrySheet"/>, so it is the seam where a frame and a truth may meet. One view
+    /// serves every table in the room; the board it shows is chosen by the table's own id
+    /// (§4.1), handed to <see cref="Show(ulong,string)"/>.</para>
+    ///
+    /// <para><b>The model outlives the rig</b> (§9). <see cref="Hide"/> destroys every slab,
+    /// mesh and texture and keeps the store, so an arrangement — loose poses, assemblies, parked
+    /// assemblies — is still there when the table is opened again, and <see cref="Archive"/>
+    /// writes it to disk at C9.2's save points. A board is emptied by clearing the table
+    /// (C4.4), never by closing it.</para>
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BoardView : MonoBehaviour
@@ -310,13 +316,34 @@ namespace Archivist.Building.Table
         /// </summary>
         public Coroutine Show(ulong islandSeed)
         {
+            return Show(islandSeed, null);
+        }
+
+        /// <summary>
+        /// The same, for one named table (§4.1). <paramref name="boardId"/> chooses which stored
+        /// board is laid back out and which one the save writes; an empty id falls back to this
+        /// view's own instance, which is a board that lives as long as the session and no longer.
+        ///
+        /// <para>Showing a table its own board is <b>the</b> restore path: the arrangement is
+        /// already in the store, and the slabs come back as their rasters land (C5.7), in lay
+        /// order, poses from the store and assemblies from their frames (G3.1).</para>
+        /// </summary>
+        public Coroutine Show(ulong islandSeed, string boardId)
+        {
+            string id = Keyed(boardId);
+
             // Both re-open paths reset the framing, because a board is always opened as the
             // spec composes it (§3.1, C8.13's view scaled by TableOptions.BoardZoom) and never
             // as the player last left it — see BoardViewport for why a camera is not a fact
             // worth carrying. The build path gets its reset free: BuildCamera makes a new
             // viewport.
-            if (build != null && IslandSeed == islandSeed) { ResetView(); return build; }
-            if (IsShowing && IslandSeed == islandSeed && build == null)
+            //
+            // The id is part of "already showing this": two tables bound to one island show the
+            // same paper and different boards, and answering the second with the first's rig
+            // would put one table's arrangement on the other.
+            bool same = IslandSeed == islandSeed && id == StateId;
+            if (build != null && same) { ResetView(); return build; }
+            if (IsShowing && same && build == null)
             {
                 ResetView();
                 return StartCoroutine(AlreadyShowing());
@@ -325,6 +352,7 @@ namespace Archivist.Building.Table
             if (build != null) { StopCoroutine(build); build = null; }
             Teardown();
 
+            stateId = id;
             build = StartCoroutine(BuildBoard(islandSeed));
             return build;
         }
@@ -412,6 +440,33 @@ namespace Archivist.Building.Table
             Raise();
         }
 
+        /// <summary>
+        /// Writes a loose sheet's transform into the model, silently — no re-sort, no
+        /// <see cref="Changed"/>, nothing moved. The pose is already the sheet's (C4.6); this is
+        /// what makes it durable, and it exists because C9.2 saves on every release while C6.6
+        /// says a release that fits nothing produces no feedback at all. <see cref="Lay"/> would
+        /// do both jobs and rebuild a 48-row cabinet to announce a 3 mm move.
+        ///
+        /// <para><b>Seated and grouped sheets are left alone, and that is the whole guard.</b>
+        /// Neither has a pose of its own — one is the island's, one is the frame's (C4.6, G4.1)
+        /// — so writing this sheet's transform into the store would unseat it or, worse, take it
+        /// out of its assembly and dissolve a pair.</para>
+        /// </summary>
+        public void CommitPose(SheetId id)
+        {
+            if (!placed.ContainsKey(id)) return;
+            if (GroupIdOf(id) != 0) return;
+
+            Placement placement;
+            if (state.TryGetPlacement(StateId, id, out placement) && placement.Seated) return;
+
+            V2 ground;
+            double rotationDeg;
+            if (!TryPoseOf(id, out ground, out rotationDeg)) return;
+
+            state.Lay(StateId, id, ground.X, ground.Y, rotationDeg);
+        }
+
         /// <summary>Back to the cabinet (C7.5). The slab is destroyed rather than parked:
         /// <c>BoardSheetView</c> owns its mesh, material and texture and frees them in
         /// <c>OnDestroy</c>, and the raster it was built from stays cached, so laying the same
@@ -447,17 +502,32 @@ namespace Archivist.Building.Table
 
         // --------------------------------------------------------------- groups
 
-        /// <summary>The store's key for this board. A per-instance string because a
-        /// <c>BoardView</c> is one board and nothing is persisted yet; see the class
-        /// comment.</summary>
+        /// <summary>The store's key for the board on screen — the table's id (§4.1), or this
+        /// view's own instance when it was opened without one.</summary>
         string StateId
         {
             get
             {
-                if (string.IsNullOrEmpty(stateId)) stateId = "BoardView#" + GetInstanceID();
+                if (string.IsNullOrEmpty(stateId)) stateId = Keyed(null);
                 return stateId;
             }
         }
+
+        /// <summary>
+        /// A usable store key, whatever the caller had. The fallback is per instance and
+        /// therefore per run: a board opened with no table behind it — the <c>C</c> shortcut, a
+        /// bench — is kept and saved like any other, and comes back as a different board next
+        /// session because nothing in the room can point at it and say which one it was.
+        /// </summary>
+        string Keyed(string boardId)
+        {
+            return string.IsNullOrEmpty(boardId) ? "BoardView#" + GetInstanceID() : boardId;
+        }
+
+        /// <summary>Every board this view has been shown, for <c>Archive</c> to write and to
+        /// read back (§9). The one caller: a board is mutated through the methods above, which
+        /// keep the slabs and the model saying the same thing.</summary>
+        public BoardStore Boards { get { return state; } }
 
         /// <summary>
         /// Every assembly on this board, on-table and parked alike (G6.1) — the list the
@@ -661,13 +731,11 @@ namespace Archivist.Building.Table
         /// <see cref="BoardStore.SetGroupOnTable"/> is the only thing that may take members off
         /// the board, because a member is on the board exactly when its group is.</para>
         ///
-        /// <para><b>WHAT IS PARKED DOES NOT SURVIVE CLOSING THE TABLE.</b>
-        /// <see cref="Teardown"/> calls <c>BoardStore.Clear</c>, so <see cref="Hide"/> destroys
-        /// every group, parked ones included. That is consistent with the rest of the board — no
-        /// board state has ever been persisted — and still a real loss, because the Groups drawer
-        /// <i>reads</i> as storage. <b>Do not paper over this with a cache here.</b> The fix is
-        /// <c>spec.md</c> §9 and nothing smaller: a group that outlived one board but not the
-        /// archive would be a second, private persistence with its own rules.</para>
+        /// <para><b>A parked assembly outlives the table being closed</b> (§9): the model
+        /// survives <see cref="Teardown"/> and <c>Archive</c> writes it at this gesture, so the
+        /// Groups drawer keeps what it looks like it keeps. It does not outlive the table being
+        /// <i>cleared</i> — C4.4, the last binder coming off — because an assembly of one
+        /// island's paper on a table now bound elsewhere is a group with no board under it.</para>
         /// </summary>
         public bool ParkGroup(int groupId)
         {
@@ -722,8 +790,9 @@ namespace Archivist.Building.Table
         /// arrive: the store's invariant already says the group is on the table, and a
         /// partly-drawn assembly is recoverable where a refused retrieval is not (R6.5).</para>
         ///
-        /// <para>See <see cref="ParkGroup"/> for the loss at <see cref="Hide"/>: there is
-        /// nothing to retrieve after the table has been closed.</para>
+        /// <para>A parked assembly is still there after the table has been closed and opened
+        /// again, and after the game has been (§9). It is not there after the table has been
+        /// cleared — see <see cref="ParkGroup"/>.</para>
         /// </summary>
         public bool RetrieveGroup(int groupId)
         {
@@ -850,6 +919,19 @@ namespace Archivist.Building.Table
 
             IslandSeed = islandSeed;
 
+            // C4.2 and C4.3, asked of the store instead of the furniture: a table carries one
+            // island's paper. A stored board for a different island cannot be shown beside this
+            // one, and leaving it bound would give the player a table that refuses the binders
+            // lying on it. Clearing is C4.4's act, arrived at from the other side.
+            if (state.IsBound(StateId) && state.IslandOf(StateId) != islandSeed)
+            {
+                Debug.LogWarning("[BoardView] Board " + StateId + " held island " +
+                                 state.IslandOf(StateId).ToString("X16") + " and is being opened on " +
+                                 islandSeed.ToString("X16") + " — the old arrangement is discarded.", this);
+                state.Clear(StateId);
+            }
+            state.Bind(StateId, islandSeed);
+
             // Generation is ~340 ms of pure, engine-free C# (C5.7) and must not happen inline —
             // MapCrate's comment is the authority. The generator reference is captured on the
             // main thread and only its thread-safe GetOrGenerate is touched off it; nothing in
@@ -880,7 +962,33 @@ namespace Archivist.Building.Table
 
             yield return RenderAvailable();
 
+            ReportUnlaid();
+
             build = null;
+        }
+
+        /// <summary>
+        /// Says so when the board holds paper the cabinet never offered. The store keeps it —
+        /// nothing is dropped and the next save still carries it — but no slab is made for a
+        /// sheet with no raster, and a board that quietly showed eight of nine sheets would look
+        /// like a lost placement rather than what it is.
+        ///
+        /// <para>The case that produces it is the room: binders and their contents are not saved
+        /// (see <c>Archive</c>), so a restored board can name sheets no binder on the table
+        /// holds.</para>
+        /// </summary>
+        void ReportUnlaid()
+        {
+            IReadOnlyList<SheetId> order = state.LayOrder(StateId);
+
+            int missing = 0;
+            for (int i = 0; i < order.Count; i++)
+                if (!placed.ContainsKey(order[i])) missing++;
+
+            if (missing > 0)
+                Debug.LogWarning("[BoardView] " + missing + " sheet(s) of this board are not in " +
+                                 "the cabinet and were not laid out. They stay in the board's " +
+                                 "state and come back when their paper does.", this);
         }
 
         void BuildRig()
@@ -1115,6 +1223,11 @@ namespace Archivist.Building.Table
                     if (textures.TryGetValue(render.Id, out old)) Discard(old);
                     textures[render.Id] = texture;
 
+                    // The board comes back here and nowhere else: a slab needs its raster, and
+                    // this is the frame the raster arrives in (C5.7). A sheet nobody had laid
+                    // down returns nothing to do.
+                    Relay(render.Id);
+
                     Raise();
                 }
 
@@ -1189,9 +1302,70 @@ namespace Archivist.Building.Table
 
         // ------------------------------------------------------------ placement
 
+        /// <summary>
+        /// One sheet back onto the board from the store, as its raster lands (§9). Nothing to do
+        /// for a sheet that is not on this board, is already down, or belongs to a parked
+        /// assembly — a parked group is in the drawer and has no slabs (G6.4).
+        ///
+        /// <para><b>It writes nothing back.</b> <see cref="Lay"/>, <see cref="Seat"/> and the
+        /// group calls are gestures and each of them edits the model; this reads it. Laying a
+        /// member here would take it out of its assembly on the way in (G4.1), and laying
+        /// anything would stamp the pile with the order the rasters happened to land in instead
+        /// of the order the player built (C4.7) — which is what the draw index is for.</para>
+        /// </summary>
+        void Relay(SheetId id)
+        {
+            if (!IsShowing || placed.ContainsKey(id)) return;
+
+            Placement placement;
+            if (!state.TryGetPlacement(StateId, id, out placement)) return;
+
+            int at = LaidAtOf(id);
+
+            if (placement.Seated)
+            {
+                Sheet sheet;
+                if (!TrySheet(id, out sheet)) return;
+                if (Put(id, sheet.CentreGround, sheet.RotationDeg, true, at) == null) return;
+            }
+            else if (placement.Grouped)
+            {
+                GroupRecord group;
+                if (!TryGetGroup(placement.GroupId, out group) || !group.OnTable) return;
+
+                // Provisionally at the frame's offset and then derived, exactly as
+                // RetrieveGroup does it: Put needs a pose to write, and G3.1 has one
+                // implementation.
+                if (Put(id, FrameOf(placement.GroupId).Offset, 0.0, false, at) == null) return;
+                Derive(placement.GroupId);
+            }
+            else if (Put(id, new V2(placement.GroundX, placement.GroundY),
+                         placement.RotationDeg, false, at) == null)
+            {
+                return;
+            }
+
+            Resort();
+        }
+
+        /// <summary>Where this sheet sits in the store's lay order — the order the player built
+        /// the board in (§3.3, C4.7). -1 for a sheet the board does not hold, which
+        /// <see cref="Put"/> reads as "put it on top".</summary>
+        int LaidAtOf(SheetId id)
+        {
+            IReadOnlyList<SheetId> order = state.LayOrder(StateId);
+            for (int i = 0; i < order.Count; i++)
+                if (order[i].Equals(id)) return i;
+
+            return -1;
+        }
+
         /// <summary>Lay or move, without the re-sort and the event — so <see cref="Seat"/> is one
-        /// mutation and not two, and a subscriber never sees a board mid-change.</summary>
-        BoardSheetView Put(SheetId id, V2 groundPos, double rotationDeg, bool seated)
+        /// mutation and not two, and a subscriber never sees a board mid-change.
+        ///
+        /// <para><paramref name="laidAt"/> is the draw index for a sheet arriving from the store
+        /// (§9); -1 means "as if just laid down", which is every gesture.</para></summary>
+        BoardSheetView Put(SheetId id, V2 groundPos, double rotationDeg, bool seated, int laidAt = -1)
         {
             if (!IsShowing)
             {
@@ -1230,7 +1404,10 @@ namespace Archivist.Building.Table
                 int layer = UnityEngine.LayerMask.NameToLayer(TableLayerName);
                 if (layer >= 0) SetLayerRecursive(view.gameObject, layer);
 
-                entry = new Laid(view, nextLaidAt++);
+                int at = laidAt >= 0 ? laidAt : nextLaidAt;
+                if (at >= nextLaidAt) nextLaidAt = at + 1;
+
+                entry = new Laid(view, at);
                 placed.Add(id, entry);
                 layOrder.Add(entry);
             }
@@ -1438,22 +1615,10 @@ namespace Archivist.Building.Table
             placed.Clear();
             layOrder.Clear();
 
-            // Groups go with the board, parked ones included — BoardStore.Clear is the one
-            // place G5.5's "membership never shrinks" is overruled, because an assembly that
-            // outlived its binding would list sheets the table will not accept.
-            //
-            // ---- THIS LINE LOSES PARKED WORK, AND KNOWINGLY. -------------------------------
-            // Park and retrieve (G6.4, G6.5) are a WITHIN-SESSION facility: this Clear destroys
-            // every group, so Hide() takes a nine-sheet assembly with it. Consistent with the
-            // rest of the board — loose sheets lose their poses here too — but not the same to a
-            // player, because the Groups drawer reads as storage.
-            //
-            // The slice that fixes it is spec.md §9. Until it exists this line stays as it is.
-            // Do NOT keep parked groups alive here, in a static beside this class, or across a
-            // Show of the same seed: a group that outlived one board but not the archive would
-            // be a second persistence mechanism with its own rules, and choosing one is above
-            // this file.
-            state.Clear(StateId);
+            // The MODEL IS NOT TOUCHED (§9). Placements, assemblies and parked assemblies belong
+            // to the table and outlive its rig; what dies here is everything made of pixels. A
+            // board is emptied by clearing the table — the last binder coming off it, C4.4 — and
+            // that path calls BoardStore.Clear itself.
             nextLaidAt = 0;
             onTable.Clear();
             available.Clear();

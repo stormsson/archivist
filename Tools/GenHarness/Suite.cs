@@ -96,6 +96,8 @@ namespace Archivist.Harness
                                   "POI determinism, the placeability floor, detail-sheet numbering"),
             new Group("render",   "-- POC-02 rendering (§11) -----------------------------",
                                   "render determinism and cross-rect coherence"),
+            new Group("save",     "-- the archive file (cartography table §9) ------------",
+                                  "the save: round trip, order, the ledger check, damaged files, the room"),
             new Group("metrics",  "-- measurements (reported, never gated) ---------------",
                                   "the 50-seed sweeps: sheet economy, POI density, render timing"),
             new Group("sweep",    "-- POC-02 resolution sweep ----------------------------",
@@ -131,6 +133,26 @@ namespace Archivist.Harness
             new Check("B3", "render", "two rects, different rotation and resolution, agree (§11)",
                       Cost.Quick,    true,  o => Poc02Acceptance.B3_Coherence()),
 
+            new Check("S1", "save", "a board written, read and written again is the same board",
+                      Cost.Quick,    true,  o => SaveAcceptance.S1_RoundTrip()),
+            new Check("S2", "save", "lay order and join order survive the file (C4.7, G5.6)",
+                      Cost.Quick,    true,  o => SaveAcceptance.S2_Order()),
+            new Check("S3", "save", "no geometry in the file, and A6 by hand (R1.11, C4.6, G4.4)",
+                      Cost.Quick,    true,  o => SaveAcceptance.S3_NoGeometry()),
+            new Check("S4", "save", "no board names an unissued sheet; thin groups dissolve (C9.1)",
+                      Cost.Quick,    true,  o => SaveAcceptance.S4_LedgerFirst()),
+            new Check("S5", "save", "a damaged file costs what it damaged, and no more",
+                      Cost.Quick,    true,  o => SaveAcceptance.S5_Damage()),
+            new Check("S6", "save", "poses round-trip exactly, in any culture (A5's foundation)",
+                      Cost.Quick,    true,  o => SaveAcceptance.S6_Numbers()),
+            new Check("S7", "save", "group ids are never reused across a save (G4.2, G15.1)",
+                      Cost.Quick,    true,  o => SaveAcceptance.S7_GroupIds()),
+
+            new Check("S8", "save", "the room: binders, contents, where each lies, loose paper",
+                      Cost.Quick,    true,  o => SaveAcceptance.S8_Room()),
+            new Check("S9", "save", "every issued sheet is somewhere, and somewhere once",
+                      Cost.Quick,    true,  o => SaveAcceptance.S9_EveryIssuedSheetIsSomewhere()),
+
             new Check("A7", "metrics", "sheet economy over N seeds (§13.7, D2, D5)",
                       Cost.VerySlow, false, o => Acceptance.A7_SheetEconomy(o.Seeds)),
             new Check("C6", "metrics", "POI density and distribution over N seeds",
@@ -155,8 +177,8 @@ namespace Archivist.Harness
         /// </summary>
         static readonly Dictionary<string, string[]> Aliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            { "all",   new[] { "gen", "poi", "render", "metrics", "sweep" } },
-            { "gate",  new[] { "gen", "poi", "render" } },
+            { "all",   new[] { "gen", "poi", "render", "save", "metrics", "sweep" } },
+            { "gate",  new[] { "gen", "poi", "render", "save" } },
             { "fast",  new[] { "gen", "poi" } },              // the old mode of that name
             { "poc02", new[] { "render", "metrics:B4", "sweep" } },
         };
