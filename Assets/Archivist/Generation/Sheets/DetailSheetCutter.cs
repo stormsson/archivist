@@ -103,7 +103,26 @@ namespace Archivist.Generation.Sheets
         public static double RotationFor(ulong islandSeed, int poiIndex)
         {
             Pcg32 rng = Streams.For(islandSeed, StreamNames.PoiSheet, poiIndex);
-            return Rotations.NormaliseAxisDeg(rng.Range(0.0, 180.0));
+            return NormaliseAxisDeg(rng.Range(0.0, 180.0));
+        }
+
+        /// <summary>
+        /// An axis angle, folded into [0, 180) and quantised. A rect and the same rect turned
+        /// half a turn are the same rect, so 190° and 10° must be one value or two islands with
+        /// the same geometry would digest differently.
+        ///
+        /// <para>Was <c>Rotations.NormaliseAxisDeg</c>, in <c>SurveyCutter</c>. The quarter cut
+        /// has no rotation at all (Q1.2), so the rest of that class went with the cutter and
+        /// this — its one surviving caller's one need — came here.</para>
+        /// </summary>
+        static double NormaliseAxisDeg(double deg)
+        {
+            double d = deg % 180.0;
+            if (d < 0.0) d += 180.0;
+
+            double q = Q.Deg(d);
+            if (q >= 180.0) q -= 180.0;
+            return q;
         }
     }
 }

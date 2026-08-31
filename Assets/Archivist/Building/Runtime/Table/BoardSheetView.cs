@@ -139,11 +139,13 @@ namespace Archivist.Building.Table
         {
             SurveySpec survey = sheet.Survey;
 
-            // Ground metres straight to board units. SheetGroundWidth/Height are the MAP's
-            // footprint (Scale.GroundMetres(Format.MapWidthMm)) — which is exactly what is
-            // drawn here, margin and all excluded.
-            float width  = (float)(survey.SheetGroundWidth  * unitsPerMetre);
-            float height = (float)(survey.SheetGroundHeight * unitsPerMetre);
+            // Ground metres straight to board units, from the SHEET and not from the survey.
+            // Sheet.GroundWidth/Height is the ground this plate is OF — its quarter, for a
+            // quarter plate — where SurveySpec.SheetGroundWidth is what the PAPER could hold.
+            // Taking the paper's is what put four near-identical drawings of one island on top
+            // of each other instead of four quarters side by side.
+            float width  = (float)(sheet.GroundWidth  * unitsPerMetre);
+            float height = (float)(sheet.GroundHeight * unitsPerMetre);
 
             var root = new GameObject(
                 $"BoardSheet_{islandName}_{survey.Office}_{sheet.Number}");

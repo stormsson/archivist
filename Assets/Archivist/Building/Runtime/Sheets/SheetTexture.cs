@@ -25,11 +25,15 @@ namespace Archivist.Building.Sheets
     /// </summary>
     public static class SheetTexture
     {
-        public static Texture2D Compose(ImageBuffer map, SheetFormat format, Color32 paper, string name)
+        public static Texture2D Compose(ImageBuffer map, SheetFormat format, Color32 paper,
+                                        string name, double pixelsPerPaperMm)
         {
-            // Derived from the raster rather than passed in, so the margin cannot disagree
-            // with the render resolution that actually produced the map.
-            double pixelsPerPaperMm = map.Width / format.MapWidthMm;
+            // PASSED IN, not derived. It used to be map.Width / format.MapWidthMm — sound while
+            // every map filled its sheet's map area, and wrong the moment one did not. A quarter
+            // plate is of its quarter (Q1.1) and covers only part of the paper, so deriving the
+            // resolution from its width would report a coarser render than actually happened,
+            // shrink the paper to fit, and print the quarter edge to edge with no margin at all.
+            if (!(pixelsPerPaperMm > 0.0)) pixelsPerPaperMm = map.Width / format.MapWidthMm;
 
             int paperW = Math.Max(map.Width, (int)Math.Round(format.WidthMm * pixelsPerPaperMm));
             int paperH = Math.Max(map.Height, (int)Math.Round(format.HeightMm * pixelsPerPaperMm));

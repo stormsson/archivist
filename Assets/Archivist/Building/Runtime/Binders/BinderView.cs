@@ -25,10 +25,22 @@ namespace Archivist.Building.Binders
     /// be recomputed. A binder of forty sheets costs forty small structs and no rendering at
     /// all; nothing is rasterised until something actually wants to look at a sheet.</para>
     ///
-    /// <para><b>One island per binder</b>, enforced by <see cref="Add"/>. C4.2 has a table
-    /// take its island from the first folder laid on it, which is only meaningful if a folder
-    /// names exactly one island. A mixed binder would make the table's binding ambiguous at
-    /// the moment it is established — and there would be no good answer.</para>
+    /// <para><b>One island per binder</b> (Q3.1), enforced by <see cref="Add"/>. Its contents
+    /// may span <b>one office or every office</b> — from four quarters of the Hydrographic to a
+    /// whole island in every hand it was ever surveyed in. Two binders may name the same island
+    /// and hold different plates; uniqueness (R2.10) is about the sheet, not the container.</para>
+    ///
+    /// <para><b>Which offices are in here is read off the contents, never stored.</b> A binder
+    /// does not have an office; it has plates, and they have offices. That was not always safe —
+    /// an empty binder has nothing to infer from — but empty binders do not exist: nothing
+    /// generates one (F-R19.2) and sheets cannot be taken back out (D-B2). The only one that
+    /// ever exists is the source of a merge, destroyed in the same frame.</para>
+    ///
+    /// <para><b>Merging is tidying, not assembling</b> (Q3.3, Q3.4). The premise is that the
+    /// collection was moved and the order was lost; merging is the one act that undoes it. The
+    /// end state is one spine per island, which is what C4.2's "a table takes its island from
+    /// the folder laid on it" always described — but a binder that arrives already holding two
+    /// offices is the mess itself, and is why comparison never depends on tidying first.</para>
     ///
     /// <para><b>Contents are not serialised, and must not be.</b> The ledger — the only record
     /// that a sheet has been issued (R2.10) — starts empty on every load, so a binder surviving a
@@ -52,6 +64,7 @@ namespace Archivist.Building.Binders
         [Tooltip("A memo of a pure function of the seed, kept so a binder can be identified " +
                  "in the Hierarchy without regenerating an island to ask its name.")]
         [SerializeField] string islandName;
+
 
         [Header("Carried pose")]
         [Tooltip("How the binder is turned once it is in the hands, relative to the hold " +
@@ -78,6 +91,37 @@ namespace Archivist.Building.Binders
 
         /// <summary>The island's name, or empty if nobody has said. A memo, never a fact.</summary>
         public string IslandName { get { return islandName; } }
+
+        /// <summary>How many offices have plates in here. 1 for a folder holding one survey,
+        /// up to <c>Offices.Count</c> for a whole island in every hand.</summary>
+        public int OfficeCount
+        {
+            get
+            {
+                int found = 0;
+                for (int i = 0; i < Offices.All.Length; i++)
+                    if (CountFor(Offices.All[i]) > 0) found++;
+                return found;
+            }
+        }
+
+        /// <summary>What goes on the spine: the island, and — while it is still one survey — the
+        /// office, because that is what a reader would have written on it.</summary>
+        public string Label
+        {
+            get
+            {
+                string island = string.IsNullOrEmpty(islandName)
+                    ? IslandSeed.ToString("X16") : islandName;
+
+                if (OfficeCount != 1) return island;
+
+                for (int i = 0; i < Offices.All.Length; i++)
+                    if (CountFor(Offices.All[i]) > 0) return island + " · " + Offices.All[i];
+
+                return island;
+            }
+        }
 
         // ---- contents --------------------------------------------------------------------
 
@@ -122,6 +166,28 @@ namespace Archivist.Building.Binders
             return true;
         }
 
+        /// <summary>
+        /// Pours <paramref name="other"/> into this binder and leaves it empty (Q3.3). False,
+        /// and nothing moves, if the two are not about the same island or are the same object.
+        ///
+        /// <para>It does not destroy <paramref name="other"/>. What happens to an emptied
+        /// folder is the caller's business — the verb that started this knows whether there is
+        /// a hand holding it.</para>
+        /// </summary>
+        public bool Merge(BinderView other)
+        {
+            if (other == null || ReferenceEquals(other, this)) return false;
+            if (other.IslandSeed != IslandSeed) return false;
+
+            for (int i = 0; i < other.contents.Count; i++)
+            {
+                SheetId id = other.contents[i];
+                if (!contents.Contains(id)) contents.Add(id);
+            }
+            other.contents.Clear();
+            return true;
+        }
+
         /// <summary>Takes a sheet out. False if it was never in here.</summary>
         public bool Remove(SheetId id) { return contents.Remove(id); }
 
@@ -149,7 +215,7 @@ namespace Archivist.Building.Binders
                     ? IslandSeed.ToString("X16")
                     : islandName;
 
-                return $"{BinderName} — {island}, {SheetCount} sheet{(SheetCount == 1 ? "" : "s")}";
+                return $"{BinderName} — {Label}, {SheetCount} sheet{(SheetCount == 1 ? "" : "s")}";
             }
         }
 

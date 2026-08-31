@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using Archivist.Generation;
 using Archivist.Generation.Features;
+using Archivist.Generation.Field;
 using Archivist.Generation.Geometry;
+using Archivist.Generation.Sheets;
 
 namespace Archivist.Render
 {
@@ -51,6 +53,19 @@ namespace Archivist.Render
 
         /// <summary>Soundings sit on the dark sea bands, so their dot is light, not dark.</summary>
         static readonly Rgba SoundingInk = Rgba.FromHex("dfeaf1");
+
+        /// <summary>
+        /// The Garrison grid: a washed-out blue-grey, and the one line on a plate that is not
+        /// drafting ink.
+        ///
+        /// <para>A grid is a reference printed <i>over</i> a map, not a thing the map is made
+        /// of, and it crosses everything — so at <c>MarkInk</c>'s weight it would read as the
+        /// dominant feature of a sheet whose actual subject is underneath it. A5b measured
+        /// <b>56% of Garrison's plates carrying nothing but a coastline and this grid</b>, which
+        /// is exactly the case where getting its colour wrong turns an office into
+        /// graph paper.</para>
+        /// </summary>
+        static readonly Rgba GridInk = Rgba.FromHex("8899a6");
 
         // ------------------------------------------------------------- geometry
         //
@@ -117,7 +132,8 @@ namespace Archivist.Render
         /// <param name="buf">The destination, composited into with <see cref="Rgba.Over"/>.</param>
         /// <param name="palette">The fill palette (§6.4); stroke ink is derived from it where sensible.</param>
         public static void Draw(Island island, RenderRequest req, GroundImage gi,
-                                ImageBuffer buf, Rgba[] palette)
+                                ImageBuffer buf, Rgba[] palette, OfficeStyle style,
+                                SampleGridCache samples = null)
         {
             if (island == null || gi == null || buf == null) return;
             if (req.Layers == LayerMask.None) return;
@@ -128,12 +144,19 @@ namespace Archivist.Render
             if (!(ppm > 0.0) || double.IsInfinity(ppm)) return;
             if (!(req.PixelsPerMetre > 0.0) || double.IsInfinity(req.PixelsPerMetre)) return;
 
-            double coastHalf = HalfWidthPx(RenderTuning.CoastWidthMm, ppm);
-            double riverHalf = HalfWidthPx(RenderTuning.RiverWidthMm, ppm);
-            double markHalf = HalfWidthPx(MarkLineMm, ppm);
-            double settlementRadius = GroundImage.MmToPx(RenderTuning.SettlementMarkMm, ppm) * 0.5;
-            double peakBase = GroundImage.MmToPx(RenderTuning.PeakMarkMm, ppm);
-            double soundingRadius = GroundImage.MmToPx(RenderTuning.SoundingDotMm, ppm) * 0.5;
+            // Every width scales together (OfficeStyle.Weight): the relationships between a
+            // coast, a river and a contour are cartographic and the same on anyone's map; what
+            // differs between offices is how hard the pen was pressed.
+            double w = style.Weight > 0.0 ? style.Weight : 1.0;
+
+            double coastHalf = HalfWidthPx(RenderTuning.CoastWidthMm * w, ppm);
+            double contourHalf = HalfWidthPx(RenderTuning.ContourWidthMm * w, ppm);
+            double gridHalf = HalfWidthPx(RenderTuning.GridWidthMm * w, ppm);
+            double riverHalf = HalfWidthPx(RenderTuning.RiverWidthMm * w, ppm);
+            double markHalf = HalfWidthPx(MarkLineMm * w, ppm);
+            double settlementRadius = GroundImage.MmToPx(RenderTuning.SettlementMarkMm * w, ppm) * 0.5;
+            double peakBase = GroundImage.MmToPx(RenderTuning.PeakMarkMm * w, ppm);
+            double soundingRadius = GroundImage.MmToPx(RenderTuning.SoundingDotMm * w, ppm) * 0.5;
 
             double widest = coastHalf;
             if (riverHalf > widest) widest = riverHalf;
@@ -145,18 +168,38 @@ namespace Archivist.Render
 
             // Ink.cs owns both derivations, so this fallback coast is the same colour as the
             // FieldCoast one IslandRenderer draws when the fill is on (§7).
-            Rgba coastInk = Ink.CoastInk(palette);
-            Rgba riverInk = Ink.RiverInk(palette);
+            // Ink.cs owns both derivations. Which one applies is decided by whether this
+            // render has a fill under it: on bare paper a "pen on water" colour is a blue line
+            // on cream, and a river taken from the shallow band disappears.
+            // Over a fill the palette derivations are right — a pen on water is what they are.
+            // On bare paper the office's own inks are, and that is where a plate lives (Q2.2).
+            // The office's inks, fill or no fill. The palette derivations were right when one
+            // global relief palette was the only colour a plate had; an office has its own now.
+            bool hasFill = (req.Layers & LayerMask.Fill) != 0;
+            Rgba coastInk = style.Ink;
+            Rgba riverInk = style.Water;
 
             IslandFeatures features = island.Features;
 
-            // ---- the fixed draw order (§5). Do not reorder: the acceptance hash depends on it.
-            // 1 coast, 2 rivers, 3 settlements, 4 peaks, 5 soundings.
+            // ---- the fixed draw order (§5, R10). Do not reorder: the acceptance hash depends
+            // on it, and so does the map.
+            //
+            //   1 contours    terrain underneath, as faint background
+            //   2 coast       the strong line over it
+            //   3 rivers      water
+            //   4 grid        printed across everything as a reference
+            //   5 settlements
+            //   6 peaks       the symbols a reader looks FOR, last, because
+            //   7 soundings   nothing may cross them out
+            //
+            // Contours before the coast and not after: where a low contour runs close to the
+            // shore the coastline must win, and ink is opaque, so "wins" means "later".
 
-            if ((req.Layers & LayerMask.Coast) != 0)
-            {
-                DrawCoast(island, req, gi, buf, groundRect, coastHalf, coastInk);
-            }
+            // Contours and the coastline are ONE extraction. They are isolines of the same
+            // field at different levels, they want the same corner samples, and sampling is the
+            // whole cost — see DrawIsolines.
+            DrawIsolines(island, req, gi, buf, groundRect, contourHalf, coastHalf, coastInk,
+                         style, samples);
 
             if ((req.Layers & LayerMask.Rivers) != 0 && features != null && features.Rivers != null)
             {
@@ -167,6 +210,18 @@ namespace Archivist.Render
                 }
             }
 
+            if ((req.Layers & LayerMask.Grid) != 0 && req.ScaleDenominator > 0)
+            {
+                // GroundBounds, not the rotated rect: GarrisonGrid's own comment says clipping
+                // to a rotated sheet belongs to the renderer, and Garrison does not rotate
+                // (Q1.2 — nothing does). The query rect is already the AABB.
+                List<Polyline> grid = GarrisonGrid.ForRect(groundRect, new MapScale(req.ScaleDenominator));
+                for (int i = 0; i < grid.Count; i++)
+                {
+                    StrokePolyline(gi, buf, grid[i], gridHalf, style.Grid);
+                }
+            }
+
             if ((req.Layers & LayerMask.Settlements) != 0 && features != null && features.Settlements != null)
             {
                 IReadOnlyList<Settlement> towns = features.Settlements;
@@ -174,7 +229,7 @@ namespace Archivist.Render
                 {
                     double ix, iy;
                     gi.ImageAt(towns[i].Position, out ix, out iy);
-                    DrawRing(buf, ix, iy, settlementRadius, markHalf, MarkInk);
+                    DrawRing(buf, ix, iy, settlementRadius, markHalf, style.Marks);
                 }
             }
 
@@ -185,7 +240,7 @@ namespace Archivist.Render
                 {
                     double ix, iy;
                     gi.ImageAt(peaks[i].Position, out ix, out iy);
-                    DrawTriangle(buf, ix, iy, peakBase, MarkInk);
+                    DrawTriangle(buf, ix, iy, peakBase, style.Marks);
                 }
             }
 
@@ -198,7 +253,7 @@ namespace Archivist.Render
                 {
                     double ix, iy;
                     gi.ImageAt(soundings[i].Position, out ix, out iy);
-                    FillDot(buf, ix, iy, soundingRadius, SoundingInk);
+                    FillDot(buf, ix, iy, soundingRadius, hasFill ? SoundingInk : style.Water);
                 }
             }
         }
@@ -206,28 +261,123 @@ namespace Archivist.Render
         // --------------------------------------------------------------- layers
 
         /// <summary>
-        /// §7's LOD rule. The cell size follows the pixel, never a fixed LOD, so the stroke and
-        /// the fill's per-pixel water edge agree by construction. Do not "optimise" this to a
-        /// coarser lattice — the line will float off the water and B1 fails on sight.
+        /// The contours and the coastline, in one pass. They are isolines of the same field at
+        /// different levels — the coast is simply the one at sea level — so they want the same
+        /// corner samples, and sampling the field is the entire cost of a contour.
+        ///
+        /// <para><b>This is why they are not two methods.</b> Four contour levels and a coast,
+        /// extracted separately, read the same grid five times: a Land Survey plate cost 858 ms
+        /// against Hydrographic's 173 for its one level (F-R13.3). Through
+        /// <c>Contours.ExtractLevels</c> the grid is sampled once and marched five times, and
+        /// the marching is cheap.</para>
+        ///
+        /// <para><b>The levels are the fill's band edges</b> (every
+        /// <c>RenderTuning.ContourLevelStride</c>-th), so a contour falls exactly where the
+        /// ground would change colour: the two halves of one map agree by construction, and on a
+        /// plate with no fill the contour is the only thing saying where that boundary was. They
+        /// are normalised against the island's own highest point, as <c>Bands</c> does — an
+        /// absolute interval would put forty lines on a mountain and none on an atoll.</para>
+        ///
+        /// <para><b>Order and weight are the point of drawing them together, not a side effect.</b>
+        /// Contours go down first and lowest-first, which is the order they would be drawn by
+        /// hand; the coast goes over them, at its own heavier width, because where a low contour
+        /// runs close to the shore the shoreline must win and ink is opaque.</para>
+        ///
+        /// <para><b>This only ever runs without a fill.</b> <c>IslandRenderer</c> allocates the
+        /// <c>h01</c> raster only when <c>Coast</c> and <c>Fill</c> are both wanted, and strips
+        /// <c>Coast</c> when it does — so <c>FieldCoast</c> handles the shoreline whenever there
+        /// is a fill and this handles it whenever there is not. The cell therefore follows
+        /// <see cref="RenderLod.NoFillSlack"/>: there is no per-pixel water edge here for a
+        /// coarser lattice to drift away from. <b>What must not be "optimised" is
+        /// <c>FieldCoast</c>'s path</b>, where that warning is still true.</para>
         /// </summary>
-        static void DrawCoast(Island island, RenderRequest req, GroundImage gi, ImageBuffer buf,
-                              Rect2 groundRect, double halfWidth, Rgba ink)
+        static void DrawIsolines(Island island, RenderRequest req, GroundImage gi, ImageBuffer buf,
+                                 Rect2 groundRect, double contourHalf, double coastHalf, Rgba ink,
+                                 OfficeStyle style, SampleGridCache samples)
         {
             if (island.Field == null) return;
 
-            int lod = RenderLod.ForPixelsPerMetre(req.PixelsPerMetre);
+            bool wantContours = (req.Layers & LayerMask.Contours) != 0;
+            bool wantCoast = (req.Layers & LayerMask.Coast) != 0;
+            if (!wantContours && !wantCoast) return;
+
+            double sea = island.Params.SeaLevel;
+            double norm = 1.0 - sea;
+
+            var levels = new List<double>();
+            int contourCount = 0;
+
+            if (wantContours && norm > 0.0)
+            {
+                int stride = style.ContourStride > 0 ? style.ContourStride : RenderTuning.ContourLevelStride;
+                if (stride < 1) stride = 1;
+
+                double[] edges = RenderTuning.LandBandEdges;
+                for (int i = 0; i < edges.Length; i += stride)
+                {
+                    double level = sea + edges[i] * norm;
+                    if (level > sea && level < 1.0) levels.Add(level);
+                }
+                contourCount = levels.Count;
+            }
+
+            if (wantCoast) levels.Add(sea);
+            if (levels.Count == 0) return;
+
+            int lod = RenderLod.ForPixelsPerMetreWithoutFill(req.PixelsPerMetre);
             double cell = Contours.CellSizeForLod(lod);
 
-            IReadOnlyList<Polyline> coast =
-                Contours.Extract(island.Field, groundRect, cell, island.Params.SeaLevel);
-            if (coast == null) return;
+            // Only the ground that can carry an isoline. Everything outside the land bounds is
+            // sea, no level crosses it, and it is most of the sheet — see
+            // RenderTuning.IsolineLandMarginM for the margin and the measurement.
+            //
+            // LOCAL to this method, deliberately. groundRect is also what Soundings.ForRect and
+            // GarrisonGrid.ForRect are given, and soundings are BELOW sea level while the grid
+            // reaches the paper's edge: clipping the shared rect would delete two layers without
+            // a symptom.
+            Rect2 area = Clipped(groundRect, island.LandBounds, RenderTuning.IsolineLandMarginM);
+            if (area.IsEmpty) return;
 
-            // Extract returns a total order on the polylines (first vertex x asc, y asc), so
-            // this walk is stable without any sorting of our own.
-            for (int i = 0; i < coast.Count; i++)
+            // Sampled once for the area and shared with whatever renders the same quarter next —
+            // three offices, one cut (Q1.2). A null cache is legal and only costs speed.
+            IHeightField field = samples != null
+                ? samples.For(island.Field, area, cell)
+                : island.Field;
+
+            IReadOnlyList<Polyline>[] byLevel =
+                Contours.ExtractLevels(field, area, cell, levels.ToArray());
+
+            // Contours first, lowest first; then the coast over them.
+            for (int L = 0; L < byLevel.Length; L++)
             {
-                StrokePolyline(gi, buf, coast[i], halfWidth, ink);
+                IReadOnlyList<Polyline> lines = byLevel[L];
+                if (lines == null) continue;
+
+                double half = L < contourCount ? contourHalf : coastHalf;
+
+                // Extract returns a total order on the polylines (first vertex x asc, y asc), so
+                // this walk is stable without any sorting of our own.
+                for (int k = 0; k < lines.Count; k++) StrokePolyline(gi, buf, lines[k], half, ink);
             }
+        }
+
+        /// <summary>The rect intersected with the island's land bounds grown by
+        /// <paramref name="marginM"/>, or the rect itself when the island has no land to clip
+        /// to.</summary>
+        static Rect2 Clipped(Rect2 rect, Rect2 land, double marginM)
+        {
+            if (land.IsEmpty) return rect;
+
+            double lo = land.MinX - marginM, hi = land.MaxX + marginM;
+            double bo = land.MinY - marginM, to = land.MaxY + marginM;
+
+            double minX = rect.MinX > lo ? rect.MinX : lo;
+            double minY = rect.MinY > bo ? rect.MinY : bo;
+            double maxX = rect.MaxX < hi ? rect.MaxX : hi;
+            double maxY = rect.MaxY < to ? rect.MaxY : to;
+
+            if (maxX <= minX || maxY <= minY) return Rect2.Empty;
+            return new Rect2(minX, minY, maxX, maxY);
         }
 
         /// <summary>

@@ -42,7 +42,7 @@ namespace Archivist.Building.Editor
             TableCanvas canvas = Object.FindFirstObjectByType<TableCanvas>(FindObjectsInactive.Include);
             if (canvas == null) canvas = TableCanvas.Create();
 
-            BoardInteractor interactor = Ensure<BoardInteractor>("BoardInteractor");
+            BoardControls controls = Ensure<BoardControls>("BoardControls");
             TableSession session = Ensure<TableSession>("TableSession");
 
             // Everything below is serialized private state, so it is set the way the inspector
@@ -55,19 +55,17 @@ namespace Archivist.Building.Editor
                 ("unlitMaterial", (Object)null),   // BoardView builds its own when this is null
             });
 
-            Wire(interactor, new[]
-            {
-                ("board", (Object)board),
-                ("options", (Object)LoadOptions()),
-                ("inputActions", (Object)LoadInputActions()),
-            });
-
-            // The canvas needs the interactor: a row click selects on the BOARD and the header
-            // follows from SelectionChanged, so that one thing is the authority (C7.6).
             Wire(canvas, new[]
             {
                 ("generator", (Object)generator),
-                ("interactor", (Object)interactor),
+            });
+
+            // Q/E. Where BoardInteractor used to sit, holding the one part of its job that was
+            // never about placement — and no longer the camera, which is fixed (BoardZoom 1).
+            Wire(controls, new[]
+            {
+                ("board", (Object)board),
+                ("inputActions", (Object)LoadInputActions()),
             });
 
             Wire(session, new[]
@@ -82,8 +80,11 @@ namespace Archivist.Building.Editor
             });
 
             Selection.activeGameObject = session.gameObject;
-            Debug.Log("[RigBuilder] Rig ready: BoardView, BoardInteractor, TableCanvas and TableSession wired. " +
+            Debug.Log("[RigBuilder] Rig ready: BoardView, BoardControls, TableCanvas and " +
+                      "TableSession wired. " +
                       "Aim at the table and press the interact key, or press C. Esc closes. " +
+                      "A scene built before the quarter rework may still carry a BoardInteractor " +
+                      "object; it holds a missing script and can be deleted. " +
                       "The scene is NOT saved.", session);
         }
 

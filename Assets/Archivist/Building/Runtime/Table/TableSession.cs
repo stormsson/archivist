@@ -146,6 +146,12 @@ namespace Archivist.Building.Table
             // throwIfNotFound on all four: every one of these exists in the asset today, and
             // a typo that silently produced a null action would show up as a key that does
             // nothing, which is the same symptom as half a dozen unrelated faults.
+            // The board's input, made if the scene has none. It is the one part of the rig that
+            // only ever existed because somebody ran the rig builder, and a scene written by a
+            // menu item drifts behind the code — this one sat a week behind it, with Q/E bound
+            // to nothing and no symptom but a key that did not work.
+            BoardControls.EnsureInScene(inputActions);
+
             playerMap = inputActions.FindActionMap("Player", throwIfNotFound: true);
             tableMap = inputActions.FindActionMap("Table", throwIfNotFound: true);
             uiMap = inputActions.FindActionMap("UI", throwIfNotFound: true);

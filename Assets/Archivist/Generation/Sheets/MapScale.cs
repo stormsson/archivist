@@ -1,23 +1,21 @@
 namespace Archivist.Generation.Sheets
 {
-    /// <summary>§8.1, and D5. R2.3 allows three or four fixed values; the live set is four —
-    /// 1250 (<see cref="PoiDetail"/>), 2500 (<see cref="Detail"/> and <see cref="Coastal"/>,
-    /// which now share a denominator), 25000 (<see cref="WholeIsland"/>) and 50000
-    /// (<see cref="WholeIslandFallback"/>, a fallback only).</summary>
+    /// <summary>
+    /// §8.1, and D5. R2.3 allows three or four fixed values; the live set is
+    /// 1250 (<see cref="PoiDetail"/>, detail sheets), 5000 / 10000 / 25000 (the quarter ladder,
+    /// <c>QuarterCutter.QuarterLadder</c>) and 50000 (<see cref="WholeIslandFallback"/>, for a
+    /// chart that will not fit).
+    ///
+    /// <para><b>Per-office scale is gone.</b> <c>Detail</c>, <c>Coastal</c> and <c>ForOffice</c>
+    /// chose a denominator from the office; Q1.6 chooses one per <b>island</b>, shared by every
+    /// office, because that is what puts the board's layers in register. They had no callers
+    /// left and are removed rather than kept as a second way to answer a settled question.</para>
+    /// </summary>
     public readonly struct MapScale
     {
         public readonly int Denominator;
 
         public MapScale(int denominator) { Denominator = denominator; }
-
-        /// <summary>Terrain detail surveys. 1:2500 since F1 — see Tuning.DetailScaleDenominator.</summary>
-        public static MapScale Detail       { get { return new MapScale(Tuning.DetailScaleDenominator); } }
-
-        /// <summary>Coastal reconnaissance. 1:2500 — see Tuning.CoastalScaleDenominator, which is
-        /// the same denominator <see cref="Detail"/> uses. Hydrographic once worked at 1:5000 and
-        /// scale was then a fourth office signal; it is not one any more, and the offices are told
-        /// apart by style, rotation and coverage alone.</summary>
-        public static MapScale Coastal      { get { return new MapScale(Tuning.CoastalScaleDenominator); } }
 
         /// <summary>
         /// POC-03 spec §2.1. The detail-sheet scale, and <b>the sweep knob</b> — see
@@ -28,21 +26,6 @@ namespace Archivist.Generation.Sheets
         /// </summary>
         public static MapScale PoiDetail { get { return new MapScale(Tuning.PoiScaleDenominator); } }
 
-        /// <summary>
-        /// Scale per office (§8.1 as amended by F1). Nothing in R2.2 ties surveys to a
-        /// shared scale — that was an implementation default, not a requirement.
-        /// <para>POC-03's Antiquarian office works at its own, much larger scale: it maps one
-        /// thing closely rather than tiling ground.</para>
-        /// </summary>
-        public static MapScale ForOffice(Office office)
-        {
-            switch (office)
-            {
-                case Office.Hydrographic: return Coastal;
-                case Office.Antiquarian:  return PoiDetail;
-                default:                  return Detail;
-            }
-        }
         /// <summary>Whole-island index sheet. 1:25000 — see Tuning.WholeIslandScaleDenominator.</summary>
         public static MapScale WholeIsland  { get { return new MapScale(Tuning.WholeIslandScaleDenominator); } }
 
@@ -55,9 +38,8 @@ namespace Archivist.Generation.Sheets
         /// <summary>
         /// Grid pitch for this scale (D4 / §6.4), stated as the paper-space rule D4's two
         /// values already encoded: 40 mm on the sheet, whatever the scale. Reproduces D4's own
-        /// table exactly — 1000 m at 1:25000, and, illustratively, 200 m at 1:5000, a scale
-        /// nothing in the project draws at any more. The live scales give 50 m at 1:1250,
-        /// 100 m at 1:2500, 1000 m at 1:25000 and 2000 m at 1:50000.
+        /// table exactly — 1000 m at 1:25000. The live scales give 50 m at 1:1250, 200 m at
+        /// 1:5000, 400 m at 1:10000, 1000 m at 1:25000 and 2000 m at 1:50000.
         /// </summary>
         public double GridPitch
         {

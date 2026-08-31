@@ -68,6 +68,12 @@ namespace Archivist.Building.Editor
 
             Transform anchor = crate != null ? crate.transform : spawner.transform;
 
+            // One binder per office, the way a crate delivers (Q3.1). The bench used to make
+            // one folder and pour everything into it, which BinderView now refuses — and
+            // refuses correctly, because that folder was three offices wearing one label.
+            // One folder for the lot: a binder names an island and may hold every office of it
+            // (Q3.1). The bench is not modelling how a delivery is split — the crate does that —
+            // it is summoning something to look at.
             BinderView binder = binders.Create(seed, opening.IslandName);
             if (binder != null)
             {
@@ -113,7 +119,7 @@ namespace Archivist.Building.Editor
         // --- draw settings
         int sheetCount = 5;
         double pixelsPerPaperMm = 1.2;
-        string sheetSpec = "LandSurvey:7, Antiquarian:1";
+        string sheetSpec = "LandSurvey:2, Antiquarian:1";   // 2 = NE; a survey has four (Q1.1)
 
         // --- state
         Island island;

@@ -1,25 +1,23 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using Archivist.Building.Table;
 using Archivist.Generation.Sheets;
 
 namespace Archivist.Building.Collection
 {
     /// <summary>
-    /// The archive file, as JSON (C9.5). One document holding the ledger, every board and the
-    /// room, because per-table files desync from the ledger and C9.1's invariant — no board and
-    /// no binder may name a sheet the ledger never issued — is only cheap to hold if all of it is
-    /// written together.
+    /// The archive file, as JSON (C9.5). One document holding the ledger and the room, because
+    /// separate files desync and C9.1's invariant — no binder may name a sheet the ledger never
+    /// issued — is only cheap to hold if both are written together.
     ///
-    /// <para><b>Three sections, and the order is the argument</b> (C9.1): <c>ledger</c>, then
-    /// <c>boards</c>, then <c>room</c>. Each depends only on what came before it, so the document
-    /// reads in the order the load happens.</para>
+    /// <para><b>Two sections, and the order is the argument</b> (C9.1): <c>ledger</c>, then
+    /// <c>room</c>. The second depends on the first, so the document reads in the order the load
+    /// happens. <b>There is no board section</b> (Q4.7): a board is derived from the binders on
+    /// a table every time it opens, so there is nothing about it to write down.</para>
     ///
     /// <para><b>Order is content.</b> Islands are listed in the order the archive met them and
-    /// sheets in the order they were issued (<see cref="SheetLedgerStore"/>); placements in lay
-    /// order, which is draw order (§3.3, C4.7); a group's members in join order and a binder's
-    /// contents in filing order. Arrays keep all of that for free and are read back top to
+    /// sheets in the order they were issued (<see cref="SheetLedgerStore"/>); a binder's
+    /// contents in filing order. Arrays keep that for free and are read back top to
     /// bottom.</para>
     ///
     /// <para><b>A damaged record costs that record.</b> Text that will not parse is refused whole
@@ -46,7 +44,23 @@ namespace Archivist.Building.Collection
         /// <summary>The format's version, the <c>archive</c> member of the root object. A reader
         /// that does not recognise it refuses the whole document rather than half-reading it.
         /// </summary>
-        public const int Version = 1;
+        /// <summary>
+        /// 4. Version 1 carried a <c>boards</c> section and sheet numbers that were a
+        /// cull-dependent 1..N; version 2 carried a binder's office; version 3 knew only three
+        /// places a binder could be. A mismatched version makes the file unreadable, which is the
+        /// correct outcome — a v1 save names plates that no longer exist, and a v2 save describes
+        /// a binder model that does not.
+        ///
+        /// <para>The office is gone because a binder no longer has one (Q3.1): it names an
+        /// island and holds whatever offices' plates are in it, which is read off the contents.
+        /// The field existed for the one case that could not be inferred — an empty binder — and
+        /// empty binders do not exist (F-R19.2).</para>
+        ///
+        /// <para>The fourth place is a shelf (R4.2). A v3 save cannot describe one, so every
+        /// binder in it would come back on the floor with no warning that anything was lost —
+        /// refusing it outright says so once, loudly.</para>
+        /// </summary>
+        public const int Version = 4;
 
         /// <summary>One island's row of the ledger: what it is, and what has come out of it.
         /// Name and total are memos of pure functions (R1.11), saved so that listing thirty
@@ -65,7 +79,6 @@ namespace Archivist.Building.Collection
         public sealed class Contents
         {
             public readonly List<LedgerIsland> Islands = new List<LedgerIsland>();
-            public readonly List<BoardSnapshot> Boards = new List<BoardSnapshot>();
             public readonly List<string> Warnings = new List<string>();
 
             /// <summary>Every piece of paper the file names.</summary>
@@ -87,8 +100,7 @@ namespace Archivist.Building.Collection
         // ---- writing -----------------------------------------------------------------------
 
         /// <summary>The whole archive as one JSON document.</summary>
-        public static string Write(SheetLedgerStore ledger, IReadOnlyList<BoardSnapshot> boards,
-                                   RoomSnapshot room)
+        public static string Write(SheetLedgerStore ledger, RoomSnapshot room)
         {
             var json = new Json.Writer();
 
@@ -122,71 +134,6 @@ namespace Archivist.Building.Collection
             }
             json.CloseArray();
 
-            json.Name("boards").OpenArray();
-            for (int b = 0; boards != null && b < boards.Count; b++)
-            {
-                BoardSnapshot board = boards[b];
-                if (board == null || !IsWritableId(board.TableId)) continue;
-
-                json.OpenObject();
-                json.Field("table", board.TableId);
-                json.Field("seed", Seed(board.IslandSeed));
-                json.Field("nextGroup", board.NextGroupId);
-
-                json.Name("groups").OpenArray();
-                for (int g = 0; g < board.Groups.Count; g++)
-                {
-                    GroupRecord group = board.Groups[g];
-
-                    json.OpenObject();
-                    json.Field("id", group.GroupId);
-                    json.Field("office", group.Office.ToString());
-                    json.Field("whole", group.WholeIsland);
-                    json.Field("onTable", group.OnTable);
-                    json.Field("rotation", group.RotationDeg);
-                    json.Field("x", group.OffsetX);
-                    json.Field("y", group.OffsetY);
-
-                    json.Name("members").OpenArray();
-                    for (int m = 0; group.Members != null && m < group.Members.Count; m++)
-                        json.Value(Key(group.Members[m]));
-                    json.CloseArray();
-
-                    json.CloseObject();
-                }
-                json.CloseArray();
-
-                json.Name("placed").OpenArray();
-                for (int p = 0; p < board.Placed.Count; p++)
-                {
-                    BoardSnapshot.Entry entry = board.Placed[p];
-                    Table.Placement placement = entry.Placement;
-
-                    // Three kinds, and only the loose one carries a pose (C4.6, G4.1). This is
-                    // where R1.11 is visible in the file: a nine-sheet assembly is nine names and
-                    // one frame, and a seated sheet is a name.
-                    json.OpenObject();
-                    json.Field("sheet", Key(entry.Id));
-
-                    if (placement.Seated) json.Field("seated", true);
-                    else if (placement.Grouped) json.Field("group", placement.GroupId);
-                    else
-                    {
-                        json.Field("x", placement.GroundX);
-                        json.Field("y", placement.GroundY);
-                        json.Field("rotation", placement.RotationDeg);
-                    }
-                    json.CloseObject();
-                }
-                json.CloseArray();
-
-                json.CloseObject();
-            }
-            json.CloseArray();
-
-            // The room last, because it is the half that says where the ledger's paper actually
-            // is: a reader that stops before it has an archive that over-claims, which is the
-            // state this section exists to end.
             json.Name("room").OpenObject();
             json.Field("nextBinder", room != null ? room.NextBinderNumber : 1);
 
@@ -200,7 +147,7 @@ namespace Archivist.Building.Collection
                 json.Field("number", binder.Number);
                 json.Field("seed", Seed(binder.IslandSeed));
                 json.Field("island", binder.IslandName);
-                WriteWhere(json, binder.Where, binder.TableId, binder.Anchor, binder.Pose);
+                WriteWhere(json, binder);
 
                 json.Name("holds").OpenArray();
                 for (int c = 0; c < binder.Contents.Count; c++) json.Value(Key(binder.Contents[c]));
@@ -218,7 +165,7 @@ namespace Archivist.Building.Collection
 
                 json.OpenObject();
                 json.Field("sheet", Key(sheet.Id));
-                WriteWhere(json, sheet.Where, null, -1, sheet.Pose);
+                WriteFloorOrHands(json, sheet.Where, sheet.Pose);
                 json.CloseObject();
             }
             json.CloseArray();
@@ -229,11 +176,44 @@ namespace Archivist.Building.Collection
             return json.ToString();
         }
 
-        /// <summary>Where one piece of paper is: the three places of <see cref="PaperWhere"/>
-        /// and, for the two that have one, the pose it is standing in. In the hands there is no
-        /// pose to write — the hands are the place.</summary>
-        static void WriteWhere(Json.Writer json, PaperWhere where, string tableId, int anchor,
-                               PaperPose pose)
+        /// <summary>Where one binder is: the four places of <see cref="PaperWhere"/> and, for the
+        /// three that have one, the pose it is standing in. In the hands there is no pose to write
+        /// — the hands are the place.
+        ///
+        /// <para>A furniture record with no id, or a shelf slot with no row and column, falls back
+        /// to the floor. The pose is written either way, so a binder whose furniture cannot be
+        /// named still comes back where it was standing rather than at the world origin.</para>
+        /// </summary>
+        static void WriteWhere(Json.Writer json, BinderRecord binder)
+        {
+            if (binder.Where == PaperWhere.Hands)
+            {
+                json.Field("where", "hands");
+                return;
+            }
+
+            if (binder.Where == PaperWhere.Table && IsWritableId(binder.TableId))
+            {
+                json.Field("where", "table");
+                json.Field("table", binder.TableId);
+                json.Field("anchor", binder.Anchor);
+            }
+            else if (binder.Where == PaperWhere.Shelf && IsWritableId(binder.ShelfId)
+                     && binder.Row >= 0 && binder.Column >= 0)
+            {
+                json.Field("where", "shelf");
+                json.Field("shelf", binder.ShelfId);
+                json.Field("row", binder.Row);
+                json.Field("column", binder.Column);
+            }
+            else json.Field("where", "floor");
+
+            WritePose(json, binder.Pose);
+        }
+
+        /// <summary>The same, for paper that has no furniture to be on: a loose sheet is on the
+        /// floor or in the hands and nowhere else (D-B2).</summary>
+        static void WriteFloorOrHands(Json.Writer json, PaperWhere where, PaperPose pose)
         {
             if (where == PaperWhere.Hands)
             {
@@ -241,14 +221,14 @@ namespace Archivist.Building.Collection
                 return;
             }
 
-            if (where == PaperWhere.Table && IsWritableId(tableId))
-            {
-                json.Field("where", "table");
-                json.Field("table", tableId);
-                json.Field("anchor", anchor);
-            }
-            else json.Field("where", "floor");
+            json.Field("where", "floor");
+            WritePose(json, pose);
+        }
 
+        /// <summary>The pose, as its own object. Shared by both writers so a floor pose and a
+        /// shelf pose cannot drift into different shapes.</summary>
+        static void WritePose(Json.Writer json, PaperPose pose)
+        {
             json.Name("pose").OpenObject();
             json.Field("x", pose.X);
             json.Field("y", pose.Y);
@@ -293,7 +273,6 @@ namespace Archivist.Building.Collection
             }
 
             ReadLedger(root["ledger"], contents);
-            ReadBoards(root["boards"], contents);
             ReadRoom(root["room"], contents);
 
             return contents;
@@ -342,104 +321,6 @@ namespace Archivist.Building.Collection
             }
         }
 
-        static void ReadBoards(Json.Value boards, Contents contents)
-        {
-            IReadOnlyList<Json.Value> all = boards.Items;
-            for (int b = 0; b < all.Count; b++)
-            {
-                Json.Value entry = all[b];
-                string where = "boards[" + b + "]";
-
-                string tableId = entry["table"].AsString(null);
-                ulong seed;
-                if (!IsWritableId(tableId) || !TrySeed(entry["seed"].AsString(null), out seed))
-                {
-                    Complain(contents, where, "unreadable board");
-                    continue;
-                }
-
-                var groups = new List<GroupRecord>();
-                IReadOnlyList<Json.Value> groupEntries = entry["groups"].Items;
-                for (int g = 0; g < groupEntries.Count; g++)
-                {
-                    Json.Value group = groupEntries[g];
-                    string at = where + ".groups[" + g + "]";
-
-                    Office office;
-                    if (!group["id"].IsNumber) { Complain(contents, at, "bad group id"); continue; }
-                    if (!Enum.TryParse(group["office"].AsString(null), out office))
-                    { Complain(contents, at, "unknown office"); continue; }
-
-                    var members = new List<SheetId>();
-                    IReadOnlyList<Json.Value> memberEntries = group["members"].Items;
-                    for (int m = 0; m < memberEntries.Count; m++)
-                    {
-                        SheetId id;
-                        if (!TryKey(memberEntries[m].AsString(null), out id))
-                        {
-                            Complain(contents, at + ".members[" + m + "]", "bad sheet");
-                            continue;
-                        }
-                        members.Add(id);
-                    }
-
-                    groups.Add(new GroupRecord(group["id"].AsInt(0),
-                                               group["rotation"].AsDouble(0.0),
-                                               group["x"].AsDouble(0.0),
-                                               group["y"].AsDouble(0.0),
-                                               office,
-                                               group["whole"].AsBool(false),
-                                               group["onTable"].AsBool(true),
-                                               members.ToArray()));
-                }
-
-                var placed = new List<BoardSnapshot.Entry>();
-                IReadOnlyList<Json.Value> placedEntries = entry["placed"].Items;
-                for (int p = 0; p < placedEntries.Count; p++)
-                {
-                    Json.Value laid = placedEntries[p];
-                    string at = where + ".placed[" + p + "]";
-
-                    SheetId id;
-                    if (!TryKey(laid["sheet"].AsString(null), out id))
-                    {
-                        Complain(contents, at, "bad sheet");
-                        continue;
-                    }
-
-                    if (laid["seated"].AsBool(false))
-                    {
-                        placed.Add(new BoardSnapshot.Entry(id, Table.Placement.SeatedAtTruth()));
-                        continue;
-                    }
-
-                    if (laid["group"].IsNumber)
-                    {
-                        placed.Add(new BoardSnapshot.Entry(
-                            id, Table.Placement.InGroup(laid["group"].AsInt(0))));
-                        continue;
-                    }
-
-                    // A pose, and all three of it. A placement missing one is a sheet that would
-                    // silently move — which is exactly what A6 invites by editing the file, so it
-                    // is refused rather than defaulted.
-                    if (!laid["x"].IsNumber || !laid["y"].IsNumber || !laid["rotation"].IsNumber)
-                    {
-                        Complain(contents, at, "a laid sheet with no pose");
-                        continue;
-                    }
-
-                    placed.Add(new BoardSnapshot.Entry(id, Table.Placement.Laid(
-                        laid["x"].AsDouble(0.0),
-                        laid["y"].AsDouble(0.0),
-                        laid["rotation"].AsDouble(0.0))));
-                }
-
-                contents.Boards.Add(new BoardSnapshot(tableId, seed, placed, groups,
-                                                      entry["nextGroup"].AsInt(1)));
-            }
-        }
-
         static void ReadRoom(Json.Value room, Contents contents)
         {
             if (!room.IsObject) return;
@@ -459,11 +340,8 @@ namespace Archivist.Building.Collection
                     continue;
                 }
 
-                PaperWhere where;
-                string tableId;
-                int anchor;
-                PaperPose pose;
-                if (!TryWhere(entry, out where, out tableId, out anchor, out pose))
+                PaperPlace place;
+                if (!TryWhere(entry, out place))
                 {
                     Complain(contents, at, "a binder that does not say where it is");
                     continue;
@@ -489,7 +367,9 @@ namespace Archivist.Building.Collection
 
                 contents.Binders.Add(new BinderRecord(entry["number"].AsInt(0), seed,
                                                       entry["island"].AsString(null), holding,
-                                                      where, tableId, anchor, pose));
+                                                      place.Where, place.TableId, place.Anchor,
+                                                      place.Pose, place.ShelfId,
+                                                      place.Row, place.Column));
             }
 
             IReadOnlyList<Json.Value> sheets = room["sheets"].Items;
@@ -505,25 +385,23 @@ namespace Archivist.Building.Collection
                     continue;
                 }
 
-                PaperWhere where;
-                string tableId;
-                int anchor;
-                PaperPose pose;
-                if (!TryWhere(entry, out where, out tableId, out anchor, out pose))
+                PaperPlace place;
+                if (!TryWhere(entry, out place))
                 {
                     Complain(contents, at, "a sheet that does not say where it is");
                     continue;
                 }
 
-                // A loose sheet on a table is not a state the room can be in: filing is what a
-                // sheet does at a table, and it consumes the paper (D-B2).
-                if (where == PaperWhere.Table)
+                // A loose sheet on furniture is not a state the room can be in: filing is what a
+                // sheet does at a table, and it consumes the paper (D-B2); a rack takes binders
+                // and nothing else (R4.2).
+                if (place.Where == PaperWhere.Table || place.Where == PaperWhere.Shelf)
                 {
-                    Complain(contents, at, "a loose sheet cannot be on a table");
+                    Complain(contents, at, "a loose sheet cannot be on furniture");
                     continue;
                 }
 
-                contents.Sheets.Add(new LooseSheetRecord(id, where, pose));
+                contents.Sheets.Add(new LooseSheetRecord(id, place.Where, place.Pose));
             }
 
             // The counter cannot be behind the binders that exist, whatever the file says: two
@@ -533,39 +411,69 @@ namespace Archivist.Building.Collection
                     contents.NextBinderNumber = contents.Binders[i].Number + 1;
         }
 
-        /// <summary>The inverse of <see cref="WriteWhere"/>. A record naming a table with no id or
-        /// no anchor is refused rather than dropped to the floor: a binder wrong by a metre is a
-        /// binder somebody has to go and find.</summary>
-        static bool TryWhere(Json.Value entry, out PaperWhere where, out string tableId,
-                             out int anchor, out PaperPose pose)
+        /// <summary>One record's place, as read. A struct rather than six <c>out</c> parameters:
+        /// the two readers want all of it, and a signature nobody can call without a scratch pad
+        /// is a signature that grows a seventh field wrong.</summary>
+        struct PaperPlace
         {
-            where = PaperWhere.Floor;
-            tableId = null;
-            anchor = -1;
-            pose = default(PaperPose);
+            public PaperWhere Where;
+            public string TableId;
+            public int Anchor;
+            public string ShelfId;
+            public int Row;
+            public int Column;
+            public PaperPose Pose;
+        }
+
+        /// <summary>The inverse of <see cref="WriteWhere"/>. A record naming furniture with no id,
+        /// no anchor or no slot is refused rather than dropped to the floor: a binder wrong by a
+        /// metre is a binder somebody has to go and find.</summary>
+        static bool TryWhere(Json.Value entry, out PaperPlace read)
+        {
+            read = new PaperPlace
+            {
+                Where = PaperWhere.Floor,
+                TableId = null,
+                Anchor = -1,
+                ShelfId = null,
+                Row = -1,
+                Column = -1,
+                Pose = default(PaperPose)
+            };
 
             string place = entry["where"].AsString(null);
             if (place == "hands")
             {
-                where = PaperWhere.Hands;
+                read.Where = PaperWhere.Hands;
                 return true;
             }
 
             if (place == "table")
             {
-                tableId = entry["table"].AsString(null);
-                if (!IsWritableId(tableId) || !entry["anchor"].IsNumber) return false;
+                read.TableId = entry["table"].AsString(null);
+                if (!IsWritableId(read.TableId) || !entry["anchor"].IsNumber) return false;
 
-                where = PaperWhere.Table;
-                anchor = entry["anchor"].AsInt(-1);
+                read.Where = PaperWhere.Table;
+                read.Anchor = entry["anchor"].AsInt(-1);
+            }
+            else if (place == "shelf")
+            {
+                read.ShelfId = entry["shelf"].AsString(null);
+                if (!IsWritableId(read.ShelfId)) return false;
+                if (!entry["row"].IsNumber || !entry["column"].IsNumber) return false;
+
+                read.Where = PaperWhere.Shelf;
+                read.Row = entry["row"].AsInt(-1);
+                read.Column = entry["column"].AsInt(-1);
+                if (read.Row < 0 || read.Column < 0) return false;
             }
             else if (place != "floor") return false;
 
             Json.Value at = entry["pose"];
             if (!at.IsObject) return false;
 
-            pose = new PaperPose(at["x"].AsDouble(0.0), at["y"].AsDouble(0.0), at["z"].AsDouble(0.0),
-                                 at["rx"].AsDouble(0.0), at["ry"].AsDouble(0.0), at["rz"].AsDouble(0.0));
+            read.Pose = new PaperPose(at["x"].AsDouble(0.0), at["y"].AsDouble(0.0), at["z"].AsDouble(0.0),
+                                      at["rx"].AsDouble(0.0), at["ry"].AsDouble(0.0), at["rz"].AsDouble(0.0));
             return true;
         }
 

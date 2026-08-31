@@ -101,8 +101,24 @@ namespace Archivist.Building.Table
         {
             if (id.WholeIsland) return PrefixFor(id.Office) + Separator + IndexSheetMark;
 
-            return PrefixFor(id.Office) + Separator
-                 + id.Number.ToString("D2", CultureInfo.InvariantCulture);
+            return PrefixFor(id.Office) + Separator + QuarterOrNumber(id);
+        }
+
+        /// <summary>
+        /// The corner, for a quarter plate: <c>HY·NE</c>. A plate's number <b>is</b> its quarter
+        /// (Q1.1), so printing it as <c>02</c> named a series that does not exist and hid the
+        /// one fact a player uses to place it.
+        ///
+        /// <para>Anything outside 1..4 falls back to the two-digit form. That is a detail sheet
+        /// — POC-03 numbers those 1..M and they are not quarters — and it is also what a plate
+        /// from a future cut would read as rather than throwing.</para>
+        /// </summary>
+        static string QuarterOrNumber(SheetId id)
+        {
+            if (id.Number >= 1 && id.Number <= QuarterCutter.QuarterNames.Length)
+                return QuarterCutter.QuarterNames[id.Number - 1];
+
+            return id.Number.ToString("D2", CultureInfo.InvariantCulture);
         }
 
         /// <summary>

@@ -93,7 +93,14 @@ fi
 
 if [ "$RUN_HARNESS" = 1 ]; then
   echo "== build =="
-  "$DOTNET" build "$ROOT/Tools/GenHarness/GenHarness.csproj" -v q --nologo 2>&1 | grep -Ev '^$' | tail -40
+  # -c Release, and it matters: `dotnet build` defaults to Debug, and an unoptimised
+  # harness measures a generator four times slower than the one Unity runs. That is the
+  # whole of the 4x gap generation_for_agents.md carried as unexplained -- 484 ms
+  # unoptimised against 123 ms optimised, with A8's 250 ms budget sitting between them.
+  # Every timing this harness prints is a timing of the SHIPPING configuration or it is
+  # not worth printing. The run below must name the same configuration or --no-build
+  # looks for a binary that was never built.
+  "$DOTNET" build -c Release "$ROOT/Tools/GenHarness/GenHarness.csproj" -v q --nologo 2>&1 | grep -Ev '^$' | tail -40
   status=${PIPESTATUS[0]}
   if [ "$status" != "0" ]; then echo "BUILD FAILED"; exit 1; fi
 
@@ -102,9 +109,9 @@ if [ "$RUN_HARNESS" = 1 ]; then
   # Split on emptiness: under `set -u`, expanding an empty array is an error in the bash 3.2
   # that ships with macOS, and passing no selector is exactly the default run.
   if [ ${#HARNESS_ARGS[@]} -gt 0 ]; then
-    "$DOTNET" run --project "$ROOT/Tools/GenHarness/GenHarness.csproj" --no-build -- "${HARNESS_ARGS[@]}" || fail=1
+    "$DOTNET" run -c Release --project "$ROOT/Tools/GenHarness/GenHarness.csproj" --no-build -- "${HARNESS_ARGS[@]}" || fail=1
   else
-    "$DOTNET" run --project "$ROOT/Tools/GenHarness/GenHarness.csproj" --no-build || fail=1
+    "$DOTNET" run -c Release --project "$ROOT/Tools/GenHarness/GenHarness.csproj" --no-build || fail=1
   fi
 fi
 

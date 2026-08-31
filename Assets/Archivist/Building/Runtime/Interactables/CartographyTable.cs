@@ -212,6 +212,34 @@ namespace Archivist.Building.Interactables
         /// <summary>How many binders are on it.</summary>
         public int BinderCount { get { Prune(); return placed.Count; } }
 
+        /// <summary>
+        /// Whether the binders on this table hold the island's whole-island chart (R2.2a) — the
+        /// one sheet a board cannot open without (R6.8a).
+        ///
+        /// <para>Read off the contents rather than remembered, like everything else about a
+        /// table's binding (B1.2): a chart arrives when the binder holding it is put down and
+        /// leaves when that binder is taken away, and nothing has to be told.</para>
+        ///
+        /// <para>There is exactly one per island (Q2.3), so this stops at the first.</para>
+        /// </summary>
+        public bool HasChart
+        {
+            get
+            {
+                Prune();
+                for (int b = 0; b < placed.Count; b++)
+                {
+                    BinderView binder = placed[b];
+                    if (binder == null) continue;
+
+                    IReadOnlyList<SheetId> held = binder.Contents;
+                    for (int i = 0; i < held.Count; i++)
+                        if (held[i].WholeIsland) return true;
+                }
+                return false;
+            }
+        }
+
         /// <summary>No anchor left free.</summary>
         public bool IsFull { get { Prune(); return placed.Count >= Capacity; } }
 
@@ -326,6 +354,12 @@ namespace Archivist.Building.Interactables
             // permanent state dressed up as a temporary one.
             if (placed.Count == 0)
                 return InteractionState.Refused("Nothing on this table");
+
+            // R6.8a. A board is the island's chart with quarters laid on it (Q4.4), so without
+            // the chart there is no board — only the mounting sheet, an island-shaped blank with
+            // a name in the header, which is what F-R18.4 found you could open.
+            if (!HasChart)
+                return InteractionState.Refused("No chart of this island");
 
             return InteractionState.Ready;
         }
@@ -508,16 +542,12 @@ namespace Archivist.Building.Interactables
         }
 
         /// <summary>
-        /// C4.4's second half: an unbound table has no board. A saved arrangement of one island's
-        /// paper left on a table that will next be bound elsewhere is not a board with nothing on
-        /// it — it is a board with no table under it, listing sheets this table would refuse.
+        /// C4.4's second half: an unbound table has no board. There is nothing to clear — a
+        /// board is a view of the binders on the table (Q4.1), so the last binder leaving takes
+        /// the board with it — but the save still has to hear that a binder moved.
         /// </summary>
         void Discard()
         {
-            Archive archive = Archive.InScene;
-            BoardStore boards = archive != null ? archive.Boards : null;
-            if (boards != null) boards.Clear(TableId);
-
             Archive.Note();
         }
 
@@ -543,6 +573,7 @@ namespace Archivist.Building.Interactables
 
             ulong seed = BoundSeed;
             if (seed == 0) return;   // CanInteract has already said so, in words.
+            if (!HasChart) return;   // R6.8a, and the same: refused above, in words.
 
             session.Open(seed, new BinderSheetSource(this), TableId);
         }

@@ -112,6 +112,29 @@ namespace Archivist.Generation
         /// </summary>
         public const int    DefaultMaxPaperContourLod = 4;
 
+        /// <summary>
+        /// How far past the land bounds the island-scale coastline is extracted, in
+        /// <see cref="BaseCell"/> units. 4 cells = 256 m.
+        ///
+        /// <para><b>Why the coastline is not extracted over the whole domain.</b> It used to be,
+        /// and it was 68.6% of the cost of generating an island — 500 x 500 cells over 256 km²
+        /// of which the land bounds average 42.8 km², so five sixths of the scan was open sea.
+        /// <c>ComputeLandBounds</c> already runs first, so the bounds are free.</para>
+        ///
+        /// <para><b>Why a margin at all, and why this one.</b> <c>ComputeLandBounds</c> samples
+        /// on the <see cref="BaseCell"/> lattice, so an islet smaller than that spacing can fall
+        /// between samples and never enter the bounds — and its coastline loop then lies outside
+        /// them. Measured against the full-domain extraction over 30 islands, vertex for vertex:
+        /// 1 cell misses five, 2 cells miss one, <b>4 cells miss none</b>, and 8 and 16 cells
+        /// also miss none while giving back the saving. See <c>rework1/03-findings.md</c> F-R4.3.</para>
+        ///
+        /// <para><b>A threshold, not a guarantee.</b> Nothing bounds how far offshore an
+        /// unsampled islet can sit, so raising this cannot be proved unnecessary — but an islet
+        /// outside the land bounds is not drawn on any plate (Q1.1), so it exists in the data and
+        /// nowhere else.</para>
+        /// </summary>
+        public const int    DefaultCoastlineMarginCells = 4;
+
         // --- quantisation (D3 / §4.4) ---
         public const double DefaultGradientStep = 20.0;     // central difference h, metres
 
@@ -119,79 +142,28 @@ namespace Archivist.Generation
         public const double DefaultSheetWidthMm = 594.0;    // A1
         public const double DefaultSheetHeightMm = 841.0;
         public const double DefaultSheetMarginMm = 40.0;
-        public const double DefaultOverlapFraction = 0.20;
 
-        // --- Hydrographic coastal strip (D-H3) ---
-        // 380 x 200 mm, map 350 x 170 mm -> 875 x 425 m of ground at 1:2500.
-        //
-        // (History: the strip was once 841 x 297 mm — A1's long edge by A3's short edge, map
-        // area 801 x 257 mm, which is the 2002 x 642 m the paragraph below refers to. That
-        // paper-convention format is gone; the numbers above are the live ones.)
-        //
-        // The length is set by the coast, not by paper convention. Tuning.FeatureScale is
-        // 2600 m — the wavelength the coastline wiggles on — and a straight rectangle can
-        // only track a curve if it spans well under one wavelength. At 2002 m the strips
-        // cut across every bay; at ~1/3 of a wavelength they follow it.
-        public const double DefaultStripWidthMm = 380.0;
-        public const double DefaultStripHeightMm = 200.0;
-        public const double DefaultStripMarginMm = 15.0;
-
-        // A survey works a STRETCH of coast, not the whole ring. Without this the office
-        // circumnavigates every island exhaustively, which is both implausible and the
-        // reason no ground was ever left unsurveyed (R1.8 / finding F8).
-        // Tuned against the 10-15 sheet target: 0.50-0.85 gave a mean of 17.2. Half a coast
-        // is also the more believable expedition — a season's work, not a circumnavigation.
-        // An expedition works a REGION, not a fraction of each loop independently. Applying
-        // an arc per loop made the office survey 30% of the main shore while charting remote
-        // skerries end to end, because a loop too small to step across gets one sheet
-        // covering all of it — an expedition no one would mount. The survey is now a disc:
-        // a seeded anchor on the main coast, and everything within reach of it, main shore
-        // and offshore rocks alike. Radius is a fraction of the land bbox diagonal.
-        public const double DefaultCoastRegionRadiusMin = 0.34;
-        public const double DefaultCoastRegionRadiusMax = 0.62;
-
-        // How far seaward of the shoreline the strip sits, as a fraction of its depth.
-        // 0 centres it on the coast, which puts half of every sheet over ground this
-        // office does not chart; 0.3 leaves roughly a fifth of the strip inland.
-        public const double DefaultCoastSeawardBias = 0.30;
-
-        /// <summary>Loops shorter than this are specks, not coastline. ~190 m across.</summary>
-        public const double DefaultCoastMinLoopLength = 600.0;
-
-        /// <summary>Minimum gap between sheet centres, as a fraction of the step.</summary>
-        public const double DefaultCoastMinSheetSeparation = 0.75;
-
-        // --- scales (§8.1, D5, F1) ---
-        // Detail surveys moved 1:5000 -> 1:2500 (F1): at 1:5000 one sheet covered 9.78 km2
-        // against islands holding 1-27 km2, so sheet economy sat at a median of 13 against
-        // requirements §6.1's 30-60, and Land Survey's landFraction >= 0.60 was
-        // geometrically unreachable on most islands. At 1:2500 the median is 30.
-        public const int    DefaultDetailScaleDenominator = 2500;
-
-        // Hydrographic works at 1:2500 — the SAME scale as the terrain offices. Scale is
-        // therefore NOT an office signal: style, rotation and coverage are the three that
-        // distinguish a coastal reconnaissance from a terrain survey, and a reader cannot
-        // tell the two apart by denominator alone.
-        //
-        // (History, and why 1:5000 was once chosen: Hydrographic keeps every rect the coast
-        // crosses, so at 1:2500 it once produced 31 of 56 detail sheets on one island — more
-        // than half the archive re-showing ground already filed three times. At 1:5000 it
-        // produced 12, and a coastal reconnaissance genuinely IS small-scale work where a
-        // terrain survey is not, which made scale a fourth signal alongside the other three.
-        // That differentiation was lost when this value moved back to 2500; the sheet-count
-        // argument against 1:2500 still stands and is unaddressed here. Changing the value
-        // back is a design decision, not a comment fix.)
-        //
-        // R2.2 never tied surveys to a shared scale; R2.3 allows three or four fixed values.
-        // The live set is four: 1250 (PoiScaleDenominator), 2500, 25000, 50000 — 5000 is no
-        // longer among them and nothing in the project draws at it.
-        public const int    DefaultCoastalScaleDenominator = 2500;
 
         // Whole-island index sheets, and the fallback when even that will not fit. Both are
         // small-scale by construction: the point is one sheet covering the entire island, so
         // the denominator follows the largest island rather than any paper-detail rule.
         // 1:50000 exists only as the fallback — it is used when 1:25000 still overflows the
         // sheet, which is why the two are named apart instead of being one clamped value.
+        /// <summary>
+        /// The middle rung of the quarter ladder (Q1.6). A quarter of an island has to fit one
+        /// A1 map area, and the two rungs that already existed are too far apart to do it: a
+        /// 6.9 km island's quarter needs about 1:6700, which 1:2500 cannot reach and 1:25000
+        /// overshoots into 73% blank paper. Three rungs — 2500, 10000, 25000 — keep R2.3's
+        /// "three or four fixed values" and give a small island, an ordinary one and a large
+        /// one each a scale that fills its sheet.
+        /// </summary>
+        /// <summary>The fine rung of the quarter ladder (Q1.6). Replaced 1:2500, which no
+        /// island's quarter could ever reach — a quarter of even a small island is kilometres
+        /// across, and 1:2500 on an A1 covers 1285 x 1902 m.</summary>
+        public const int    DefaultQuarterScaleFineDenominator = 5000;
+
+        public const int    DefaultQuarterScaleDenominator = 10000;
+
         public const int    DefaultWholeIslandScaleDenominator = 25000;
         public const int    DefaultWholeIslandFallbackScaleDenominator = 50000;
 
@@ -209,15 +181,17 @@ namespace Archivist.Generation
         public const double DefaultServedThreshold = 0.50;
         public const double DefaultSoundingDepth = -4.0;
 
-        // --- cull (§10.3) ---
-        public const double DefaultLandFractionMinLandSurvey = 0.60;
-        public const double DefaultLandFractionMinGarrison = 0.02;
+        /// <summary>
+        /// Sampling density for a rect, as an n x n lattice. 16.
+        ///
+        /// <para><b>The cull it was named for is gone</b> — every office gets the same four
+        /// quarters and nothing decides whether a rect survives (Q1.2), so <c>RectCull</c> and
+        /// both <c>LandFractionMin</c> thresholds went with it. This survives because
+        /// <c>Editor/IslandDebugWindow</c> samples a sheet the same way to say whether it is
+        /// worth drawing, and 16 x 16 is still the right density for that.</para>
+        /// </summary>
         public const int    DefaultCullSampleGrid = 16;       // 16x16 per rect
 
-        // --- rotation (D2 / §10.1) ---
-        public const double DefaultPcaIsotropyThreshold = 1.15;  // lambda1/lambda2 below this = degenerate
-        public const double DefaultPcaCoastSampleFrac = 0.25;  // step = u * this
-        public const int    DefaultPcaLandMinPoints = 64;
 
         // --- peaks (§7.1) ---
         public const double DefaultPeakElevationFrac = 0.35;     // of MaxElevation

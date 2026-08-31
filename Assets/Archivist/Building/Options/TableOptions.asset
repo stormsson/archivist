@@ -15,13 +15,12 @@ MonoBehaviour:
   boardUnitsPerMetre: 0.01
   boardPadding: 0.08
   sheetSeparation: 0.004
-  boardZoom: 2
+  boardZoom: 1
   boardZoomMin: 1
   boardZoomMax: 4
   boardZoomStep: 1.15
   wheelSensitivity: 0.03
-  cabinetScrollPixelsPerNotch: 40
-  boardPixelsPerPaperMm: 0.6
+  boardPixelsPerMetre: 0.35
   positionTolerance: 0.12
   rotationToleranceDeg: 8
   settleSeconds: 0.18

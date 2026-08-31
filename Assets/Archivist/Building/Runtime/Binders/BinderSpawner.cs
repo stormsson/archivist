@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Archivist.Generation.Sheets;
 
 namespace Archivist.Building.Binders
 {
@@ -101,9 +102,9 @@ namespace Archivist.Building.Binders
         }
 
         /// <summary>
-        /// A new, empty binder for one island, numbered and named. Nothing is filed into it
-        /// here: what goes in is the caller's business, and the ledger has to be told about
-        /// every sheet that does (R2.10).
+        /// A new, empty binder for one island (Q3.1), numbered and named. What offices end up in
+        /// it is decided by what is filed into it, and that is the caller's business — the ledger
+        /// has to be told about every sheet that goes in (R2.10).
         /// </summary>
         public BinderView Create(ulong islandSeed, string islandName)
         {

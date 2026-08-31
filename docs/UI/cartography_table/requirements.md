@@ -1,10 +1,18 @@
-The interface is to show different sheets of papers that must be positioned and rotated to match, like a puzzle.
-the window is split in 3 different areas
-- a small header, full width showing information about the "Island" and the current "Sheet" selected
-- a right column that shows an accordion that contains items
--- an item is a small thumbnail +  a sheet name (or ID)
-- the main composition area (main part of the screen) basically shows a big white piece of white paper over a wooden table. the player position their sheets selected from the accordion.
+# The Cartography Table — Requirements
 
-the sheet can be dragged to/from the accordion and this will hide/show the sheet on the table.
+> **SUPERSEDED (2026-08-30, branch `rework1`).** The authority is
+> `../../quarters/requirements.md` §5 (Q4.1–Q4.7); the argument is
+> `../../quarters/decisions.md`.
 
-clicking on a sheet shows a selected outline on the sheet and allows the user to move it and rotate it (no zoom)
+What this asked for, and what happened to each part:
+
+| asked for | now |
+|---|---|
+| sheets positioned and rotated to match, like a puzzle | **gone.** Plates lay themselves out from binder contents (Q4.1); nothing is placed or rotated (Q4.2, D-Q1) |
+| a header showing island and selected sheet | the caption survives as a place to name the island and the office currently shown |
+| a right-hand accordion of islands, thumbnail + name | **gone.** A table shows the binders set on it (B1.2); there is no browser of everything |
+| drag sheets to/from the accordion to show/hide | replaced by `Q`/`E` cycling office layers (Q4.3) |
+| click to select, move and rotate; no zoom | **gone** (Q4.2) |
+
+The one thing it got right and that survives whole: the table is a **big area
+where an island is looked at**, not a tool that judges the player.

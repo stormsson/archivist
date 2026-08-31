@@ -50,6 +50,14 @@ where they disagree, that is recorded, not silently fixed.
   per POC. Findings are measured, not reasoned.
 - `docs/generation_for_agents.md` — the generator **as built**. Read before
   touching `Archivist.Generation`.
+- `docs/quarters/` — **the map-table rework (branch `rework1`)**. `requirements.md`
+  is the authority on the quarter model, the office-as-layer model, and what the
+  table does; `decisions.md` records every fork and what was rejected. It
+  supersedes `requirements.md` §3.6 and all of `docs/UI/cartography_table/`
+  except `findings.md`.
+- `docs/rework1/` — the implementation plan for it: `00-overview.md` (order and
+  parallelism), `01-removal.md` (what comes out), `02-features.md` (**W**-numbers,
+  what gets built).
 
 Requirements are cited by number (R1.11, S3.1, F-02.2). Use them when explaining
 a change; if code and a numbered requirement disagree, say so rather than

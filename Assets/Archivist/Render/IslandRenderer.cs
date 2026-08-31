@@ -14,7 +14,25 @@ namespace Archivist.Render
     /// </summary>
     public static class IslandRenderer
     {
-        public static ImageBuffer Render(Island island, RenderRequest req)
+        /// <summary>
+        /// One render. <paramref name="samples"/> is optional and lets several plates of one
+        /// quarter share the field samples they all need (Q1.2 gives every office the same four
+        /// rects); a null cache renders the same picture and only pays more for it.
+        ///
+        /// <para><b>Defaulted, and unlike <c>RenderRequest.ScaleDenominator</c> that is safe
+        /// here</b> — losing this loses speed, never a layer. F-R13.2 is the case where a
+        /// defaulted value silently changed what was drawn; this one cannot.</para>
+        /// </summary>
+        public static ImageBuffer Render(Island island, RenderRequest req,
+                                         SampleGridCache samples = null)
+        {
+            return Render(island, req, OfficeStyles.Neutral, samples);
+        }
+
+        /// <summary>The same, in one office's hand (R2.6, Q2.6). See <c>OfficeStyles</c> for why
+        /// this carries the whole of what tells two offices apart.</summary>
+        public static ImageBuffer Render(Island island, RenderRequest req, OfficeStyle style,
+                                         SampleGridCache samples = null)
         {
             if (island == null) throw new ArgumentNullException("island");
 
@@ -22,7 +40,9 @@ namespace Archivist.Render
             var gi = new GroundImage(req);
 
             double norm = Normalisation(island);
-            Rgba[] palette = Palette.ForIsland(island);
+            // A washing office brings its own two-tone palette; everyone else gets the global
+            // one, which only a fill would use and which no plate turns on.
+            Rgba[] palette = style.HasWash ? OfficeStyles.WashPalette(style) : Palette.ForIsland(island);
 
             // The coast is derived from the fill's own samples (§7, FieldCoast), so it needs
             // the h01 raster — allocated only when both layers are actually wanted.
@@ -34,6 +54,13 @@ namespace Archivist.Render
             {
                 FillRenderer.Fill(island, req, gi, buf, palette, norm, h01);
             }
+            else
+            {
+                // The unprinted sheet, in this office's stock (R2.6). A buffer starts at zero,
+                // which is black — so a plate with Fill off (Q2.2) and no paper under it is ink
+                // on a black rectangle, which is what this looked like before the line existed.
+                buf.Fill(style.Paper);
+            }
 
             if (h01 != null)
             {
@@ -41,17 +68,20 @@ namespace Archivist.Render
                 // Ink.CoastInk is the single derivation both coast paths call, so this line
                 // and the Strokes vector fallback are the same colour by construction — they
                 // were NOT when each path derived its own (one rounded, one truncated).
+                // The office's own pen, not one derived from the fill. With a wash the fill
+                // IS the office's colour, so deriving from it would give a coastline that
+                // vanishes into the water it is the edge of.
                 FieldCoast.Draw(h01, buf.Width, buf.Height, island.Params.SeaLevel,
-                                halfWidthPx, Ink.CoastInk(palette), buf);
+                                halfWidthPx, style.Ink, buf);
             }
 
             // Strokes still draws the discrete features. Coast is cleared when FieldCoast
             // handled it; without a fill there is no h01 raster, so the vector path remains
             // the fallback and Strokes keeps the layer.
             LayerMask remaining = h01 != null ? (req.Layers & ~LayerMask.Coast) : req.Layers;
-            var strokeReq = new RenderRequest(req.Area, req.RotationDeg, req.PixelsPerMetre,
-                                              req.PixelsPerPaperMm, remaining);
-            Strokes.Draw(island, strokeReq, gi, buf, palette);
+
+            RenderRequest strokeReq = req.WithLayers(remaining);
+            Strokes.Draw(island, strokeReq, gi, buf, palette, style, samples);
             return buf;
         }
 

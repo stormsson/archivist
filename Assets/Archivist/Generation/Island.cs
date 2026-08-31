@@ -92,9 +92,17 @@ namespace Archivist.Generation
             island.LandBounds = island.Field.ComputeLandBounds();
 
             // Island-scale contours: the whole-island view sits at lod 1 (32 m cell), §6.2.
+            //
+            // Over the LAND BOUNDS and a margin, not the whole domain. The sea-level isoline
+            // can only run where land meets sea, and every sampled land point is inside the
+            // bounds -- which ComputeLandBounds has just paid for. Scanning all 256 km² of the
+            // domain was 68.6% of the cost of an island, and five sixths of it was open sea.
+            //
+            // The margin is Tuning.CoastlineMarginCells, and that comment is where the reason
+            // lives: land is sampled on the 64 m lattice, so an islet finer than that can fall
+            // between samples and be missed. 4 cells was measured, not chosen.
             double half = island.Params.DomainMetres * 0.5;
-            Rect2 domain = new Rect2(-half, -half, half, half);
-            island.Coastline = Contours.Extract(island.Field, domain,
+            island.Coastline = Contours.Extract(island.Field, CoastlineArea(island.LandBounds, half),
                                                 Contours.CellSizeForLod(1), island.Params.SeaLevel);
 
             // Discrete features, once per island, in this order, with stable ids (§3.1, §7).
@@ -126,24 +134,41 @@ namespace Archivist.Generation
         }
 
         /// <summary>
-        /// Rotation order matters: Hydrographic derives from the coast, and Land Survey's
-        /// degenerate case falls back to hydroDeg + 90 (D2), so Hydrographic must be first.
+        /// Where the island-scale coastline is extracted: the land bounds, grown by
+        /// <see cref="Tuning.CoastlineMarginCells"/> cells and clamped to the domain.
+        ///
+        /// <para>Clamped rather than trusted: an island whose land reaches the domain edge would
+        /// otherwise ask <c>Contours.Extract</c> for ground the field does not define. Empty
+        /// bounds — a seed that produced no land — fall back to the whole domain, because there
+        /// is nothing to centre a margin on and the answer is an empty list either way.</para>
+        /// </summary>
+        static Rect2 CoastlineArea(Rect2 landBounds, double half)
+        {
+            if (landBounds.IsEmpty) return new Rect2(-half, -half, half, half);
+
+            double m = Tuning.CoastlineMarginCells * Tuning.BaseCell;
+            return new Rect2(Math.Max(landBounds.MinX - m, -half), Math.Max(landBounds.MinY - m, -half),
+                             Math.Min(landBounds.MaxX + m,  half), Math.Min(landBounds.MaxY + m,  half));
+        }
+
+        /// <summary>
+        /// The chart first, then one four-plate survey per office that cuts one (Q2.3).
+        ///
+        /// <para>Order is the file's and the board's: the chart is the base everything else is
+        /// laid over (Q4.4), and the offices follow in <see cref="Offices.All"/> order, which is
+        /// the order <c>Q</c>/<c>E</c> cycles them in.</para>
         /// </summary>
         static List<Survey> CutSurveys(Island island)
         {
             var surveys = new List<Survey>();
-            surveys.Add(SurveyCutter.CutWholeIsland(island.LandBounds, island.Seed));
-
-            // Derived once and handed to every office, not once per office: Land Survey's
-            // degenerate case falls back to hydroDeg + 90 (D2).
-            double hydroDeg = HydroRotation(island);
+            surveys.Add(QuarterCutter.CutChart(island.LandBounds, island.Seed));
 
             for (int i = 0; i < Offices.All.Length; i++)
             {
                 Office office = Offices.All[i];
                 if (!CutsOffice(office)) continue;
 
-                surveys.Add(CutSurvey(island, office, hydroDeg));
+                surveys.Add(CutSurvey(island, office));
             }
             return surveys;
         }
@@ -168,28 +193,20 @@ namespace Archivist.Generation
         /// </summary>
         public Survey CutSurvey(Office office)
         {
-            return CutSurvey(this, office, HydroRotation(this));
+            return CutSurvey(this, office);
         }
 
-        /// <summary>
-        /// Shared by both entry points, so the loop and the on-demand call cannot diverge.
-        /// <paramref name="hydroDeg"/> is a parameter rather than derived here because
-        /// <see cref="CutSurveys"/> needs it once for all four offices.
-        /// </summary>
-        static Survey CutSurvey(Island island, Office office, double hydroDeg)
+        /// <summary>Shared by both entry points, so the loop and the on-demand call cannot
+        /// diverge.</summary>
+        static Survey CutSurvey(Island island, Office office)
         {
-            SurveySpec spec = SurveyCutter.PlanSurvey(island.Field, island.Coastline,
-                                                      island.LandBounds, office, hydroDeg);
+            if (office == Office.Antiquarian)
+            {
+                return DetailSheetCutter.Cut(island.Features.Pois, island.Service,
+                                             QuarterCutter.PlanDetail(island.Seed));
+            }
 
-            return SurveyCutter.CutFor(island.Field, island.Coastline, island.Service,
-                                       island.Features.Pois, island.LandBounds, spec);
-        }
-
-        /// <summary>The island's Hydrographic rotation (D2). Every office's plan needs it.</summary>
-        static double HydroRotation(Island island)
-        {
-            PcaResult ignored;
-            return Rotations.Hydrographic(island.Coastline, island.Params.ServiceRadius, out ignored);
+            return QuarterCutter.Cut(island.LandBounds, island.Seed, office);
         }
 
         public Survey SurveyFor(Office office)

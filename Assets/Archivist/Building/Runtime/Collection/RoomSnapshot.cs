@@ -17,14 +17,18 @@ namespace Archivist.Building.Collection
         }
     }
 
-    /// <summary>The three places paper can be. There is no fourth: a sheet <i>on a board</i> is
-    /// not paper at all but a slab drawn from an identity, and the document itself is in the
-    /// binder the board was opened from.</summary>
+    /// <summary>Where paper can be. A sheet <i>on a board</i> is not one of them: it is not paper
+    /// at all but a slab drawn from an identity, and the document itself is in the binder the
+    /// board was opened from.
+    ///
+    /// <para><see cref="Shelf"/> is for binders only. A loose sheet is filed into a binder and
+    /// stops being paper (D-B2), so nothing ever stands a sheet in a rack.</para></summary>
     public enum PaperWhere
     {
         Floor,
         Table,
-        Hands
+        Hands,
+        Shelf
     }
 
     /// <summary>
@@ -55,6 +59,19 @@ namespace Archivist.Building.Collection
         public readonly string TableId;
         public readonly int Anchor;
 
+        /// <summary>Which shelf it is filed in, and which slot of it. Empty and -1 unless
+        /// <see cref="Where"/> is <see cref="PaperWhere.Shelf"/>.
+        ///
+        /// <para><b>Row and column, never a slot index.</b> An index is <c>row * slotsPerRow +
+        /// column</c>, and those numbers are authored — changing a shelf from eight slots per row
+        /// to nine would silently shift every filed binder one place along, which for a game
+        /// about order being meaningful is the worst available failure. The pair survives every
+        /// change to the shelf's spacing and its row count, and when a column really has gone it
+        /// fails loudly instead: no such slot, warn, put the binder on the floor.</para></summary>
+        public readonly string ShelfId;
+        public readonly int Row;
+        public readonly int Column;
+
         /// <summary>Its world pose, wherever it is standing — including on a table, where the
         /// anchor decides the place and a runtime jitter decides the angle (so the angle is not
         /// recomputable and must be kept). Meaningless in the hands.</summary>
@@ -62,7 +79,8 @@ namespace Archivist.Building.Collection
 
         public BinderRecord(int number, ulong islandSeed, string islandName,
                             IReadOnlyList<SheetId> contents, PaperWhere where,
-                            string tableId, int anchor, PaperPose pose)
+                            string tableId, int anchor, PaperPose pose,
+                            string shelfId = null, int row = -1, int column = -1)
         {
             Number = number;
             IslandSeed = islandSeed;
@@ -72,6 +90,9 @@ namespace Archivist.Building.Collection
             TableId = tableId;
             Anchor = anchor;
             Pose = pose;
+            ShelfId = shelfId;
+            Row = row;
+            Column = column;
         }
 
         public override string ToString()

@@ -1,5 +1,12 @@
 # Binders on the Cartography Table — Specification
 
+> **Amended (2026-08-30, branch `rework1`).** B1.1–B1.8 mostly survive. Three
+> changes: a binder's identity becomes `island · office`, not island alone
+> (Q3.1); B1.3's "identity is its island" becomes the *goal* state reached by
+> merging (Q3.3); and B1.1's capacity must never gate which offices can be
+> compared (Q4.5). §11's "opening the board" now opens a view, not a workspace
+> (Q4.1). See `quarters/requirements.md` §4.
+
 Construction. `UI/cartography_table/requirements.md` is the authority on intent
 for the table, `UI/cartography_table/spec.md` on the board it opens, and
 `requirements.md` §3.6 on the activity. This document is the authority on the

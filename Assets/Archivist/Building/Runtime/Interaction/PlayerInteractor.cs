@@ -68,7 +68,12 @@ namespace Archivist.Building.Interaction
 
             if (found != current)
             {
+                // Told in this order — the one losing the aim first — so two interactables are
+                // never both lit for a frame while the player sweeps across a rack.
+                if (current != null) current.Unaimed();
                 current = found;
+                if (current != null) current.Aimed(this);
+
                 Refresh();
             }
             else if (current != null)
@@ -139,6 +144,11 @@ namespace Archivist.Building.Interaction
 
         void OnDisable()
         {
+            // The aim is lost whether the player looked away or the room was taken from them —
+            // opening the map table disables this, and a slot left lit would still be glowing
+            // when they came back out.
+            if (current != null) current.Unaimed();
+
             current = null;
             if (prompt != null) prompt.Hide();
         }

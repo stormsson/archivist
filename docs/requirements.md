@@ -2,6 +2,13 @@
 
 Working title. Single-player, first person, no fail state, no timer.
 
+> **Reworked on branch `rework1` (2026-08-30).** The map table, the cut of an
+> island, and what a binder holds all changed. `quarters/requirements.md` is the
+> authority on that model and `quarters/decisions.md` records why. Requirements
+> below that it retires are marked **[retired — Qn.n]** in place rather than
+> deleted; where this document and that one disagree, that one is later and
+> narrower, and the disagreement is recorded, not silently fixed.
+
 ---
 
 ## 1. Premise
@@ -15,9 +22,10 @@ visitor, no supervisor, no deadline.
 
 There are always more islands. The sea they sit in is never drawn.
 
-A second, optional activity exists: a map table where sheets can be laid out
-and joined, recovering the shape of one island at a time. Nobody asked for
-this. It is not required.
+A second, optional activity exists: a map table, where the sheets an archivist
+has put in order can be looked at as one island — a coast in one office's hand,
+then the same ground in another's. Nobody asked for this. It is not required.
+*(Q4.1–Q4.3. It was once an assembly puzzle; see `quarters/decisions.md` §1.)*
 
 ---
 
@@ -100,22 +108,29 @@ world geometry above them and no spatial relationship between them.
 - **R2.1** A sheet is a render of **one island** at
   `island_seed, centre, size, rotation, scale, office, year`. No sheet ever
   shows two islands.
-- **R2.2** Sheets are generated in **surveys**, not individually. One survey =
+- **R2.2 (reshaped — Q3.1)** Sheets are generated in **surveys**, not individually. One survey =
   one island, one office, one year, one scale, one rotation, covering a coherent
   area with a numbered set of sheets.
-- **R2.2a** Each island carries at least one survey at whole-island scale — a
+- **R2.2a (reshaped — Q4.4: it is the board's base, not a placeable tile)**
+  Each island carries at least one survey at whole-island scale — a
   single sheet showing the full coastline. This is the entry point for that
   island and makes every later sheet placeable. It may be old, distorted, or
   damaged, but it exists.
-- **R2.3** Scale is drawn from three or four fixed values. Never continuous.
-- **R2.4** Rotation is fixed per survey, not per sheet. A survey may follow a
-  coast or a ridge and sit at any angle.
-- **R2.5** Overlap *within* a survey is a tuning parameter
+- **R2.3 (reshaped — Q1.6)** Scale is drawn from three or four fixed values.
+  Never continuous. It is now chosen per *island*, not per survey.
+- **R2.4 [retired — Q1.2]** ~~Rotation is fixed per survey, not per sheet. A
+  survey may follow a coast or a ridge and sit at any angle.~~ Every office now
+  shares one cut on one axis, so no survey has a rotation to fix.
+- **R2.5 [retired — Q1.4]** Quarters tile exactly, so there is no overlap to
+  tune. The rule is struck; the measurement below is kept, because it is what
+  makes Q1.4 safe.
+
+  ~~Overlap *within* a survey is a tuning parameter
   (`paper.OverlapFraction` in `config/generation.yml`), not a fixed property of
   the world. It defaults to 20%; **0% is permitted** — sheets then tile edge to
   edge and a collection carries about a quarter fewer of them. Sheets from
   different surveys overlap freely and unevenly at any setting, because rotation,
-  scale and extent are decided per survey and not by this number.
+  scale and extent are decided per survey and not by this number.~~
 
   *Changed from "sheets within a survey overlap by roughly 10–25%". That range
   was intent and was never a measurement; it became a parameter when the
@@ -130,9 +145,10 @@ world geometry above them and no spatial relationship between them.
   typography, paper stock, wear. Style is the fastest signal the player has.
 - **R2.7** Two sheets covering the same ground in different styles must show the
   same underlying features, drawn differently. Neither may omit them entirely.
-- **R2.8** Roughly one third of surveys carry an index diagram in the margin
-  showing where the sheet sits. The rest do not. This is the main difficulty
-  dial.
+- **R2.8 [retired — Q4.2]** ~~Roughly one third of surveys carry an index
+  diagram in the margin showing where the sheet sits. The rest do not. This is
+  the main difficulty dial.~~ It was the difficulty dial for *placement*, and
+  nothing is placed any more.
 - **R2.9** Some surveys are incomplete: numbered sheets that do not exist.
 - **R2.10 (uniqueness)** Every sheet in the collection is unique. No duplicates,
   no near-duplicates, no reprints. One sheet, one slot, always.
@@ -145,7 +161,7 @@ world geometry above them and no spatial relationship between them.
 - **R2.10b** A slot on a rack is therefore binary — filled or empty — and a gap
   in a run is unambiguous. The rack becomes a checklist made of physical space,
   with no readout needed.
-- **R2.11** 2–3% of sheets resist classification: damaged, unstamped, mixed
+- **R2.11 (cut, and Q6.3 keeps it cut)** 2–3% of sheets resist classification: damaged, unstamped, mixed
   provenance, or filed wrongly by a previous hand.
 - **R2.12** Distribution is uneven. One office dominates. Some years are a flood,
   others nearly empty.
@@ -203,30 +219,31 @@ world geometry above them and no spatial relationship between them.
 
 ### 3.6 The map table
 
-- **R6.1** Optional. The game is completable without ever using it.
-- **R6.2** The player places a **copy**, not the original. An item can be shelved
-  and composed at once.
-- **R6.3** A sheet can only be copied after it has been handled.
-- **R6.4** Assisted placement: the player drops a sheet roughly positioned and
-  roughly rotated; the game fits it locally against **that island's** vector
-  data and settles it. Tolerance is generous and hidden.
-- **R6.5** If no good fit exists, the sheet stays where it was dropped, unsettled.
-  No error state, no colour, no message.
-- **R6.6** Two input methods: drag and wheel for coarse work; two-point pinning
-  (click a feature on the sheet, click it on the board, twice) for hard sheets.
-- **R6.7** Fitting is always against the true island, **never** against the
-  player's reference maps.
-- **R6.8** **One board per island.** Boards are self-contained; a sheet cannot
-  be placed on the wrong island's board and settle. There is no master board and
-  no arrangement of islands relative to each other.
+**Superseded in full by `quarters/requirements.md` §5 (Q4.1–Q4.7).** The rules
+below described an assembly puzzle: the player positioned each sheet at its true
+ground pose and the game settled it against the island's vector data. That is
+gone. The table now lays a binder's plates out automatically, shows one office
+layer at a time, and stores nothing.
+
+- **R6.1** Optional. The game is completable without ever using it. **(holds)**
+- **R6.2 [retired — Q4.1]** ~~The player places a **copy**, not the original.~~
+- **R6.3 [retired — Q4.1]** ~~A sheet can only be copied after it has been
+  handled.~~
+- **R6.4 [retired — Q4.2]** ~~Assisted placement, fitted against the island's
+  vector data, tolerance generous and hidden.~~
+- **R6.5 [retired — Q4.2]** ~~If no good fit exists, the sheet stays unsettled.~~
+- **R6.6 [retired — Q4.2, D-Q1]** ~~Drag and wheel, plus two-point pinning.~~
+  Rotation is disabled, not deleted.
+- **R6.7 [retired — Q4.2]** ~~Fitting is always against the true island.~~
+- **R6.8** **One board per island.** Boards are self-contained. There is no
+  master board and no arrangement of islands relative to each other. **(holds)**
 - **R6.8a** A board can only be opened once the island's whole-island sheet
-  (R2.2a) has been handled. That sheet is the board's outline; without it there
-  is nothing to place against.
-- **R6.9** Full coverage of an island is impossible by design. A board can be
-  *worked out* but never *filled*.
-- **R6.10** Boards persist and stack up. Old boards can be reopened, and are
-  worth reopening when a late crate delivers sheets for an island finished long
-  ago.
+  (R2.2a) has been handled. **(holds — it is now the base, Q4.4)**
+- **R6.9 [retired — Q1.1]** ~~Full coverage of an island is impossible by design.
+  A board can be *worked out* but never *filled*.~~ Four plates complete a layer
+  and completing it is the point. Already contradicted by measurement (F-S1.8).
+- **R6.10 [retired — Q4.7]** ~~Boards persist and stack up.~~ There is no board
+  state: the board is a view of what is in the binders on the table.
 
 ### 3.7 Reference maps
 
@@ -243,7 +260,11 @@ there is no map of the world.
 - **R7.3** References are wrong in specific ways: smooth distortion of the
   coast, dropped features, two settlements transposed, a peninsula shortened,
   occasionally something drawn that is not there.
-- **R7.3a (unresolved — see §6.11)** R7.3 sits against R2.13. If nothing in the
+- **R7.3a (closed — Q2.4)** Offices differ by *omission*, never by
+  contradiction, so nothing needs an exemption from R2.13 and open question 11
+  is answered. The original text follows.
+
+  **(unresolved — see §6.11)** R7.3 sits against R2.13. If nothing in the
   collection lies, a reference cannot either, and the trust arc goes with it.
   Either references are exempt as small-scale sketches rather than survey work,
   or R7.3 is dropped and the board's value becomes detail rather than
@@ -341,6 +362,11 @@ stop
 The crate is the session unit. Opening one is a clean start; finishing one is a
 clean stop.
 
+**Amended — Q7.1, Q7.2.** `MapCrate` is a debug tool, not the supply. The game
+starts with the collection already amassed in the room: binders and loose plates,
+disordered. The session unit is therefore a *pile the player chooses*, not a
+crate the game hands over. What that does to R1.2 and §4.6 is open — Q7.4.
+
 **The island is the chapter.** A crate usually carries sheets for one or two
 islands. A new island is a small event — a name that is not in the index yet,
 a coastline nobody has seen, an empty board. An island is worked out and then
@@ -372,6 +398,11 @@ main arc of the game and it is made entirely of the player's own work.
 
 Neither requires the other. The link is one-directional pressure, not a gate.
 
+**Amended — D-Q3.** Composing no longer explains anything, because nothing is
+composed. The table shows the island the player assembled *by filing*, and feeds
+nothing back into the filing. The link now runs the other way: sorting is the
+work, the table is where it pays out.
+
 ### 4.6 Ending
 
 There is no completion state, and now there cannot be one. The islands do not
@@ -386,6 +417,11 @@ Crates should arrive slowly enough that the room is usually calm, and the game
 must never indicate how many are left, because the honest answer is unhelpful.
 
 The player stops when the room looks finished to them. It will not be.
+
+**Open — Q7.4.** A pre-populated room (Q7.1) is a *finite* collection, and a
+finite collection ends. Either more arrives by some later means, or §4.6 is
+retired and the game becomes completable, or the pile is replenished off-screen
+and never counted. Recorded as D-Q2; unsettled.
 
 ---
 
@@ -406,8 +442,8 @@ add, because it is the only thing that can be added safely later.
   because they disagree most: sea, terrain, and grid.
 - **No eras.** Style hangs off office alone. Three styles total.
 - Surveys, not loose sheets (R2.2), each with a whole-island sheet (R2.2a)
-- Two scales, not four
-- Overlap within a survey (R2.5)
+- ~~Two scales, not four~~ — one scale per island, from R2.3's set (Q1.6)
+- ~~Overlap within a survey (R2.5)~~ — quarters tile exactly (Q1.4)
 - Every sheet unique (R2.10) — a constraint, not a feature, and it holds from
   v1 onward
 - Same ground, different office, same features drawn differently (R2.7) —
@@ -424,10 +460,12 @@ add, because it is the only thing that can be added safely later.
 - Stack pickup (R5.1), weight (R5.2), settle (R5.3), sound (R5.4) — all of
   §3.5. None of this is cuttable; it *is* the minute-to-minute game.
 
-**Table**
-- One board per island (R6.8), opened by the whole-island sheet (R6.8a)
-- Assisted fit, drag and wheel only (R6.4, R6.5, R6.7)
-- Copies, not originals (R6.2, R6.3)
+**Table** *(replaced — `quarters/requirements.md` §5)*
+- One board per island (R6.8), opened by the whole-island chart (R6.8a, Q4.4)
+- Plates lay themselves out from binder contents; nothing is placed (Q4.1, Q4.2)
+- One office layer visible at a time, `Q`/`E` to cycle (Q4.3)
+- The base shows through where no plate is owned (Q4.6)
+- ~~Assisted fit, drag and wheel only~~ · ~~Copies, not originals~~
 
 **Tone**
 - All of §3.8. Free, and the whole point.
@@ -446,7 +484,7 @@ Cut, with the reason:
 | Uneven distribution | R2.12 | One line of sampling code, added when there is something to skew. |
 | Flat sheets, folders, volumes | R4.2 | Each is a second set of furniture, animation, and sound. One class proves the loop. |
 | Bulk shelf operations | R4.6 | Quality of life. Painful to lack at 4000 sheets, irrelevant at 400. |
-| Two-point pinning | R6.6 | Only needed for sheets that drag-and-wheel cannot solve. V1 should not have those. |
+| ~~Two-point pinning~~ | R6.6 | Moot — nothing is placed at all (Q4.2). |
 | Separate reference maps, and their errors | §3.7 per-island | **In v1 the whole-island sheet is the reference.** No second artifact, no distortion pass, no trust arc. The arc is the best thing in the design and it is worth building on a proven base. |
 | The written index | R7.8–R7.11 | Needs many islands to mean anything. |
 | Board persistence across many islands | R6.10 | Follows from the above. |
@@ -467,9 +505,11 @@ Two things, in order:
    If the three styles do not separate at pile distance, the far signal range
    is dead and the whole rhythm collapses into reading. Test this before
    building a room.
-2. **Does assisted fit feel like landing, or like fighting?**
-   The settle is the reward. If it misfires even occasionally, the table is
-   worse than not having one.
+2. ~~**Does assisted fit feel like landing, or like fighting?**~~
+   **Replaced — `quarters/requirements.md` §9.** Assisted fit no longer exists. The second proof is now:
+   **does filing a plate into a binder feel good four hundred times?** Filing is
+   clerical by construction (Q6.4), so R5.1–R5.4 — stack pickup, weight, settle,
+   sound — carry the entire minute-to-minute game with no puzzle beneath them.
 
 Everything cut in §5.2 makes the game deeper. Neither of these two gets better
 by adding any of it.
@@ -484,8 +524,8 @@ Marked **[v1]** where the answer blocks the first version.
    sitting, high enough that the racks look like an archive. Guess: 30–60.
 2. **[v1] Walk speed and rack spacing.** The dullest question here and the one
    most likely to sink the feel. Cannot be reasoned about; only played.
-3. **[v1] How wrong a drop can be and still settle.** Generous, hidden, and the
-   number that decides whether the table works.
+3. ~~**[v1] How wrong a drop can be and still settle.**~~ **Closed — Q4.2.**
+   Nothing is dropped; there is no tolerance to tune.
 4. Ratio of odd sheets to easy ones. Not a v1 question — v1 has no odd sheets.
 5. Whether references are all emergent, or two or three planted contradictions
    are authored for the moments a player will remember.
@@ -502,8 +542,13 @@ Marked **[v1]** where the answer blocks the first version.
    right, and it is a generator parameter, not a design decision.
 10. **Sibling frequency.** R1.10 is the sharpest tool in the generator and the
    easiest to overuse. Rare enough to be a discovery, not a tax.
-11. **Does R2.13 bind references too?** See R7.3a. If every artifact is
-   truthful, the board can only ever add detail — it can never correct
-   anything, and the strongest arc in the design is gone. The narrow exemption
-   (references are sketches, not surveys) keeps the arc at the cost of one
-   qualification to an otherwise clean rule.
+11. ~~**Does R2.13 bind references too?**~~ **Closed — Q2.4.** It binds
+   everything, and no exemption is needed: offices differ by *omission*, so the
+   arc is what each hand leaves out rather than what any of them gets wrong.
+
+12. **[new] What happens to the supply?** See Q7.4 / D-Q2. A pre-populated room
+   is finite; R1.2 says the islands are not. Unsettled, and it decides the long
+   arc.
+
+13. **[new] Does filing feel good enough?** §5.4's second proof. It cannot be
+   reasoned about, only played.

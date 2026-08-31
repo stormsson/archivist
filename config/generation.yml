@@ -59,6 +59,7 @@ contouring:
   WeldFraction: 1e-6
   MmPerMetre: 1000.0
   MaxPaperContourLod: 4
+  CoastlineMarginCells: 4
 
 # --- quantisation (D3 / §4.4) ------------------------------------------
 quantisation:
@@ -69,23 +70,11 @@ paper:
   SheetWidthMm: 594.0   # A1
   SheetHeightMm: 841.0
   SheetMarginMm: 40.0
-  OverlapFraction: 0.00
-
-# --- Hydrographic coastal strip (D-H3) ---------------------------------
-hydrographic_coastal_strip:
-  StripWidthMm: 380.0
-  StripHeightMm: 200.0
-  StripMarginMm: 15.0
-  CoastRegionRadiusMin: 0.34
-  CoastRegionRadiusMax: 0.62
-  CoastSeawardBias: 0.30
-  CoastMinLoopLength: 600.0
-  CoastMinSheetSeparation: 0.75
 
 # --- scales (§8.1, D5, F1) ---------------------------------------------
 scales:
-  DetailScaleDenominator: 2500
-  CoastalScaleDenominator: 2500
+  QuarterScaleFineDenominator: 5000
+  QuarterScaleDenominator: 10000
   WholeIslandScaleDenominator: 25000
   WholeIslandFallbackScaleDenominator: 50000
 
@@ -101,15 +90,7 @@ service_rule:
 
 # --- cull (§10.3) ------------------------------------------------------
 cull:
-  LandFractionMinLandSurvey: 0.60
-  LandFractionMinGarrison: 0.02
   CullSampleGrid: 16   # 16x16 per rect
-
-# --- rotation (D2 / §10.1) ---------------------------------------------
-rotation:
-  PcaIsotropyThreshold: 1.15   # lambda1/lambda2 below this = degenerate
-  PcaCoastSampleFrac: 0.25   # step = u * this
-  PcaLandMinPoints: 64
 
 # --- peaks (§7.1) ------------------------------------------------------
 peaks:
@@ -181,7 +162,3 @@ detail_sheets:
   DetailSheetMarginMm: 15.0
   PoiScaleDenominator: 1250
 
-# --- gameplay (read by Archivist.Building, NOT by Tuning) --------------
-gameplay:
-  assistedSnap: true
-  GlowingHintRange: 1.0   # multiples of the dragged slab's LONGER side

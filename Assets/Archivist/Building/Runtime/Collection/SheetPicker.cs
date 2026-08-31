@@ -54,16 +54,47 @@ namespace Archivist.Building.Collection
         public static List<Sheet> PickUnissued(Island island, int count,
                                                HashSet<SheetId> alreadyIssued, int drawSeed)
         {
+            return PickUnissued(island, count, alreadyIssued, drawSeed, false);
+        }
+
+        /// <summary>
+        /// The same, with <paramref name="includeChart"/> to put the island's whole-island
+        /// chart (R2.2a) into the pool.
+        ///
+        /// <para><b>The chart has to be issuable now.</b> Q4.4 makes it the board's base and
+        /// R6.8a will not open a board without it, so a chart nobody can be given is a board
+        /// nobody can open. It goes into its own office's binder like any other plate — it is
+        /// that office's work (Q4.4) — and it is drawn first rather than shuffled, because an
+        /// island whose chart came last would be a stack of quarters with nothing to lay them
+        /// on.</para>
+        /// </summary>
+        public static List<Sheet> PickUnissued(Island island, int count,
+                                               HashSet<SheetId> alreadyIssued, int drawSeed,
+                                               bool includeChart)
+        {
             if (island == null) throw new ArgumentNullException(nameof(island));
 
             var pool = new List<Sheet>();
+            Sheet chart = default(Sheet);
+            bool haveChart = false;
+
             for (int s = 0; s < island.Surveys.Count; s++)
             {
                 Survey survey = island.Surveys[s];
 
-                // Reserved, not abolished: skipped here so it is never drawn, never issued,
-                // and still there for whatever claims it (R2.2a, R6.8a).
-                if (survey.Spec.IsWholeIsland) continue;
+                if (survey.Spec.IsWholeIsland)
+                {
+                    // Held back from the shuffle either way: skipped entirely when it is not
+                    // wanted, and prepended when it is, so it is never the plate an island runs
+                    // out before reaching.
+                    if (includeChart && survey.SheetCount > 0
+                        && (alreadyIssued == null || !alreadyIssued.Contains(SheetId.Of(survey.Sheets[0]))))
+                    {
+                        chart = survey.Sheets[0];
+                        haveChart = true;
+                    }
+                    continue;
+                }
 
                 for (int i = 0; i < survey.Sheets.Count; i++)
                 {
@@ -74,8 +105,10 @@ namespace Archivist.Building.Collection
             }
 
             int wanted = count <= 0 ? pool.Count : count;
+            if (haveChart && wanted > 0) wanted--;
 
-            var picked = new List<Sheet>(Math.Min(wanted, pool.Count));
+            var picked = new List<Sheet>(Math.Min(wanted, pool.Count) + 1);
+            if (haveChart) picked.Add(chart);
             var rng = new Random(drawSeed);
 
             // Partial Fisher-Yates: swap a random survivor to the front, take it, shrink.

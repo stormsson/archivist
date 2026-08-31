@@ -1,5 +1,12 @@
 # The save — as built
 
+> **SUPERSEDED (2026-08-30, branch `rework1`).** Q4.7 reduces the save to two
+> facts: **what is in each binder** (`island · office → quarter → SheetId`) and
+> **which binders are on which table**. Sheet poses, board state, group tables
+> and fuse history are not saved because they no longer exist. §2's room
+> invariant — every issued sheet is somewhere, and somewhere once — still holds
+> and is still worth auditing. See `../../quarters/requirements.md` §5.
+
 **Status: as built.** `spec.md` §9 (C9.1–C9.5) is the intent and is not edited
 here. `groups_spec.md` §15 asked for an analysis before the code; this is that
 analysis and the record of what the code decided. Where this document and §15

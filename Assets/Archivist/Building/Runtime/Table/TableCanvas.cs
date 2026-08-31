@@ -2,15 +2,14 @@ using Archivist.Building.Collection;
 using Archivist.Generation;
 using Archivist.Generation.Sheets;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Archivist.Building.Table
 {
     /// <summary>
-    /// The chrome over the cartography board: the full-width header (C7.6) and the right-hand
-    /// cabinet (C7.1–C7.4). C1.1 draws the composition area as real <c>SheetView</c> slabs under
-    /// an orthographic camera and puts <i>only</i> the chrome in UGUI, and this is that chrome.
+    /// The chrome over the cartography board: a full-width header naming the island and the
+    /// office layer on screen. C1.1 draws the composition area as real slabs under an
+    /// orthographic camera and puts <i>only</i> the chrome in UGUI, and this is that chrome.
     /// Nothing here knows the board camera exists.
     ///
     /// <para><b>Built in code, like the room.</b> No prefab, no UXML: every number here is
@@ -29,37 +28,8 @@ namespace Archivist.Building.Table
     /// <c>Awake</c> would never run, so the hierarchy would not exist, so the first
     /// <see cref="Show"/> would have nothing to fill. Turning off the <see cref="Canvas"/> and
     /// its <see cref="GraphicRaycaster"/> costs the same nothing, keeps the built hierarchy
-    /// alive between openings, and — the part that matters — stops the cabinet swallowing
+    /// alive between openings, and — the part that matters — stops this canvas swallowing
     /// clicks meant for the room while the player is walking around it.</para>
-    ///
-    /// <para><b>This is where the cabinet meets the board, and the only place that knows
-    /// both.</b> The cabinet reports gestures in screen space; <c>BoardInteractor</c> owns
-    /// selection and placement in the board's space, and neither references the other. This
-    /// class translates: a drop becomes <c>BeginPlace</c>, the interactor's selection becomes a
-    /// header line (C7.6). <see cref="SetSelected"/> stays a pure display update, because
-    /// selection is <i>decided</i> elsewhere and the header only reports it.</para>
-    ///
-    /// <para><b>A group crosses the same seam as a sheet, by the same two events</b> (G6.1): a
-    /// click becomes a selection, a drop over the composition area becomes
-    /// <c>BoardInteractor.PlaceGroup</c> (G6.5). The other direction — a group dragged off the
-    /// board onto the column and parked (G6.4) — never reaches this class, because it is a board
-    /// gesture and <c>ReleaseOverCabinet</c> is how the board hears about the column.</para>
-    ///
-    /// <para><b>Board or cabinet is decided by one rectangle, negatively.</b> "Over the board" is
-    /// <i>not</i> inside the cabinet's rect (C7.5). Hit-testing the board positively means a
-    /// physics raycast through <c>BoardCamera</c>, which makes this chrome depend on the camera
-    /// it is documented above as not knowing about — and a drop on the dark wood <i>beside</i>
-    /// the mounting sheet would hit nothing and be discarded, when it is plainly a drop on the
-    /// table.</para>
-    ///
-    /// <para><b>Why the refile flag comes from the cabinet's pointer-enter and not the row
-    /// drag.</b> C7.5 has two directions and only one passes through
-    /// <see cref="CabinetPanel.Dragging"/>: a slab dragged off the board and back into the drawer
-    /// is a board gesture this class never hears about, so driving <c>ReleaseOverCabinet</c> from
-    /// row drags leaves the flag stale for exactly the case it exists to serve.
-    /// <see cref="CabinetPanel.PointerOverChanged"/> is true of the pointer at any moment,
-    /// whatever is being dragged. It is written from one place only: a wrong value here does not
-    /// misdraw something, it refiles a sheet the player meant to keep.</para>
     ///
     /// <para><b>Why an <see cref="IslandGenerator"/> is wanted.</b> A sheet's name needs the
     /// whole island — <c>SheetNaming.NameFor</c> takes an <see cref="Island"/> deliberately, so a
@@ -87,23 +57,16 @@ namespace Archivist.Building.Table
                  "uncached, which is fine for a bench and not for play.")]
         [SerializeField] IslandGenerator generator;
 
-        [Tooltip("Optional. Owns what is selected on the board and what gets laid down. Found " +
-                 "in the scene on first use when left empty; without one the cabinet still " +
-                 "draws and still scrolls, and a drop onto the board does nothing.")]
-        [SerializeField] BoardInteractor interactor;
-
         Canvas canvas;
         GraphicRaycaster raycaster;
 
         Text islandNameText;
-        Text sheetNameText;
-        Text sheetCodeText;
-        CabinetPanel cabinet;
+        Text officeNameText;
+        Text officeCodeText;
 
         BoardView board;
         Island island;
         bool built;
-        bool selectionHooked;
 
         /// <summary>The island whose paperwork is on screen, or 0 while hidden.</summary>
         public ulong IslandSeed { get; private set; }
@@ -111,13 +74,27 @@ namespace Archivist.Building.Table
         /// <summary>True between <see cref="Show"/> and <see cref="Hide"/>.</summary>
         public bool IsShown { get { return canvas != null && canvas.enabled; } }
 
-        /// <summary>C7.6's empty reading, assembled from <see cref="SheetNaming.Separator"/> so
-        /// that the placeholder and a real code can never disagree about the middle dot.</summary>
-        public static readonly string NoSelectionCode =
-            CabinetStyle.UnknownName + SheetNaming.Separator + CabinetStyle.UnknownName;
+        /// <summary>What the office field reads when the board has no layers — an island whose
+        /// binders hold nothing but the chart. Assembled from <see cref="SheetNaming.Separator"/>
+        /// so the placeholder and a real code cannot disagree about the middle dot.</summary>
+        public static readonly string NoLayerCode =
+            TableStyle.UnknownName + SheetNaming.Separator + TableStyle.UnknownName;
 
-        /// <summary>C7.6, verbatim from <c>1b-empty-table.png</c>.</summary>
-        public const string NoSelectionName = "None selected";
+        /// <summary>The same, for the name.</summary>
+        public const string NoLayerName = "No office";
+
+        /// <summary>
+        /// How much of the screen's top edge the header covers, in pixels.
+        ///
+        /// <para>Off the canvas's own <c>scaleFactor</c>, never
+        /// <c>HeaderHeight / ReferenceHeight</c>: the scaler's match is 0.5, so the band's screen
+        /// height is a function of the window's width as well as its height, and the scaler is
+        /// the only thing that knows the factor it settled on.</para>
+        /// </summary>
+        public float HeaderScreenHeight
+        {
+            get { return canvas == null ? 0f : TableStyle.HeaderHeight * canvas.scaleFactor; }
+        }
 
         // --------------------------------------------------------------------
 
@@ -138,17 +115,29 @@ namespace Archivist.Building.Table
         void Awake()
         {
             Build();
-            ResolveInteractor();
         }
 
         void OnDestroy()
         {
             if (board != null) board.Changed -= OnBoardChanged;
             board = null;
+        }
 
-            // A delegate left on an object that survives this one throws on the next domain
-            // reload, when the target has been serialized away and the invocation list has not.
-            UnhookSelection();
+        /// <summary>
+        /// Keeps the board out from under the header (§5.1). The band is opaque chrome over a
+        /// camera that fills the screen, and at zoom 1 the board's full height is in frame — so
+        /// whatever the header covers is board no pan can reach. <c>BoardView</c> narrows its
+        /// rect by what it is told.
+        ///
+        /// <para>Pushed every frame rather than at <see cref="Show"/>: the scaler settles its
+        /// factor after the canvas is enabled, and a window can be resized while the table is
+        /// open. The board writes its camera only when the rectangle actually moves.</para>
+        /// </summary>
+        void Update()
+        {
+            if (board == null || canvas == null || !canvas.enabled) return;
+
+            board.TopInsetPixels = HeaderScreenHeight;
         }
 
         // --------------------------------------------------------------------
@@ -181,16 +170,9 @@ namespace Archivist.Building.Table
 
             islandNameText.text = (island != null && !string.IsNullOrEmpty(island.Name))
                                 ? island.Name
-                                : CabinetStyle.UnknownName;
+                                : TableStyle.UnknownName;
 
-            cabinet.Bind(island, board);
-
-            // Hooked on Show rather than on Awake: the interactor may be built with the board,
-            // after this canvas, and an opening is the first moment both are certain to exist.
-            HookSelection();
-            if (interactor != null) interactor.ReleaseOverCabinet = false;
-
-            SetSelected(interactor != null ? interactor.Selected : null);
+            ShowOffice();
 
             canvas.enabled = true;
             raycaster.enabled = true;
@@ -210,165 +192,52 @@ namespace Archivist.Building.Table
             island = null;
             IslandSeed = 0UL;
 
-            UnhookSelection();
-
-            // The pointer's last known side of the screen must not survive a closed table: with
-            // the canvas off nothing raises pointer-exit, so a table closed with the cursor in
-            // the cabinet would leave "release means refile" armed for the next opening.
-            if (interactor != null) interactor.ReleaseOverCabinet = false;
-
-            cabinet.Clear();
-            SetSelected(null);
-            islandNameText.text = CabinetStyle.UnknownName;
+            ShowOffice();
+            islandNameText.text = TableStyle.UnknownName;
 
             canvas.enabled = false;
             raycaster.enabled = false;
         }
 
         /// <summary>
-        /// Writes the SHEET field of the header (C7.6). <b>Display only</b> — it selects
-        /// nothing, moves nothing and changes no row: C7.4 allows the cabinet two states, in the
-        /// drawer and on the table, and "selected" is not one of them. Where the selection is
-        /// visible is on the board, where the sheet is.
+        /// Writes the OFFICE field of the header: whose hand the board is showing (Q4.3).
         ///
-        /// <para>Null reads <c>None selected  —·—</c>, exactly as <c>1b-empty-table.png</c>
-        /// draws it. A sheet the board cannot resolve reads a dash and its real code, because
-        /// the code is derivable from the <see cref="SheetId"/> alone and is still true.</para>
+        /// <para><b>It used to say SHEET, and there is no selected sheet any more.</b> Nothing
+        /// is selected, dragged or placed on a board (Q4.2) — a plate lies at its quarter and
+        /// nowhere else — so the field spent its life reading "None selected". What a player
+        /// needs to know is which of two or three offices they are looking at, because the whole
+        /// point of <c>Q</c>/<c>E</c> is that the ground does not change and the hand does.</para>
+        ///
+        /// <para><b>Display only.</b> It reports the board's layer; it does not choose one.
+        /// <c>BoardControls</c> owns that, and this follows through <c>BoardView.Changed</c>.</para>
+        ///
+        /// <para>The code line carries the office's prefix and its place in the cycle —
+        /// <c>L S · 2/3</c> — so a player knows both who drew this and that there are two more
+        /// to see. Without the position, one office looks like the only one.</para>
         /// </summary>
-        public void SetSelected(SheetId? id)
+        public void ShowOffice()
         {
             Build();
 
-            if (!id.HasValue)
+            int count = board != null ? board.Layers.Count : 0;
+            if (count == 0 || board.LayerIndex < 0)
             {
-                sheetNameText.text = NoSelectionName;
-                sheetNameText.color = CabinetStyle.Muted;
-                sheetCodeText.text = CabinetStyle.Spaced(NoSelectionCode);
+                officeNameText.text = NoLayerName;
+                officeNameText.color = TableStyle.Muted;
+                officeCodeText.text = TableStyle.Spaced(NoLayerCode);
                 return;
             }
 
-            SheetId sheetId = id.Value;
-            string name = CabinetStyle.UnknownName;
+            Office office = board.ActiveLayer;
 
-            if (board != null && island != null)
-            {
-                Sheet sheet;
-                if (board.TrySheet(sheetId, out sheet))
-                {
-                    string resolved = SheetNaming.NameFor(island, sheet);
-                    if (!string.IsNullOrEmpty(resolved)) name = resolved;
-                }
-            }
-
-            sheetNameText.text = name;
-            sheetNameText.color = CabinetStyle.Ink;
-            sheetCodeText.text = CabinetStyle.Spaced(SheetNaming.CodeFor(sheetId));
+            officeNameText.text = SheetNaming.OfficeTitleFor(office);
+            officeNameText.color = TableStyle.Ink;
+            officeCodeText.text = TableStyle.Spaced(
+                SheetNaming.PrefixFor(office) + SheetNaming.Separator
+                + (board.LayerIndex + 1) + "/" + count);
         }
 
         // --------------------------------------------------------------------
-
-        /// <summary>
-        /// C7.6 — a row click tells the BOARD first, and the header follows from that.
-        ///
-        /// <para>Setting the header directly lies: the interactor keeps whatever was selected on
-        /// the board, so the header names one sheet while <c>Q</c>/<c>E</c> turns another. Going
-        /// through <c>Select</c> makes the board the authority and leaves the header a view of
-        /// it, updated by <c>SelectionChanged</c> like every other selection change.</para>
-        ///
-        /// <para>The direct <c>SetSelected</c> stays as the fallback for a table with no
-        /// interactor wired, where the cabinet is still worth reading.</para>
-        /// </summary>
-        void OnRowClicked(SheetId id)
-        {
-            if (interactor != null) interactor.Select(id);
-            else SetSelected(id);
-        }
-
-        /// <summary>
-        /// A row released over the board lays its sheet down at the drop point (C7.5); released
-        /// anywhere inside the cabinet it never left the drawer, and nothing happens — no
-        /// message, no snap-back, because the ghost is already gone and the row never changed.
-        /// The header is deliberately not touched here either: what is selected after a
-        /// placement is the interactor's to say, and it says so through
-        /// <c>SelectionChanged</c>.
-        /// </summary>
-        void OnRowDragEnded(SheetId id, PointerEventData eventData)
-        {
-            if (interactor == null) return;
-            if (IsOverCabinet(eventData.position)) return;
-
-            interactor.BeginPlace(id);
-        }
-
-        /// <summary>
-        /// A click on a Groups row selects the assembly (G6.1, C7.6 applied to the new section).
-        ///
-        /// <para><b>It selects a member, because that is what a selection is.</b> G1.6 makes the
-        /// group the unit of interaction by way of the clicked sheet, so the row hands over the
-        /// first member in join order — the sheet the row's own label names (G6.3's "from n").
-        /// Selecting the group follows, and <c>Q</c>/<c>E</c> and the corner handle then turn the
-        /// whole assembly.</para>
-        ///
-        /// <para>For a <b>parked</b> group this clears the board selection rather than setting
-        /// one, because <c>Select</c> refuses a sheet that is not on the table — the same answer
-        /// a click on a drawer row gives.</para>
-        /// </summary>
-        void OnGroupRowClicked(int groupId)
-        {
-            if (interactor == null || board == null) return;
-
-            GroupRecord group;
-            if (!board.TryGetGroup(groupId, out group)) return;
-            if (group.Members == null || group.Members.Count == 0) return;
-
-            interactor.Select(group.Members[0]);
-        }
-
-        /// <summary>
-        /// G6.5: a Groups row released over the composition area lays the whole assembly back
-        /// down under the pointer, preserving its frame rotation φ. Released inside the cabinet
-        /// it never left the drawer and nothing happens — the same silence
-        /// <see cref="OnRowDragEnded"/> keeps, and C6.6's shape of failure (R6.5).
-        ///
-        /// <para>The board/cabinet decision is <see cref="IsOverCabinet"/>'s, unchanged: one
-        /// rectangle, asked negatively, so a group and a sheet cannot disagree about where the
-        /// column ends.</para>
-        /// </summary>
-        void OnGroupDragEnded(int groupId, PointerEventData eventData)
-        {
-            if (interactor == null) return;
-            if (IsOverCabinet(eventData.position)) return;
-
-            interactor.PlaceGroup(groupId);
-        }
-
-        /// <summary>The cabinet's edge, crossed. See the class comment for why this one event
-        /// owns <c>ReleaseOverCabinet</c> and the row drag does not.</summary>
-        void OnPointerOverCabinet(bool over)
-        {
-            if (interactor != null) interactor.ReleaseOverCabinet = over;
-        }
-
-        void OnSelectionChanged(SheetId? id) { SetSelected(id); }
-
-        /// <summary>
-        /// Geometric, not a raycast: the answer must be the same whether or not a row happens to
-        /// lie under the pointer, and must not depend on the scroll viewport's mask. It differs
-        /// from the pointer-enter chain only along the column's one-pixel edge, and a drop
-        /// exactly on that line is a drop the player cannot have meant either way.
-        ///
-        /// <para>The header is <i>not</i> the cabinet, so a drop on it counts as a drop on the
-        /// board. Left that way deliberately: the header is a strip along the top of the board,
-        /// the drop point is the interactor's to read, and inventing a third "neither" region
-        /// would mean a gesture that visibly ends nowhere.</para>
-        /// </summary>
-        bool IsOverCabinet(Vector2 screenPoint)
-        {
-            if (cabinet == null) return false;
-
-            return RectTransformUtility.RectangleContainsScreenPoint(
-                cabinet.Rect, screenPoint, EventCamera());
-        }
 
         /// <summary>Null while the canvas is screen-space-overlay, which <see cref="Build"/>
         /// makes it. Read off the canvas rather than assumed, for the same reason the ghost
@@ -379,37 +248,12 @@ namespace Archivist.Building.Table
             return canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
         }
 
-        /// <summary><c>FindObjectsInactive.Include</c>, unlike the generator lookup: the board
-        /// rig is off while the player is walking around the room, and the one moment this
-        /// canvas most wants the interactor — the first <see cref="Show"/> — is the moment
-        /// before it has been switched on.</summary>
-        void ResolveInteractor()
-        {
-            if (interactor == null)
-                interactor = FindFirstObjectByType<BoardInteractor>(FindObjectsInactive.Include);
-        }
-
-        void HookSelection()
-        {
-            ResolveInteractor();
-            if (interactor == null || selectionHooked) return;
-
-            interactor.SelectionChanged += OnSelectionChanged;
-            selectionHooked = true;
-        }
-
-        void UnhookSelection()
-        {
-            if (interactor != null && selectionHooked) interactor.SelectionChanged -= OnSelectionChanged;
-            selectionHooked = false;
-        }
-
+        /// <summary>Plates land one per frame while a board opens (C5.6), so this fires
+        /// repeatedly. Nothing in the header depends on which plates are down yet, so it does
+        /// nothing — kept as the seam W5 writes the office-layer caption into.</summary>
         void OnBoardChanged()
         {
-            // C5.6 — thumbnails arrive late and one per frame, so this fires repeatedly during
-            // an opening. Refresh re-reads textures and row states and rebuilds only when the
-            // set of available sheets actually changed; it must stay cheap for that reason.
-            if (cabinet != null) cabinet.Refresh();
+            ShowOffice();
         }
 
         Island ResolveIsland(ulong islandSeed)
@@ -442,21 +286,6 @@ namespace Archivist.Building.Table
 
             var root = (RectTransform)transform;
             BuildHeader(root);
-            cabinet = CabinetPanel.Create(root);
-
-            // Never unsubscribed: the cabinet is a child of this object and dies with it, so
-            // there is no dangling delegate to leave behind. The interactor is the opposite case
-            // — it outlives an opening — and is hooked and unhooked around Show/Hide instead.
-            cabinet.RowClicked += OnRowClicked;
-            cabinet.DragEnded += OnRowDragEnded;
-            cabinet.PointerOverChanged += OnPointerOverCabinet;
-
-            // The Groups section's two halves of the same pair (G6.1). DragStarted and Dragging
-            // are deliberately left unwired on both the sheet rows and these — the ghost is the
-            // row's own and ReleaseOverCabinet is PointerOverChanged's, so a listener here would
-            // be a second writer of facts that already have one (see the class comment).
-            cabinet.GroupRowClicked += OnGroupRowClicked;
-            cabinet.GroupDragEnded += OnGroupDragEnded;
 
             canvas.enabled = false;
             raycaster.enabled = false;
@@ -470,7 +299,7 @@ namespace Archivist.Building.Table
         /// one place in this view where that is worth the cost. In the mockup the island name
         /// ends a pixel short of the divider — <i>Ilha do Corvo</i> happens to fit. A longer name
         /// at a fixed divider would run straight through it. So the ISLAND block sizes to its own
-        /// text with a floor under it (<see cref="CabinetStyle.IslandFieldMinWidth"/>), so the
+        /// text with a floor under it (<see cref="TableStyle.IslandFieldMinWidth"/>), so the
         /// divider does not walk left and right as islands come and go, and moves right rather
         /// than being overrun when a name is long.</para>
         /// </summary>
@@ -483,23 +312,23 @@ namespace Archivist.Building.Table
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(1f, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.offsetMin = new Vector2(0f, -CabinetStyle.HeaderHeight);
+            rt.offsetMin = new Vector2(0f, -TableStyle.HeaderHeight);
             rt.offsetMax = Vector2.zero;
 
-            var plate = CabinetStyle.Plate(rt, "Plate", CabinetStyle.HeaderCream);
+            var plate = TableStyle.Plate(rt, "Plate", TableStyle.HeaderCream);
             plate.raycastTarget = true;      // the header swallows clicks meant for the board
 
-            CabinetStyle.Hairline(rt, "BottomRule", CabinetStyle.Rule,
+            TableStyle.Hairline(rt, "BottomRule", TableStyle.Rule,
                                   new Vector2(0f, 0f), new Vector2(1f, 0f),
-                                  new Vector2(0f, CabinetStyle.HairlineWidth));
+                                  new Vector2(0f, TableStyle.HairlineWidth));
 
             var fieldsGo = new GameObject("Fields", typeof(RectTransform));
             fieldsGo.transform.SetParent(rt, false);
-            CabinetStyle.Stretch((RectTransform)fieldsGo.transform);
+            TableStyle.Stretch((RectTransform)fieldsGo.transform);
 
             var row = fieldsGo.AddComponent<HorizontalLayoutGroup>();
-            row.spacing = CabinetStyle.HeaderFieldGap;
-            row.padding = new RectOffset((int)CabinetStyle.HeaderPadLeft, 0, 0, 0);
+            row.spacing = TableStyle.HeaderFieldGap;
+            row.padding = new RectOffset((int)TableStyle.HeaderPadLeft, 0, 0, 0);
             row.childAlignment = TextAnchor.MiddleLeft;
             row.childControlWidth = true;
             row.childControlHeight = true;
@@ -509,42 +338,42 @@ namespace Archivist.Building.Table
             // ---- ISLAND ----
             RectTransform islandField = Field(fieldsGo.transform, "IslandField");
             islandField.gameObject.AddComponent<LayoutElement>().minWidth =
-                CabinetStyle.IslandFieldMinWidth;
+                TableStyle.IslandFieldMinWidth;
 
-            CabinetStyle.Label(islandField, "Label", CabinetStyle.Spaced("Island"),
-                               CabinetStyle.Sans(), CabinetStyle.HeaderLabelSize,
-                               CabinetStyle.Muted);
+            TableStyle.Label(islandField, "Label", TableStyle.Spaced("Island"),
+                               TableStyle.Sans(), TableStyle.HeaderLabelSize,
+                               TableStyle.Muted);
 
-            islandNameText = CabinetStyle.Label(islandField, "Value", CabinetStyle.UnknownName,
-                                                CabinetStyle.Serif(), CabinetStyle.IslandNameSize,
-                                                CabinetStyle.Ink);
+            islandNameText = TableStyle.Label(islandField, "Value", TableStyle.UnknownName,
+                                                TableStyle.Serif(), TableStyle.IslandNameSize,
+                                                TableStyle.Ink);
 
             // ---- divider ----
             var dividerGo = new GameObject("Divider", typeof(RectTransform));
             dividerGo.transform.SetParent(fieldsGo.transform, false);
 
             var divider = dividerGo.AddComponent<Image>();
-            divider.color = CabinetStyle.Rule;
+            divider.color = TableStyle.Rule;
             divider.raycastTarget = false;
 
             var dividerElement = dividerGo.AddComponent<LayoutElement>();
-            dividerElement.preferredWidth = CabinetStyle.HairlineWidth;
-            dividerElement.minWidth = CabinetStyle.HairlineWidth;
-            dividerElement.preferredHeight = CabinetStyle.HeaderDividerHeight;
-            dividerElement.minHeight = CabinetStyle.HeaderDividerHeight;
+            dividerElement.preferredWidth = TableStyle.HairlineWidth;
+            dividerElement.minWidth = TableStyle.HairlineWidth;
+            dividerElement.preferredHeight = TableStyle.HeaderDividerHeight;
+            dividerElement.minHeight = TableStyle.HeaderDividerHeight;
 
-            // ---- SHEET ----
-            RectTransform sheetField = Field(fieldsGo.transform, "SheetField");
+            // ---- OFFICE ----
+            RectTransform sheetField = Field(fieldsGo.transform, "OfficeField");
 
-            CabinetStyle.Label(sheetField, "Label", CabinetStyle.Spaced("Sheet"),
-                               CabinetStyle.Sans(), CabinetStyle.HeaderLabelSize,
-                               CabinetStyle.Muted);
+            TableStyle.Label(sheetField, "Label", TableStyle.Spaced("Office"),
+                               TableStyle.Sans(), TableStyle.HeaderLabelSize,
+                               TableStyle.Muted);
 
             var sheetLineGo = new GameObject("Value", typeof(RectTransform));
             sheetLineGo.transform.SetParent(sheetField, false);
 
             var sheetLine = sheetLineGo.AddComponent<HorizontalLayoutGroup>();
-            sheetLine.spacing = CabinetStyle.HeaderLabelGap * 3f;
+            sheetLine.spacing = TableStyle.HeaderLabelGap * 3f;
             // Lower-left, not middle: the code is half the size of the name and should sit on
             // the same line as it, not float in the middle of its cap height.
             sheetLine.childAlignment = TextAnchor.LowerLeft;
@@ -553,15 +382,15 @@ namespace Archivist.Building.Table
             sheetLine.childForceExpandWidth = false;
             sheetLine.childForceExpandHeight = false;
 
-            sheetNameText = CabinetStyle.Label((RectTransform)sheetLineGo.transform, "Name",
-                                               NoSelectionName, CabinetStyle.Serif(),
-                                               CabinetStyle.SheetNameSize, CabinetStyle.Muted);
+            officeNameText = TableStyle.Label((RectTransform)sheetLineGo.transform, "Name",
+                                               NoLayerName, TableStyle.Serif(),
+                                               TableStyle.SheetNameSize, TableStyle.Muted);
 
-            sheetCodeText = CabinetStyle.Label((RectTransform)sheetLineGo.transform, "Code",
-                                               CabinetStyle.Spaced(NoSelectionCode),
-                                               CabinetStyle.Sans(), CabinetStyle.SheetCodeSize,
-                                               CabinetStyle.Muted);
-            sheetCodeText.alignment = TextAnchor.LowerLeft;
+            officeCodeText = TableStyle.Label((RectTransform)sheetLineGo.transform, "Code",
+                                               TableStyle.Spaced(NoLayerCode),
+                                               TableStyle.Sans(), TableStyle.SheetCodeSize,
+                                               TableStyle.Muted);
+            officeCodeText.alignment = TextAnchor.LowerLeft;
         }
 
         /// <summary>A label-over-value block: the shape both header fields share.</summary>
@@ -570,8 +399,14 @@ namespace Archivist.Building.Table
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
 
-            VerticalLayoutGroup group = CabinetStyle.Stack(go, CabinetStyle.HeaderLabelGap);
+            var group = go.AddComponent<VerticalLayoutGroup>();
+            group.spacing = TableStyle.HeaderLabelGap;
+            group.padding = new RectOffset(0, 0, 0, 0);
+            group.childAlignment = TextAnchor.UpperLeft;
+            group.childControlWidth = true;
+            group.childControlHeight = true;
             group.childForceExpandWidth = false;
+            group.childForceExpandHeight = false;
 
             return (RectTransform)go.transform;
         }

@@ -1,5 +1,17 @@
 # The Cartography Table — Specification
 
+> **SUPERSEDED (2026-08-30, branch `rework1`) — kept as the record of what was
+> built.** The board this specifies asked the player to place each sheet at its
+> absolute ground pose. That mechanic is cancelled: see
+> `../../quarters/requirements.md` §5 for what replaces it and
+> `../../quarters/decisions.md` §4 for the disposition of every section here.
+>
+> What survives: §3.1 (ground-space coordinates), §3.4 (material and light),
+> §4.1 (table identity), §5 (scene structure), §8.1 (opening the board).
+> What does not: §3.2's per-sheet poses, §3.3 draw order by survey, §4.2
+> `BoardStore`, §6 snap in full, §7 the cabinet, §8.3 board input, §9
+> persistence, §10's fit tuning, §12's acceptance cases for fitting.
+
 Construction. `requirements.md` in this folder is the authority on intent; the
 four PNGs beside it are the authority on look. `../../requirements.md` §3.6 is
 the authority on the activity, and where this document disagrees with it the

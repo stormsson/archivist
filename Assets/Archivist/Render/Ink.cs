@@ -30,6 +30,28 @@ namespace Archivist.Render
     /// </summary>
     public static class Ink
     {
+        /// <summary>
+        /// The unprinted sheet. Every plate starts as this and the ink goes on top (Q2.2).
+        ///
+        /// <para><b>Placeholder, and the seam is per office.</b> R2.6 makes paper stock the
+        /// fastest signal a player has and Q2.6 makes it one of the few left, so this becomes a
+        /// per-office value in W3. One tone until then, because a plate with no paper at all is
+        /// a black rectangle — which is what turning <c>Fill</c> off produced before this
+        /// existed.</para>
+        /// </summary>
+        public static readonly Rgba Paper = Rgba.FromHex("f2ece0");
+
+        /// <summary>
+        /// Drafting ink on paper: what every line is drawn in when there is no fill.
+        ///
+        /// <para><b>The palette derivations below are for ink over a FILL</b> — a darkened
+        /// deep-sea colour reads as a pen on water, and does read as one there. On bare paper it
+        /// is a dark blue line on cream, which is not a survey drawing; and a river taken from
+        /// the shallow band is a pale blue that vanishes. Without a fill there are no bands to
+        /// derive from and no water to sit on, so the ink is ink.</para>
+        /// </summary>
+        public static readonly Rgba Drafting = Rgba.FromHex("2e2318");
+
         /// <summary>Very dark blue-black — a survey pen on water. Reached only when the
         /// palette is too short to derive from.</summary>
         static readonly Rgba CoastFallback = Rgba.FromHex("0c1e2f");
@@ -60,6 +82,21 @@ namespace Archivist.Render
         {
             if (palette == null || palette.Length < Bands.Count) return CoastFallback;
             return Darken(palette[DeepBandIndex], CoastDarken);
+        }
+
+        /// <summary>The coastline pen for a plate: <see cref="Drafting"/> without a fill, the
+        /// palette derivation with one. One call, so no drawer has to remember which it is
+        /// in.</summary>
+        public static Rgba CoastInk(Rgba[] palette, bool hasFill)
+        {
+            return hasFill ? CoastInk(palette) : Drafting;
+        }
+
+        /// <summary>The river pen for a plate. See <see cref="Drafting"/> for why a river is not
+        /// pale blue on paper.</summary>
+        public static Rgba RiverInk(Rgba[] palette, bool hasFill)
+        {
+            return hasFill ? RiverInk(palette) : Drafting;
         }
 
         /// <summary>The shallow band, undarkened, so a river reads as water on land.</summary>

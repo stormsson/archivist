@@ -108,7 +108,8 @@ namespace Archivist.Building.Sheets
             view.Number = render.Sheet.Number;
 
             view.mesh = SheetMesh.CreateSlab(paperW, paperH, Thickness, "SheetSlab");
-            view.texture = SheetTexture.Compose(render.Image, format, paperTint, "T_Sheet_" + render.Id);
+            view.texture = SheetTexture.Compose(render.Image, format, paperTint,
+                                                "T_Sheet_" + render.Id, render.PixelsPerPaperMm);
 
             view.materialInstance = new Material(sheetMaterial);
             view.materialInstance.name = "M_Sheet_" + render.Id;

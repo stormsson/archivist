@@ -16,12 +16,15 @@ namespace Archivist.Building.Editor
     /// pose on a ground-space board. No input, no cabinet, no snapping — a solved board,
     /// built so it can be looked at.
     ///
-    /// <para><b>Why this exists before anything else.</b> The spec (§3.2) draws sheets at their
-    /// GROUND footprint rather than their paper size, which means a 1:2500 A1 and a 380x200
-    /// Hydrographic strip appear at wildly different sizes, and consecutive sheets of one
-    /// survey overlap by <c>Tuning.OverlapFraction</c> — a fifth of their width. Whether that
-    /// is legible or an unreadable heap is the one thing in the design that cannot be reasoned
-    /// about, only seen. If it is a heap, every later slice is built on a mistake.</para>
+    /// <para><b>Why this existed before anything else.</b> The spec (§3.2) draws sheets at their
+    /// GROUND footprint rather than their paper size, and sheets of one survey used to overlap
+    /// by a fifth of their width, at a different size and angle per office. Whether that read as
+    /// an island or as a heap was the one thing that could not be reasoned about, only seen —
+    /// and F-S1.1 measured that it read.
+    ///
+    /// <b>None of that shape survives.</b> Quarters tile exactly (Q1.4), every office shares one
+    /// cut at one scale (Q1.2), and nothing rotates. The bench's question is answered and its
+    /// subject is gone; what it is now is a way to summon a board to look at.</para>
     ///
     /// <para>Editor-only, and it drives the shipping path: <see cref="MapCrate.Render"/> for
     /// the raster and <see cref="BoardSheetView.Create"/> for the slab. Nothing here is a
@@ -129,7 +132,7 @@ namespace Archivist.Building.Editor
             float unitsPerMetre = options != null ? options.BoardUnitsPerMetre : TableOptions.DefaultBoardUnitsPerMetre;
             float padding       = options != null ? options.BoardPadding       : TableOptions.DefaultBoardPadding;
             float separation    = options != null ? options.SheetSeparation    : TableOptions.DefaultSheetSeparation;
-            float ppmm          = options != null ? options.BoardPixelsPerPaperMm : TableOptions.DefaultBoardPixelsPerPaperMm;
+            float pxPerMetre    = options != null ? options.BoardPixelsPerMetre : TableOptions.DefaultBoardPixelsPerMetre;
 
             ulong seed = generator.SeedForIndex(islandIndex);
             Island island = generator.GetOrGenerate(seed);
@@ -162,7 +165,7 @@ namespace Archivist.Building.Editor
 
             // Rasterising happens through the crate's own path, so what lands on the board is
             // the same image that would land on the floor — only the resolution differs.
-            List<SheetRender> renders = MapCrate.Render(island, sheets, ppmm);
+            List<SheetRender> renders = MapCrate.RenderForBoard(island, sheets, pxPerMetre);
 
             Material unlit = UnlitPaper();
             int layer = LayerMask.NameToLayer("Table");

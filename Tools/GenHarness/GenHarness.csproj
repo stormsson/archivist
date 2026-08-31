@@ -30,8 +30,6 @@
     <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/RoomSnapshot.cs" />
     <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/Json.cs" />
     <Compile Include="../../Assets/Archivist/Building/Runtime/Collection/ArchiveFormat.cs" />
-    <Compile Include="../../Assets/Archivist/Building/Runtime/Table/BoardStore.cs" />
-    <Compile Include="../../Assets/Archivist/Building/Runtime/Table/BoardSnapshot.cs" />
     <Compile Include="*.cs" />
   </ItemGroup>
 </Project>

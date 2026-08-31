@@ -53,7 +53,18 @@ namespace Archivist.Building.Table
         /// drawer or a board restored from a save can put paper outside the view. Panning is
         /// what reaches it.</para>
         /// </summary>
-        public const float DefaultBoardZoom = 2f;
+        /// <summary>
+        /// 1, which is <see cref="DefaultBoardZoomMin"/> — the whole board, framed as C8.13
+        /// composed it, and as far out as the camera goes.
+        ///
+        /// <para><b>Was 2.</b> The board is a thing to look at rather than to work on (Q4.1,
+        /// Q4.2): nothing is placed, so there is nothing to lean in on, and an island that
+        /// opened half in frame asked the player to pan before they could see what they had
+        /// come to see. At 1 the pan travel is zero by construction
+        /// (<c>max(0, boardHalf - viewHalf)</c>), so the framing is fixed rather than merely
+        /// starting there.</para>
+        /// </summary>
+        public const float DefaultBoardZoom = 1f;
 
         /// <summary>
         /// The zoom-out stop, and it is C8.13's view exactly: at 1 the camera's half-height is
@@ -72,7 +83,7 @@ namespace Archivist.Building.Table
         /// <summary>
         /// The zoom-in stop. 4, and the ceiling is the <b>raster</b>, not the geometry.
         ///
-        /// <para>C5.5 renders one texture per sheet at <see cref="BoardPixelsPerPaperMm"/> —
+        /// <para>C5.5 renders one texture per sheet at <see cref="BoardPixelsPerMetre"/> —
         /// 0.6 px per millimetre of paper — and it serves both the board slab and the cabinet
         /// thumbnail, so there is no second, finer copy to zoom into. At 1:2500 that works out
         /// at 24 texels per board unit, and on a 1080-high viewport island 0's board draws
@@ -126,17 +137,23 @@ namespace Archivist.Building.Table
         public const float DefaultWheelSensitivity = 0.03f;
 
         /// <summary>
-        /// How far one notch scrolls the cabinet, in canvas pixels — the accordion's half of
-        /// <see cref="DefaultWheelSensitivity"/>, which supplies the notches.
+        /// What a board plate is rendered at, in pixels per <b>metre of ground</b>. 0.35.
         ///
-        /// <para>40 is a little over half a row (<c>CabinetStyle.RowHeight</c> is 74), so a
-        /// notch moves the list by an amount the eye can follow back to where it was. A whole
-        /// row per notch was tried on paper and rejected: rows are tall, and a list that jumps a
-        /// full row loses the sense of a continuous column of paper.</para>
+        /// <para><b>Ground, not paper, and that is the whole point.</b> This was
+        /// <c>BoardPixelsPerPaperMm</c> at 0.6, which fixes pixels per paper millimetre — right
+        /// in the hand, where every sheet is the same size of paper whatever it is of. On a
+        /// board every plate is laid at its ground size, so a chart at 1:25000 got two and a
+        /// half times fewer pixels per metre than a quarter at 1:10000 and came out visibly
+        /// softer. Measured at 0.6: a chart gave 0.024 px/m, so a 6912 m island was
+        /// <b>166 pixels stretched over most of the screen</b>.</para>
+        ///
+        /// <para>0.35 against the ~0.24 px/m that fills a 1920-wide view at zoom 1, so there is
+        /// headroom for a larger display without paying for a 4K one on every plate. It is the
+        /// board's sharpness dial and the only one — <c>RenderRequest.ForSheetAtGroundResolution</c>
+        /// derives the paper resolution from it, so stroke weights follow rather than needing a
+        /// second number to agree with.</para>
         /// </summary>
-        public const float DefaultCabinetScrollPixelsPerNotch = 40f;
-
-        public const float DefaultBoardPixelsPerPaperMm = 0.6f;
+        public const float DefaultBoardPixelsPerMetre = 0.35f;
 
         public const float DefaultPositionTolerance = 0.12f;
 
@@ -178,7 +195,7 @@ namespace Archivist.Building.Table
         [SerializeField, Min(0.1f)] float boardZoomMin = DefaultBoardZoomMin;
 
         [Tooltip("Zoom-in stop. Bounded by the raster, not the geometry: one texture per sheet " +
-                 "at BoardPixelsPerPaperMm serves the slab and the thumbnail (C5.5), and past " +
+                 "at BoardPixelsPerMetre serves the slab and the thumbnail (C5.5), and past " +
                  "about 4 the board is magnifying texels rather than showing more map.")]
         [SerializeField, Min(0.1f)] float boardZoomMax = DefaultBoardZoomMax;
 
@@ -194,17 +211,11 @@ namespace Archivist.Building.Table
         [FormerlySerializedAs("boardWheelSensitivity")]
         [SerializeField, Min(0.001f)] float wheelSensitivity = DefaultWheelSensitivity;
 
-        [Tooltip("Canvas pixels the cabinet scrolls per notch. A row is 74, so 40 is a little " +
-                 "over half a row. Raise this, not WheelSensitivity, if only the column is " +
-                 "sluggish — WheelSensitivity moves the board's zoom with it.")]
-        [SerializeField, Min(1f)] float cabinetScrollPixelsPerNotch = DefaultCabinetScrollPixelsPerNotch;
-
         [Header("Textures")]
-        [Tooltip("Pixels per millimetre of paper for a table render. Serves the board slab " +
-                 "AND the cabinet thumbnail from one cached texture per SheetId (C5.5): the " +
-                 "thumbnail is ~60 px wide and a board sheet ~150 px, and there is no zoom, " +
-                 "so nothing on this table ever needs more.")]
-        [SerializeField, Min(0.05f)] float boardPixelsPerPaperMm = DefaultBoardPixelsPerPaperMm;
+        [Tooltip("Pixels per METRE OF GROUND for a board render. The board lays every plate " +
+                 "at its ground size, so this — not a paper resolution — is what decides how " +
+                 "sharp a plate looks on screen. ~0.24 fills a 1920-wide view at zoom 1.")]
+        [SerializeField, Min(0.01f)] float boardPixelsPerMetre = DefaultBoardPixelsPerMetre;
 
         [Header("Snap")]
         [Tooltip("Position tolerance as a fraction of the sheet's SHORTER ground dimension " +
@@ -236,8 +247,7 @@ namespace Archivist.Building.Table
         public float BoardZoomMax { get { return boardZoomMax; } }
         public float BoardZoomStep { get { return boardZoomStep; } }
         public float WheelSensitivity { get { return wheelSensitivity; } }
-        public float CabinetScrollPixelsPerNotch { get { return cabinetScrollPixelsPerNotch; } }
-        public float BoardPixelsPerPaperMm { get { return boardPixelsPerPaperMm; } }
+        public float BoardPixelsPerMetre { get { return boardPixelsPerMetre; } }
         public float PositionTolerance { get { return positionTolerance; } }
         public float RotationToleranceDeg { get { return rotationToleranceDeg; } }
         public float SettleSeconds { get { return settleSeconds; } }

@@ -1,5 +1,13 @@
 # Architecture — As Built
 
+> **A rework is in progress on branch `rework1`** — see `quarters/requirements.md`.
+> Everything below is still true of the code; some of it is slated to go.
+> `SheetFit`, `SnapHint`, `BoardFusing`, `BoardHandle`, `BoardStore`,
+> `SheetKinship`, `SheetUnion`, `BoardSnapshot` and `CoastWalkCutter` have no
+> role in the new model; `Wheel` is retained but disabled (D-Q1); `MapCrate`
+> becomes a debug tool only (Q7.2). This document is amended when the code is,
+> not before.
+
 Map of the code as it stands. One line per entity, scope only. Deeper detail
 lives in `generation_for_agents.md` (generator), `poc02/spec.md` (renderer) and
 `space/requirements.md` (the 3D half).
@@ -123,6 +131,7 @@ spec §13, D-C1). A crate delivers one binder, not a pile of paper.
 | `Building/Editor/GeneratorSceneBuilder` | Builds `Debug_Generator`: the crate, the collection and a player on a bare platform, for working on generation with nothing else in the scene. |
 | `Building/Editor/SheetTestBench` | Summons a named case — `LandSurvey:7` — on demand. Drives the shipping path, not a parallel one. |
 | `Building/Editor/SheetSceneGuard` | Strips spawned sheets — and the binders holding them — before a scene is written to disk. |
+| `Building/Editor/ArchiveMenu` | Two items over the save file: delete it, or show it in Finder. The only way to reach it from outside a running game. Pairs with `Archive.resetOnLoad`, which is the same act done every time the game starts. |
 | `Building/Editor/GlbImporterSetup` | Points every `.glb` under `Assets/Models` at glTFast's importer. Re-run after adding a model. |
 
 ## 6. Scenes and assets
@@ -133,6 +142,10 @@ spec §13, D-C1). A crate delivers one binder, not a pile of paper.
 - `Building/Options/HandlingOptions.asset` — the tuning asset.
 - `Models/Placeholders/*.glb` — placeholder art. Imported through glTFast; see `GlbImporterSetup`.
 - `Tools/run-acceptance.sh`, `Tools/GenHarness/` — headless generation + render checks.
+- `Tools/check-editor.sh` — Generation + Render + Editor + Tests compile check.
+- `Tools/check-building.sh` — **`Archivist.Building` compile check** (runtime +
+  editor), which nothing else covers. Needs the project opened in Unity once, for
+  `Library/ScriptAssemblies`.
 - `<persistentDataPath>/archive.json` — the save. Not in the project; see
   `docs/UI/cartography_table/persistence.md` for what is in it and what is not.
 

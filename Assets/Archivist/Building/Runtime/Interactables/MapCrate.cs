@@ -35,15 +35,17 @@ namespace Archivist.Building.Interactables
     /// will be exercised against the real thing. Turn <c>looseDebugSheet</c> off and the crate
     /// delivers a binder and nothing else, which is what it should eventually do.</para>
     ///
-    /// <para><b>Two temporary knobs, both for the map table, both to be put back.</b>
-    /// <c>bindersPerOpening</c> above 1 delivers several folders of the <i>same</i> island in one
-    /// opening, which is how the table's second-binder branch (C4.3) is reached without opening
-    /// the crate twice — with <c>openNewIslandEachTime</c> on, opening twice gives two islands
-    /// and tests the no-room refusal instead. Above 1 the sheets are <b>one</b> pick dealt into
-    /// shares rather than one pick per binder, because two draws from a ledger snapshot taken
-    /// before either could hand the same sheet out twice.</para>
+    /// <para><b>The delivery is a fixed debug set</b>, and a debug set is all it is — this is a
+    /// development tool, not the game's supply (Q7.2), and Q7.1 has the collection already in the
+    /// room. One opening puts down <b>one folder holding a whole island</b>, every office in it,
+    /// and <b>two folders of a second island</b> with one office each.</para>
     ///
-    /// <para><c>everySheetOfTheIsland</c> files the whole survey into the delivery, so a table
+    /// <para>Those are the two cases a table has to handle. The full folder shows three layers
+    /// on a table that takes one binder, so <c>Q</c>/<c>E</c> has something to cycle without
+    /// anything being merged first (Q3.4, Q4.5). The pair is what a merge is tried on — and,
+    /// being a different island from the first folder, is also what a merge has to refuse.</para>
+    ///
+        /// <para><c>everySheetOfTheIsland</c> files the whole survey into the delivery, so a table
     /// can be composed in full. It is the opposite of what the crate is for — the count is what
     /// makes the ledger's exclusion visible, and an archive whose islands arrive complete has no
     /// backlog — hence TEMPORARY in the Inspector. The loose debug sheet still comes out of that
@@ -63,12 +65,6 @@ namespace Archivist.Building.Interactables
         [Header("Contents")]
         [Tooltip("Sheets filed into each binder every opening.")]
         [SerializeField] int sheetsPerOpening = 5;
-
-        [Tooltip("TEMPORARY, for testing the map table: how many binders one opening " +
-                 "delivers, all of the SAME island. 1 is the design — a delivery is one " +
-                 "folder; raise it to reach the table's same-island and no-room branches " +
-                 "without opening the crate twice.")]
-        [SerializeField, Min(1)] int bindersPerOpening = 1;
 
         [Tooltip("TEMPORARY, for testing the map table: file EVERY unissued sheet of the " +
                  "island, ignoring the count above, so one delivery is the whole survey and " +
@@ -135,12 +131,10 @@ namespace Archivist.Building.Interactables
             // One pick for the whole delivery, then dealt out: asking the picker twice would
             // be two draws from a ledger snapshot taken before either, and the second could
             // pick sheets the first had already taken.
-            int wantBinders = Mathf.Max(1, bindersPerOpening);
-
             // 0 asks for the whole island — a sentinel rather than a very large number,
             // because Fill adds one to it for the loose sheet and int.MaxValue + 1 is
             // negative, which would quietly deliver nothing at all.
-            int count = everySheetOfTheIsland ? 0 : sheetsPerOpening * wantBinders;
+            int count = everySheetOfTheIsland ? 0 : sheetsPerOpening;
             bool wantLoose = looseDebugSheet && spawner != null;
             double ppmm = pixelsPerPaperMm;
 
@@ -186,35 +180,90 @@ namespace Archivist.Building.Interactables
 
             Transform anchor = dropAnchor != null ? dropAnchor : transform;
 
-            // Dealt in order, so the first binder holds the first share. Ceil rather than
-            // floor: with fewer sheets than asked for — an island running low — the shares
-            // stay full and the last binder simply is not created, which is better than
-            // several thin folders of one sheet each.
-            var delivered = new List<BinderView>(wantBinders);
-            int perBinder = opening.Filed.Count > 0
-                ? Mathf.Max(1, Mathf.CeilToInt(opening.Filed.Count / (float)wantBinders))
-                : 0;
+            // A FIXED DEBUG DELIVERY, and it is a debug delivery — MapCrate is a development
+            // tool and not the game's supply (Q7.2). One opening puts down:
+            //
+            //   * one binder holding the WHOLE of the first island, every office in one folder;
+            //   * two binders of a SECOND island, one office each.
+            //
+            // Between them those are the two cases a table has to handle. The full binder shows
+            // three layers on a table that takes one folder, so Q/E has something to cycle
+            // without anything being merged first (Q3.4, Q4.5). The pair is what a merge is
+            // tried on, and being two offices of one island it is also the case that has to
+            // refuse to merge with the first island's folder.
+            var delivered = new List<BinderView>(3);
 
-            for (int first = 0; first < opening.Filed.Count; first += perBinder)
+            BinderView whole = binders.Create(seed, opening.IslandName);
+            if (whole != null)
             {
-                BinderView binder = binders.Create(seed, opening.IslandName);
-                if (binder == null) break;
-
-                int last = Mathf.Min(first + perBinder, opening.Filed.Count);
-                for (int i = first; i < last; i++)
+                for (int i = 0; i < opening.Filed.Count; i++)
                 {
-                    // R2.10 enforced here and nowhere else: a sheet that is already out is
-                    // never issued twice, even if a picker somewhere later gets it wrong.
-                    // Filed only if the ledger agrees it is this call that issued it.
+                    // R2.10 enforced here and nowhere else: a sheet that is already out is never
+                    // issued twice, even if a picker somewhere later gets it wrong.
                     SheetId id = opening.Filed[i];
-                    if (generator.Ledger.MarkIssued(id)) binder.Add(id);
+                    if (generator.Ledger.MarkIssued(id)) whole.Add(id);
                 }
 
                 // Each is placed before the next is made: BinderSpawner.RestingPose probes
                 // downward for what is already lying there, so the second binder comes to rest
                 // on the first rather than inside it.
-                binders.Place(binder, anchor);
-                delivered.Add(binder);
+                binders.Place(whole, anchor);
+                delivered.Add(whole);
+            }
+
+            // ---- the second island, two offices, one folder each ------------------------
+
+            ulong second = generator.ReserveNextIslandSeed();
+            HashSet<SheetId> issuedSecond = generator.Ledger.Snapshot(second);
+            int drawSecond = unchecked((int)(second ^ ((ulong)issuedSecond.Count * 0x9E3779B97F4A7C15UL)));
+
+            IslandGenerator alsoSource = generator;
+            Task<Opening> alsoJob = Task.Run(
+                () => Fill(alsoSource, second, issuedSecond, 0, false, drawSecond, ppmm));
+
+            while (!alsoJob.IsCompleted) yield return null;
+
+            if (alsoJob.IsFaulted) Debug.LogException(alsoJob.Exception, this);
+            else
+            {
+                generator.Ledger.Describe(generator.GetOrGenerate(second));
+                Opening also = alsoJob.Result;
+
+                var byOffice = new Dictionary<Office, List<SheetId>>();
+                for (int i = 0; i < also.Filed.Count; i++)
+                {
+                    SheetId id = also.Filed[i];
+                    List<SheetId> forOffice;
+                    if (!byOffice.TryGetValue(id.Office, out forOffice))
+                    {
+                        forOffice = new List<SheetId>();
+                        byOffice[id.Office] = forOffice;
+                    }
+                    forOffice.Add(id);
+                }
+
+                // Offices.All order and the first two that have plates, so two openings deal the
+                // same way round. The rest of the island stays unissued and the crate can be
+                // opened again for it.
+                int made = 0;
+                for (int o = 0; o < Offices.All.Length && made < 2; o++)
+                {
+                    List<SheetId> forOffice;
+                    if (!byOffice.TryGetValue(Offices.All[o], out forOffice)) continue;
+
+                    BinderView binder = binders.Create(second, also.IslandName);
+                    if (binder == null) break;
+
+                    for (int i = 0; i < forOffice.Count; i++)
+                    {
+                        SheetId id = forOffice[i];
+                        if (generator.Ledger.MarkIssued(id)) binder.Add(id);
+                    }
+
+                    binders.Place(binder, anchor);
+                    delivered.Add(binder);
+                    made++;
+                }
             }
 
             yield return null;
@@ -298,7 +347,7 @@ namespace Archivist.Building.Interactables
             // once every sheet has been asked for. Adding to the sentinel would turn it into
             // an ordinary count of 1.
             int wanted = forBinder <= 0 ? 0 : forBinder + (wantLoose ? 1 : 0);
-            List<Sheet> picks = SheetPicker.PickUnissued(island, wanted, issued, drawSeed);
+            List<Sheet> picks = SheetPicker.PickUnissued(island, wanted, issued, drawSeed, true);
 
             // The loose sheet is the last of the pick, and is NOT one of the binder's: it
             // exists to be filed into the binder later, which it could not be if it were
@@ -306,7 +355,14 @@ namespace Archivist.Building.Interactables
             SheetRender loose = null;
             int fileCount = picks.Count;
 
-            if (wantLoose && picks.Count > 0)
+            // Never the chart, whatever else. The chart is the board's base (Q4.4) and R6.8a
+            // will not open a board without it; leaving it on the floor as the one loose sheet
+            // would make the board's own gate the thing lying under a rack. It is picks[0] when
+            // it is present, and the loose one comes off the end, so this only bites on an
+            // island whose chart is the ONLY plate left.
+            bool lastIsChart = picks.Count > 0 && picks[picks.Count - 1].Survey.IsWholeIsland;
+
+            if (wantLoose && picks.Count > 0 && !lastIsChart)
             {
                 fileCount = picks.Count - 1;
                 loose = Render(island, new List<Sheet> { picks[picks.Count - 1] }, pixelsPerPaperMm)[0];
@@ -323,16 +379,49 @@ namespace Archivist.Building.Interactables
         /// by naming its sheets instead of hoping the picker chooses them again — which is the
         /// difference between a bug you can look at and a bug you have to wait for.
         /// </summary>
+        /// <summary>
+        /// The same, for a board: sheets rendered at a target GROUND resolution rather than a
+        /// paper one, because a board lays every plate at its ground size and a chart at
+        /// 1:25000 would otherwise come out softer than a quarter at 1:10000. See
+        /// <c>RenderRequest.ForSheetAtGroundResolution</c>.
+        /// </summary>
+        public static List<SheetRender> RenderForBoard(Island island, IList<Sheet> sheets,
+                                                       double pixelsPerMetre)
+        {
+            return Render(island, sheets, pixelsPerMetre, true);
+        }
+
         public static List<SheetRender> Render(Island island, IList<Sheet> sheets,
                                                double pixelsPerPaperMm)
         {
+            return Render(island, sheets, pixelsPerPaperMm, false);
+        }
+
+        static List<SheetRender> Render(Island island, IList<Sheet> sheets,
+                                        double resolution, bool byGround)
+        {
             var rendered = new List<SheetRender>(sheets.Count);
+
+            // One cache for the batch. Three offices' plates of one quarter read the same field
+            // corners (Q1.2), and a batch is exactly where they arrive together — a crate
+            // delivering an island, a board filling in. Created here and dropped with the
+            // method, so it is single-threaded by construction and holds nothing afterwards.
+            var samples = new SampleGridCache();
+
             for (int i = 0; i < sheets.Count; i++)
             {
                 Sheet sheet = sheets[i];
-                RenderRequest request = RenderRequest.ForSheet(sheet, pixelsPerPaperMm);
-                ImageBuffer image = IslandRenderer.Render(island, request);
-                rendered.Add(new SheetRender(SheetId.Of(sheet), sheet, island.Name, image));
+                // The office's own layers (Q2.1), never LayerMask.All. Drawing everything on
+                // every sheet is what made an office a stamp in the margin — F-S1.7 measured
+                // the result and called it a filled colour relief map where the mockups show
+                // ink on paper.
+                RenderRequest request = byGround
+                    ? RenderRequest.ForSheetAtGroundResolution(sheet, resolution, OfficeLayers.For(sheet))
+                    : RenderRequest.ForSheet(sheet, resolution, OfficeLayers.For(sheet));
+                ImageBuffer image = IslandRenderer.Render(island, request,
+                                                          OfficeStyles.For(sheet), samples);
+                rendered.Add(new SheetRender(SheetId.Of(sheet), sheet, island.Name, image,
+                                             request.PixelsPerPaperMm));
             }
             return rendered;
         }

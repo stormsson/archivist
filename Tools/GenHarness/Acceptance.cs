@@ -7,6 +7,7 @@ using Archivist.Generation.Features;
 using Archivist.Generation.Field;
 using Archivist.Generation.Geometry;
 using Archivist.Generation.Sheets;
+using Archivist.Render;
 using static Archivist.Harness.Report;
 
 namespace Archivist.Harness
@@ -25,32 +26,38 @@ namespace Archivist.Harness
         const double A8IslandGenBudgetMs = 250.0;
 
         /// <summary>
-        /// §13.8 single-sheet re-contour budget, milliseconds, at the survey's own scale.
+        /// §13.8 plate re-contour budget, milliseconds: what a player waits for when a plate is
+        /// first picked up, in hand, with no fill.
         ///
-        /// <para><b>Raised from §13.8's 50 ms. This is a deviation from the spec, deliberately.</b>
-        /// With <see cref="Tuning.MaxPaperContourLod"/> capping the paper LOD at 4, the measured
-        /// median is 49.9 ms — inside 50 ms by a tenth of a millisecond, which is not a passing
-        /// check, it is a coin toss. A gate that flips run to run gets ignored, which is worse
-        /// than one that fails honestly.</para>
+        /// <para><b>Restated from 100 ms, and the number is the smaller half of the change.</b>
+        /// 100 ms was a perceptual bar — "feels instant when you pick it up" — set against a
+        /// survey sheet at 1:2500 covering <b>2.44 km²</b>. A quarter plate covers
+        /// <b>~22.5 km² of land</b> (Q1.1, Q1.6): nine times the map on one sheet of paper. The
+        /// bar did not move; the object did.</para>
         ///
-        /// <para>What the budget defends: R3.1 generates a sheet on demand and then caches it, so
-        /// this is a one-time cost when a sheet is first handled, not a per-frame cost. 50 ms was
-        /// never a frame budget either — a frame at 60 fps is 16.7 ms. It is a "feels instant when
-        /// you pick it up" number, and the perceptual bar for that is around 100 ms.</para>
+        /// <para>250 ms against nine times the content is <b>3.6x stricter per unit of map</b>
+        /// than the 100 ms it replaces. It is not a relaxation dressed as a restatement, and it
+        /// is above the perceptual bar it was named for — which is the honest position, because
+        /// the paper is bigger and there is nothing to be done about that short of drawing less
+        /// of the island on it.</para>
         ///
-        /// <para>⚠ Measured on one machine, which looks slow: A8's island-generation clause reads
-        /// ~467 ms here against the ~118 ms recorded in generation_for_agents.md §1, a 4x gap
-        /// that is still unexplained. If the reference machine is genuinely that much faster this
-        /// budget is far looser than it needs to be. Re-measure before trusting the headroom.</para>
+        /// <para><b>The rate, not the total, is what tells a slow machine from slow code.</b>
+        /// A8 reports ms per million contour cells beside this, and that figure is invariant:
+        /// the cell size follows the pixel (<c>RenderLod</c>), so cells-per-plate came out the
+        /// same before and after the rework even though the ground area went up sixteen-fold.
+        /// Measured here at ~280 ms/Mcell, in both the old shape and the new. If the total
+        /// fails while the rate holds, the plate got bigger; if the rate moves, the contouring
+        /// did.</para>
         ///
-        /// <para>⚠ Re-measured when tuning moved to <c>config/generation.yml</c>: eight runs
-        /// spanning 452-493 ms across three different shapes of <c>Tuning</c>, so the slow figure
-        /// is stable and is not an artefact of how the constants are stored. The useful datum is
-        /// that setting <c>paper.OverlapFraction</c> to 0 cuts a collection from 590 sheets to
-        /// 444 and moves this median under 4% — <b>the cost is not in sheet cutting</b>. Look
-        /// upstream, at the field, the contour extraction, or the feature passes.</para>
+        /// <para>What it defends is unchanged: R3.1 renders a plate on demand and caches it, so
+        /// this is a one-time cost when a plate is first handled and never a per-frame one. A
+        /// frame at 60 fps is 16.7 ms and this was never that.</para>
+        ///
+        /// <para>⚠ The old ⚠ notes here — a machine "which looks slow", a 4x gap against
+        /// <c>generation_for_agents.md</c> — are resolved and gone. The gap was the build
+        /// configuration: this harness ran unoptimised. See <c>rework1/03-findings.md</c> R4.</para>
         /// </summary>
-        const double A8SheetRecontourBudgetMs = 100.0;
+        const double A8SheetRecontourBudgetMs = 250.0;
 
         // ---------------------------------------------------------------- A2
         /// <summary>§13.2 — same seed, identical island, across runs.</summary>
@@ -144,6 +151,8 @@ namespace Archivist.Harness
         {
             Console.WriteLine("A5  No blank sheets  (+ A5b thin sheets)");
             int total = 0, blank = 0;
+            var blanks = new List<string>();
+            var overSea = new List<string>();
             var thin = new Dictionary<Office, int>();
             var perOffice = new Dictionary<Office, int>();
             foreach (Office o in Offices.All)
@@ -161,13 +170,38 @@ namespace Archivist.Harness
                         Office o = sv.Spec.Office;
                         if (!sv.Spec.IsWholeIsland) perOffice[o]++;
                         SheetContent content = Content(isl, sv.Sheets[k]);
-                        if (!content.Any) blank++;
+                        if (!content.Any && !HoldsLand(isl, sv.Sheets[k]))
+                        {
+                            // Q1.1 cuts the land BOUNDS into four, and an island is not a
+                            // rectangle: a fjorded or crescent island can leave a whole quarter
+                            // of its bounding box with no land in it. The office surveyed that
+                            // square and there was nothing there, which is truthful (R2.13) and
+                            // is the decision recorded in rework1/03-findings.md F-R9.4 (k).
+                            overSea.Add(Name(isl, sv, sv.Sheets[k]));
+                        }
+                        else if (!content.Any)
+                        {
+                            blank++;
+                            // Named, not just counted: under the quarter model a blank plate is
+                            // a specific office's specific corner of a specific island, and
+                            // whether it is a defect or the point (Q2.4) cannot be judged from
+                            // a number.
+                            blanks.Add(Name(isl, sv, sv.Sheets[k]));
+                        }
                         if (!sv.Spec.IsWholeIsland && !content.AnyBeyondCoastAndGrid) thin[o]++;
                     }
                 }
             }
-            if (blank > 0) Fail("A5", blank + " of " + total + " sheets carry nothing their office draws");
-            else Pass("A5", total + " sheets all carry at least one drawn class (grid counts)");
+            if (blank > 0)
+                Fail("A5", blank + " of " + total + " sheets hold land and still carry nothing "
+                           + "their office draws: " + string.Join(", ", blanks));
+            else Pass("A5", total + " sheets: every one that holds land carries a drawn class "
+                            + "(grid counts)");
+
+            Metric("A5", overSea.Count == 0
+                         ? "no blank plates at all"
+                         : overSea.Count + " blank plate(s), all of quarters with no land in them "
+                           + "— allowed (F-R9.4): " + string.Join(", ", overSea));
 
             foreach (Office o in Offices.All)
             {
@@ -177,6 +211,40 @@ namespace Archivist.Harness
         }
 
         struct SheetContent { public bool Any; public bool AnyBeyondCoastAndGrid; }
+
+        /// <summary>
+        /// Is there any land under this plate at all? Sampled on the <c>Tuning.BaseCell</c>
+        /// lattice, the same spacing <c>ComputeLandBounds</c> uses, so the two agree about what
+        /// counts as land.
+        ///
+        /// <para>A plate with no land under it is allowed to be blank (F-R9.4). A plate that
+        /// holds land and still draws nothing is the failure this check exists for.</para>
+        /// </summary>
+        /// <summary>Island, office and corner — how a plate is read off a binder.</summary>
+        static string Name(Island island, Survey survey, Sheet sheet)
+        {
+            return island.Names.Island + " " + survey.Spec.Office
+                 + (survey.Spec.IsWholeIsland ? " chart"
+                    : sheet.IsDetail ? " detail " + sheet.Number
+                    : " " + QuarterCutter.QuarterNames[sheet.Number - 1]);
+        }
+
+        static bool HoldsLand(Island island, Sheet sheet)
+        {
+            Rect2 r = sheet.GroundBounds;
+            double step = Tuning.BaseCell;
+
+            for (double y = r.MinY; y <= r.MaxY; y += step)
+            {
+                for (double x = r.MinX; x <= r.MaxX; x += step)
+                {
+                    var p = new V2(x, y);
+                    if (!sheet.Contains(p)) continue;
+                    if (island.Field.Height01(x, y) >= island.Params.SeaLevel) return true;
+                }
+            }
+            return false;
+        }
 
         /// <summary>Is this ground point inside the region being probed? A predicate, because the
         /// two callers of <see cref="HasClass"/> mean different regions: a SHEET is a rotated
@@ -449,17 +517,36 @@ namespace Archivist.Harness
             if (sv == null || sv.SheetCount == 0) sv = warm.SurveyFor(Office.Hydrographic);
             if (sv == null || sv.SheetCount == 0) { Metric("A8", "no sheets to re-contour on the warm seed"); return; }
 
-            // Must follow the survey's OWN scale — hardcoding 1:5000 here measured a
-            // 1:2500 sheet at the wrong LOD and flattered the result.
+            // The RUNTIME path, which is not Contours.LodForScale. This clause used to call
+            // LodForScale — a fixed 4 m cell — and no renderer has ever used it: Strokes.DrawCoast
+            // ties the cell to the PIXEL through RenderLod, and the four callers of LodForScale
+            // are all editor tooling plus ContourSeam. At 1:2500 the old clause reported ~50 ms
+            // while the renderer was spending ~36 ms on the same sheet with sixteen times the
+            // cells, so the number was never about the game. See rework1/03-findings.md R7.
+            //
+            // WithoutFill, and at the in-hand density, because that is the case a player waits
+            // on: Q2.2 turns Fill off, so the coastline comes from this vector path.
             int denom = sv.Spec.Scale.Denominator;
-            int lod = Contours.LodForScale(denom);
+            int lod = RenderLod.ForPixelsPerMetreWithoutFill(
+                RenderRequest.ForSheet(sv.Sheets[0], RenderTuning.SheetPxPerPaperMm).PixelsPerMetre);
             double cell = Contours.CellSizeForLod(lod);
 
             double medSheet = Timing.MedianMs(10, true,
                 i => Contours.Extract(warm.Field, sv.Sheets[i % sv.SheetCount].GroundBounds, cell, warm.Params.SeaLevel));
             string sheetBudget = A8SheetRecontourBudgetMs.ToString("F0", Inv);
-            if (medSheet < A8SheetRecontourBudgetMs) Pass("A8", "sheet re-contour at 1:" + denom + " median " + medSheet.ToString("F1", Inv) + " ms (< " + sheetBudget + ")");
-            else Fail("A8", "sheet re-contour at 1:" + denom + " median " + medSheet.ToString("F1", Inv) + " ms (>= " + sheetBudget + ")");
+            string where = "plate re-contour at 1:" + denom + ", " + cell.ToString("F0", Inv) + " m cell, in hand, no fill";
+            if (medSheet < A8SheetRecontourBudgetMs) Pass("A8", where + " median " + medSheet.ToString("F1", Inv) + " ms (< " + sheetBudget + ")");
+            else Fail("A8", where + " median " + medSheet.ToString("F1", Inv) + " ms (>= " + sheetBudget + ")");
+
+            // The invariant beside the total: cells, not square kilometres. The cell follows the
+            // pixel, so a coarser scale buys a coarser cell and the count per plate barely moves
+            // — which is why this rate, and not the total, is what a regression shows up in.
+            Rect2 plate = sv.Sheets[0].GroundBounds;
+            double megacells = plate.Width * plate.Height / (cell * cell) / 1e6;
+            Metric("A8", "contouring runs at " + (medSheet / megacells).ToString("F0", Inv)
+                         + " ms per million cells (" + megacells.ToString("F2", Inv)
+                         + " M cells on a plate covering "
+                         + (plate.Width * plate.Height / 1e6).ToString("F1", Inv) + " km2)");
         }
     }
 }

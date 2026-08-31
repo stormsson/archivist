@@ -72,33 +72,20 @@ namespace Archivist.Generation
         public static double WeldFraction { get; internal set; } = DefaultWeldFraction;
         public static double MmPerMetre { get; internal set; } = DefaultMmPerMetre;
         public static int    MaxPaperContourLod { get; internal set; } = DefaultMaxPaperContourLod;
+        public static int    CoastlineMarginCells { get; internal set; } = DefaultCoastlineMarginCells;
         public static double GradientStep { get; internal set; } = DefaultGradientStep;
         public static double SheetWidthMm { get; internal set; } = DefaultSheetWidthMm;
         public static double SheetHeightMm { get; internal set; } = DefaultSheetHeightMm;
         public static double SheetMarginMm { get; internal set; } = DefaultSheetMarginMm;
-        public static double OverlapFraction { get; internal set; } = DefaultOverlapFraction;
-        public static double StripWidthMm { get; internal set; } = DefaultStripWidthMm;
-        public static double StripHeightMm { get; internal set; } = DefaultStripHeightMm;
-        public static double StripMarginMm { get; internal set; } = DefaultStripMarginMm;
-        public static double CoastRegionRadiusMin { get; internal set; } = DefaultCoastRegionRadiusMin;
-        public static double CoastRegionRadiusMax { get; internal set; } = DefaultCoastRegionRadiusMax;
-        public static double CoastSeawardBias { get; internal set; } = DefaultCoastSeawardBias;
-        public static double CoastMinLoopLength { get; internal set; } = DefaultCoastMinLoopLength;
-        public static double CoastMinSheetSeparation { get; internal set; } = DefaultCoastMinSheetSeparation;
-        public static int    DetailScaleDenominator { get; internal set; } = DefaultDetailScaleDenominator;
-        public static int    CoastalScaleDenominator { get; internal set; } = DefaultCoastalScaleDenominator;
+        public static int    QuarterScaleFineDenominator { get; internal set; } = DefaultQuarterScaleFineDenominator;
+        public static int    QuarterScaleDenominator { get; internal set; } = DefaultQuarterScaleDenominator;
         public static int    WholeIslandScaleDenominator { get; internal set; } = DefaultWholeIslandScaleDenominator;
         public static int    WholeIslandFallbackScaleDenominator { get; internal set; } = DefaultWholeIslandFallbackScaleDenominator;
         public static double GridPitchPaperMm { get; internal set; } = DefaultGridPitchPaperMm;
         public static double ServiceRadiusFrac { get; internal set; } = DefaultServiceRadiusFrac;
         public static double ServedThreshold { get; internal set; } = DefaultServedThreshold;
         public static double SoundingDepth { get; internal set; } = DefaultSoundingDepth;
-        public static double LandFractionMinLandSurvey { get; internal set; } = DefaultLandFractionMinLandSurvey;
-        public static double LandFractionMinGarrison { get; internal set; } = DefaultLandFractionMinGarrison;
         public static int    CullSampleGrid { get; internal set; } = DefaultCullSampleGrid;
-        public static double PcaIsotropyThreshold { get; internal set; } = DefaultPcaIsotropyThreshold;
-        public static double PcaCoastSampleFrac { get; internal set; } = DefaultPcaCoastSampleFrac;
-        public static int    PcaLandMinPoints { get; internal set; } = DefaultPcaLandMinPoints;
         public static double PeakElevationFrac { get; internal set; } = DefaultPeakElevationFrac;
         public static double PeakNmsRadius { get; internal set; } = DefaultPeakNmsRadius;
         public static int    PeakNamedCount { get; internal set; } = DefaultPeakNamedCount;
@@ -177,33 +164,20 @@ namespace Archivist.Generation
         public static readonly double WeldFraction = DefaultWeldFraction;
         public static readonly double MmPerMetre = DefaultMmPerMetre;
         public static readonly int    MaxPaperContourLod = DefaultMaxPaperContourLod;
+        public static readonly int    CoastlineMarginCells = DefaultCoastlineMarginCells;
         public static readonly double GradientStep = DefaultGradientStep;
         public static readonly double SheetWidthMm = DefaultSheetWidthMm;
         public static readonly double SheetHeightMm = DefaultSheetHeightMm;
         public static readonly double SheetMarginMm = DefaultSheetMarginMm;
-        public static readonly double OverlapFraction = DefaultOverlapFraction;
-        public static readonly double StripWidthMm = DefaultStripWidthMm;
-        public static readonly double StripHeightMm = DefaultStripHeightMm;
-        public static readonly double StripMarginMm = DefaultStripMarginMm;
-        public static readonly double CoastRegionRadiusMin = DefaultCoastRegionRadiusMin;
-        public static readonly double CoastRegionRadiusMax = DefaultCoastRegionRadiusMax;
-        public static readonly double CoastSeawardBias = DefaultCoastSeawardBias;
-        public static readonly double CoastMinLoopLength = DefaultCoastMinLoopLength;
-        public static readonly double CoastMinSheetSeparation = DefaultCoastMinSheetSeparation;
-        public static readonly int    DetailScaleDenominator = DefaultDetailScaleDenominator;
-        public static readonly int    CoastalScaleDenominator = DefaultCoastalScaleDenominator;
+        public static readonly int    QuarterScaleFineDenominator = DefaultQuarterScaleFineDenominator;
+        public static readonly int    QuarterScaleDenominator = DefaultQuarterScaleDenominator;
         public static readonly int    WholeIslandScaleDenominator = DefaultWholeIslandScaleDenominator;
         public static readonly int    WholeIslandFallbackScaleDenominator = DefaultWholeIslandFallbackScaleDenominator;
         public static readonly double GridPitchPaperMm = DefaultGridPitchPaperMm;
         public static readonly double ServiceRadiusFrac = DefaultServiceRadiusFrac;
         public static readonly double ServedThreshold = DefaultServedThreshold;
         public static readonly double SoundingDepth = DefaultSoundingDepth;
-        public static readonly double LandFractionMinLandSurvey = DefaultLandFractionMinLandSurvey;
-        public static readonly double LandFractionMinGarrison = DefaultLandFractionMinGarrison;
         public static readonly int    CullSampleGrid = DefaultCullSampleGrid;
-        public static readonly double PcaIsotropyThreshold = DefaultPcaIsotropyThreshold;
-        public static readonly double PcaCoastSampleFrac = DefaultPcaCoastSampleFrac;
-        public static readonly int    PcaLandMinPoints = DefaultPcaLandMinPoints;
         public static readonly double PeakElevationFrac = DefaultPeakElevationFrac;
         public static readonly double PeakNmsRadius = DefaultPeakNmsRadius;
         public static readonly int    PeakNamedCount = DefaultPeakNamedCount;
@@ -284,33 +258,20 @@ namespace Archivist.Generation
                 WeldFraction = source.Double("WeldFraction", DefaultWeldFraction);
                 MmPerMetre = source.Double("MmPerMetre", DefaultMmPerMetre);
                 MaxPaperContourLod = source.Int("MaxPaperContourLod", DefaultMaxPaperContourLod);
+                CoastlineMarginCells = source.Int("CoastlineMarginCells", DefaultCoastlineMarginCells);
                 GradientStep = source.Double("GradientStep", DefaultGradientStep);
                 SheetWidthMm = source.Double("SheetWidthMm", DefaultSheetWidthMm);
                 SheetHeightMm = source.Double("SheetHeightMm", DefaultSheetHeightMm);
                 SheetMarginMm = source.Double("SheetMarginMm", DefaultSheetMarginMm);
-                OverlapFraction = source.Double("OverlapFraction", DefaultOverlapFraction);
-                StripWidthMm = source.Double("StripWidthMm", DefaultStripWidthMm);
-                StripHeightMm = source.Double("StripHeightMm", DefaultStripHeightMm);
-                StripMarginMm = source.Double("StripMarginMm", DefaultStripMarginMm);
-                CoastRegionRadiusMin = source.Double("CoastRegionRadiusMin", DefaultCoastRegionRadiusMin);
-                CoastRegionRadiusMax = source.Double("CoastRegionRadiusMax", DefaultCoastRegionRadiusMax);
-                CoastSeawardBias = source.Double("CoastSeawardBias", DefaultCoastSeawardBias);
-                CoastMinLoopLength = source.Double("CoastMinLoopLength", DefaultCoastMinLoopLength);
-                CoastMinSheetSeparation = source.Double("CoastMinSheetSeparation", DefaultCoastMinSheetSeparation);
-                DetailScaleDenominator = source.Int("DetailScaleDenominator", DefaultDetailScaleDenominator);
-                CoastalScaleDenominator = source.Int("CoastalScaleDenominator", DefaultCoastalScaleDenominator);
+                QuarterScaleFineDenominator = source.Int("QuarterScaleFineDenominator", DefaultQuarterScaleFineDenominator);
+                QuarterScaleDenominator = source.Int("QuarterScaleDenominator", DefaultQuarterScaleDenominator);
                 WholeIslandScaleDenominator = source.Int("WholeIslandScaleDenominator", DefaultWholeIslandScaleDenominator);
                 WholeIslandFallbackScaleDenominator = source.Int("WholeIslandFallbackScaleDenominator", DefaultWholeIslandFallbackScaleDenominator);
                 GridPitchPaperMm = source.Double("GridPitchPaperMm", DefaultGridPitchPaperMm);
                 ServiceRadiusFrac = source.Double("ServiceRadiusFrac", DefaultServiceRadiusFrac);
                 ServedThreshold = source.Double("ServedThreshold", DefaultServedThreshold);
                 SoundingDepth = source.Double("SoundingDepth", DefaultSoundingDepth);
-                LandFractionMinLandSurvey = source.Double("LandFractionMinLandSurvey", DefaultLandFractionMinLandSurvey);
-                LandFractionMinGarrison = source.Double("LandFractionMinGarrison", DefaultLandFractionMinGarrison);
                 CullSampleGrid = source.Int("CullSampleGrid", DefaultCullSampleGrid);
-                PcaIsotropyThreshold = source.Double("PcaIsotropyThreshold", DefaultPcaIsotropyThreshold);
-                PcaCoastSampleFrac = source.Double("PcaCoastSampleFrac", DefaultPcaCoastSampleFrac);
-                PcaLandMinPoints = source.Int("PcaLandMinPoints", DefaultPcaLandMinPoints);
                 PeakElevationFrac = source.Double("PeakElevationFrac", DefaultPeakElevationFrac);
                 PeakNmsRadius = source.Double("PeakNmsRadius", DefaultPeakNmsRadius);
                 PeakNamedCount = source.Int("PeakNamedCount", DefaultPeakNamedCount);
@@ -425,33 +386,20 @@ namespace Archivist.Generation
                 new Parameter("WeldFraction", "contouring", false, DefaultWeldFraction, () => WeldFraction),
                 new Parameter("MmPerMetre", "contouring", false, DefaultMmPerMetre, () => MmPerMetre),
                 new Parameter("MaxPaperContourLod", "contouring", true, DefaultMaxPaperContourLod, () => MaxPaperContourLod),
+                new Parameter("CoastlineMarginCells", "contouring", true, DefaultCoastlineMarginCells, () => CoastlineMarginCells),
                 new Parameter("GradientStep", "quantisation", false, DefaultGradientStep, () => GradientStep),
                 new Parameter("SheetWidthMm", "paper", false, DefaultSheetWidthMm, () => SheetWidthMm),
                 new Parameter("SheetHeightMm", "paper", false, DefaultSheetHeightMm, () => SheetHeightMm),
                 new Parameter("SheetMarginMm", "paper", false, DefaultSheetMarginMm, () => SheetMarginMm),
-                new Parameter("OverlapFraction", "paper", false, DefaultOverlapFraction, () => OverlapFraction),
-                new Parameter("StripWidthMm", "hydrographic_coastal_strip", false, DefaultStripWidthMm, () => StripWidthMm),
-                new Parameter("StripHeightMm", "hydrographic_coastal_strip", false, DefaultStripHeightMm, () => StripHeightMm),
-                new Parameter("StripMarginMm", "hydrographic_coastal_strip", false, DefaultStripMarginMm, () => StripMarginMm),
-                new Parameter("CoastRegionRadiusMin", "hydrographic_coastal_strip", false, DefaultCoastRegionRadiusMin, () => CoastRegionRadiusMin),
-                new Parameter("CoastRegionRadiusMax", "hydrographic_coastal_strip", false, DefaultCoastRegionRadiusMax, () => CoastRegionRadiusMax),
-                new Parameter("CoastSeawardBias", "hydrographic_coastal_strip", false, DefaultCoastSeawardBias, () => CoastSeawardBias),
-                new Parameter("CoastMinLoopLength", "hydrographic_coastal_strip", false, DefaultCoastMinLoopLength, () => CoastMinLoopLength),
-                new Parameter("CoastMinSheetSeparation", "hydrographic_coastal_strip", false, DefaultCoastMinSheetSeparation, () => CoastMinSheetSeparation),
-                new Parameter("DetailScaleDenominator", "scales", true, DefaultDetailScaleDenominator, () => DetailScaleDenominator),
-                new Parameter("CoastalScaleDenominator", "scales", true, DefaultCoastalScaleDenominator, () => CoastalScaleDenominator),
+                new Parameter("QuarterScaleFineDenominator", "scales", true, DefaultQuarterScaleFineDenominator, () => QuarterScaleFineDenominator),
+                new Parameter("QuarterScaleDenominator", "scales", true, DefaultQuarterScaleDenominator, () => QuarterScaleDenominator),
                 new Parameter("WholeIslandScaleDenominator", "scales", true, DefaultWholeIslandScaleDenominator, () => WholeIslandScaleDenominator),
                 new Parameter("WholeIslandFallbackScaleDenominator", "scales", true, DefaultWholeIslandFallbackScaleDenominator, () => WholeIslandFallbackScaleDenominator),
                 new Parameter("GridPitchPaperMm", "grid", false, DefaultGridPitchPaperMm, () => GridPitchPaperMm),
                 new Parameter("ServiceRadiusFrac", "service_rule", false, DefaultServiceRadiusFrac, () => ServiceRadiusFrac),
                 new Parameter("ServedThreshold", "service_rule", false, DefaultServedThreshold, () => ServedThreshold),
                 new Parameter("SoundingDepth", "service_rule", false, DefaultSoundingDepth, () => SoundingDepth),
-                new Parameter("LandFractionMinLandSurvey", "cull", false, DefaultLandFractionMinLandSurvey, () => LandFractionMinLandSurvey),
-                new Parameter("LandFractionMinGarrison", "cull", false, DefaultLandFractionMinGarrison, () => LandFractionMinGarrison),
                 new Parameter("CullSampleGrid", "cull", true, DefaultCullSampleGrid, () => CullSampleGrid),
-                new Parameter("PcaIsotropyThreshold", "rotation", false, DefaultPcaIsotropyThreshold, () => PcaIsotropyThreshold),
-                new Parameter("PcaCoastSampleFrac", "rotation", false, DefaultPcaCoastSampleFrac, () => PcaCoastSampleFrac),
-                new Parameter("PcaLandMinPoints", "rotation", true, DefaultPcaLandMinPoints, () => PcaLandMinPoints),
                 new Parameter("PeakElevationFrac", "peaks", false, DefaultPeakElevationFrac, () => PeakElevationFrac),
                 new Parameter("PeakNmsRadius", "peaks", false, DefaultPeakNmsRadius, () => PeakNmsRadius),
                 new Parameter("PeakNamedCount", "peaks", true, DefaultPeakNamedCount, () => PeakNamedCount),
@@ -546,33 +494,20 @@ namespace Archivist.Generation
             { "WeldFraction", v => WeldFraction = v },
             { "MmPerMetre", v => MmPerMetre = v },
             { "MaxPaperContourLod", v => MaxPaperContourLod = (int)System.Math.Round(v) },
+            { "CoastlineMarginCells", v => CoastlineMarginCells = (int)System.Math.Round(v) },
             { "GradientStep", v => GradientStep = v },
             { "SheetWidthMm", v => SheetWidthMm = v },
             { "SheetHeightMm", v => SheetHeightMm = v },
             { "SheetMarginMm", v => SheetMarginMm = v },
-            { "OverlapFraction", v => OverlapFraction = v },
-            { "StripWidthMm", v => StripWidthMm = v },
-            { "StripHeightMm", v => StripHeightMm = v },
-            { "StripMarginMm", v => StripMarginMm = v },
-            { "CoastRegionRadiusMin", v => CoastRegionRadiusMin = v },
-            { "CoastRegionRadiusMax", v => CoastRegionRadiusMax = v },
-            { "CoastSeawardBias", v => CoastSeawardBias = v },
-            { "CoastMinLoopLength", v => CoastMinLoopLength = v },
-            { "CoastMinSheetSeparation", v => CoastMinSheetSeparation = v },
-            { "DetailScaleDenominator", v => DetailScaleDenominator = (int)System.Math.Round(v) },
-            { "CoastalScaleDenominator", v => CoastalScaleDenominator = (int)System.Math.Round(v) },
+            { "QuarterScaleFineDenominator", v => QuarterScaleFineDenominator = (int)System.Math.Round(v) },
+            { "QuarterScaleDenominator", v => QuarterScaleDenominator = (int)System.Math.Round(v) },
             { "WholeIslandScaleDenominator", v => WholeIslandScaleDenominator = (int)System.Math.Round(v) },
             { "WholeIslandFallbackScaleDenominator", v => WholeIslandFallbackScaleDenominator = (int)System.Math.Round(v) },
             { "GridPitchPaperMm", v => GridPitchPaperMm = v },
             { "ServiceRadiusFrac", v => ServiceRadiusFrac = v },
             { "ServedThreshold", v => ServedThreshold = v },
             { "SoundingDepth", v => SoundingDepth = v },
-            { "LandFractionMinLandSurvey", v => LandFractionMinLandSurvey = v },
-            { "LandFractionMinGarrison", v => LandFractionMinGarrison = v },
             { "CullSampleGrid", v => CullSampleGrid = (int)System.Math.Round(v) },
-            { "PcaIsotropyThreshold", v => PcaIsotropyThreshold = v },
-            { "PcaCoastSampleFrac", v => PcaCoastSampleFrac = v },
-            { "PcaLandMinPoints", v => PcaLandMinPoints = (int)System.Math.Round(v) },
             { "PeakElevationFrac", v => PeakElevationFrac = v },
             { "PeakNmsRadius", v => PeakNmsRadius = v },
             { "PeakNamedCount", v => PeakNamedCount = (int)System.Math.Round(v) },
@@ -665,33 +600,20 @@ namespace Archivist.Generation
                 WeldFraction = source.Double("WeldFraction", DefaultWeldFraction);
                 MmPerMetre = source.Double("MmPerMetre", DefaultMmPerMetre);
                 MaxPaperContourLod = source.Int("MaxPaperContourLod", DefaultMaxPaperContourLod);
+                CoastlineMarginCells = source.Int("CoastlineMarginCells", DefaultCoastlineMarginCells);
                 GradientStep = source.Double("GradientStep", DefaultGradientStep);
                 SheetWidthMm = source.Double("SheetWidthMm", DefaultSheetWidthMm);
                 SheetHeightMm = source.Double("SheetHeightMm", DefaultSheetHeightMm);
                 SheetMarginMm = source.Double("SheetMarginMm", DefaultSheetMarginMm);
-                OverlapFraction = source.Double("OverlapFraction", DefaultOverlapFraction);
-                StripWidthMm = source.Double("StripWidthMm", DefaultStripWidthMm);
-                StripHeightMm = source.Double("StripHeightMm", DefaultStripHeightMm);
-                StripMarginMm = source.Double("StripMarginMm", DefaultStripMarginMm);
-                CoastRegionRadiusMin = source.Double("CoastRegionRadiusMin", DefaultCoastRegionRadiusMin);
-                CoastRegionRadiusMax = source.Double("CoastRegionRadiusMax", DefaultCoastRegionRadiusMax);
-                CoastSeawardBias = source.Double("CoastSeawardBias", DefaultCoastSeawardBias);
-                CoastMinLoopLength = source.Double("CoastMinLoopLength", DefaultCoastMinLoopLength);
-                CoastMinSheetSeparation = source.Double("CoastMinSheetSeparation", DefaultCoastMinSheetSeparation);
-                DetailScaleDenominator = source.Int("DetailScaleDenominator", DefaultDetailScaleDenominator);
-                CoastalScaleDenominator = source.Int("CoastalScaleDenominator", DefaultCoastalScaleDenominator);
+                QuarterScaleFineDenominator = source.Int("QuarterScaleFineDenominator", DefaultQuarterScaleFineDenominator);
+                QuarterScaleDenominator = source.Int("QuarterScaleDenominator", DefaultQuarterScaleDenominator);
                 WholeIslandScaleDenominator = source.Int("WholeIslandScaleDenominator", DefaultWholeIslandScaleDenominator);
                 WholeIslandFallbackScaleDenominator = source.Int("WholeIslandFallbackScaleDenominator", DefaultWholeIslandFallbackScaleDenominator);
                 GridPitchPaperMm = source.Double("GridPitchPaperMm", DefaultGridPitchPaperMm);
                 ServiceRadiusFrac = source.Double("ServiceRadiusFrac", DefaultServiceRadiusFrac);
                 ServedThreshold = source.Double("ServedThreshold", DefaultServedThreshold);
                 SoundingDepth = source.Double("SoundingDepth", DefaultSoundingDepth);
-                LandFractionMinLandSurvey = source.Double("LandFractionMinLandSurvey", DefaultLandFractionMinLandSurvey);
-                LandFractionMinGarrison = source.Double("LandFractionMinGarrison", DefaultLandFractionMinGarrison);
                 CullSampleGrid = source.Int("CullSampleGrid", DefaultCullSampleGrid);
-                PcaIsotropyThreshold = source.Double("PcaIsotropyThreshold", DefaultPcaIsotropyThreshold);
-                PcaCoastSampleFrac = source.Double("PcaCoastSampleFrac", DefaultPcaCoastSampleFrac);
-                PcaLandMinPoints = source.Int("PcaLandMinPoints", DefaultPcaLandMinPoints);
                 PeakElevationFrac = source.Double("PeakElevationFrac", DefaultPeakElevationFrac);
                 PeakNmsRadius = source.Double("PeakNmsRadius", DefaultPeakNmsRadius);
                 PeakNamedCount = source.Int("PeakNamedCount", DefaultPeakNamedCount);
@@ -846,33 +768,20 @@ namespace Archivist.Generation
             Mix(ref h, "WeldFraction", WeldFraction);
             Mix(ref h, "MmPerMetre", MmPerMetre);
             Mix(ref h, "MaxPaperContourLod", MaxPaperContourLod);
+            Mix(ref h, "CoastlineMarginCells", CoastlineMarginCells);
             Mix(ref h, "GradientStep", GradientStep);
             Mix(ref h, "SheetWidthMm", SheetWidthMm);
             Mix(ref h, "SheetHeightMm", SheetHeightMm);
             Mix(ref h, "SheetMarginMm", SheetMarginMm);
-            Mix(ref h, "OverlapFraction", OverlapFraction);
-            Mix(ref h, "StripWidthMm", StripWidthMm);
-            Mix(ref h, "StripHeightMm", StripHeightMm);
-            Mix(ref h, "StripMarginMm", StripMarginMm);
-            Mix(ref h, "CoastRegionRadiusMin", CoastRegionRadiusMin);
-            Mix(ref h, "CoastRegionRadiusMax", CoastRegionRadiusMax);
-            Mix(ref h, "CoastSeawardBias", CoastSeawardBias);
-            Mix(ref h, "CoastMinLoopLength", CoastMinLoopLength);
-            Mix(ref h, "CoastMinSheetSeparation", CoastMinSheetSeparation);
-            Mix(ref h, "DetailScaleDenominator", DetailScaleDenominator);
-            Mix(ref h, "CoastalScaleDenominator", CoastalScaleDenominator);
+            Mix(ref h, "QuarterScaleFineDenominator", QuarterScaleFineDenominator);
+            Mix(ref h, "QuarterScaleDenominator", QuarterScaleDenominator);
             Mix(ref h, "WholeIslandScaleDenominator", WholeIslandScaleDenominator);
             Mix(ref h, "WholeIslandFallbackScaleDenominator", WholeIslandFallbackScaleDenominator);
             Mix(ref h, "GridPitchPaperMm", GridPitchPaperMm);
             Mix(ref h, "ServiceRadiusFrac", ServiceRadiusFrac);
             Mix(ref h, "ServedThreshold", ServedThreshold);
             Mix(ref h, "SoundingDepth", SoundingDepth);
-            Mix(ref h, "LandFractionMinLandSurvey", LandFractionMinLandSurvey);
-            Mix(ref h, "LandFractionMinGarrison", LandFractionMinGarrison);
             Mix(ref h, "CullSampleGrid", CullSampleGrid);
-            Mix(ref h, "PcaIsotropyThreshold", PcaIsotropyThreshold);
-            Mix(ref h, "PcaCoastSampleFrac", PcaCoastSampleFrac);
-            Mix(ref h, "PcaLandMinPoints", PcaLandMinPoints);
             Mix(ref h, "PeakElevationFrac", PeakElevationFrac);
             Mix(ref h, "PeakNmsRadius", PeakNmsRadius);
             Mix(ref h, "PeakNamedCount", PeakNamedCount);

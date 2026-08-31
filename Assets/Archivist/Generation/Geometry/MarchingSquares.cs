@@ -104,25 +104,49 @@ namespace Archivist.Generation.Geometry
         /// remaining vertices), so callers such as §10.1's "longest loop, ties by first vertex"
         /// see a stable list. No dictionary is ever enumerated to produce it (§4.1).
         /// </summary>
-        public static IReadOnlyList<Polyline> Extract(IHeightField field, Rect2 area, double cellSize, double level01)
+        public static IReadOnlyList<Polyline> Extract(IHeightField field, Rect2 area,
+                                                     double cellSize, double level01)
         {
-            var empty = new List<Polyline>();
-            if (field == null) return empty;
-            if (area.IsEmpty) return empty;
-            if (!(cellSize > 0.0) || double.IsInfinity(cellSize) || double.IsNaN(cellSize)) return empty;
+            IReadOnlyList<Polyline>[] one = ExtractLevels(field, area, cellSize, new[] { level01 });
+            return one.Length == 1 ? one[0] : new List<Polyline>();
+        }
 
-            // §6.2: corners land on multiples of cellSize from the domain origin, then one cell
-            // of margin so a line crossing the border is built from complete cells on both sides.
-            Rect2 grid = area.SnapOut(cellSize).Expanded(cellSize);
+        /// <summary>
+        /// The same, for several levels at once: one list per level, in the order given.
+        ///
+        /// <para><b>Why this exists.</b> Every level wants the SAME corner samples, and
+        /// <see cref="IHeightField.Height01"/> is the cost of a contour — an fBm evaluation per
+        /// corner, over a grid that is hundreds of cells on a side. Extracting four elevation
+        /// levels by calling the single-level entry point four times sampled that grid four
+        /// times: measured on a quarter plate, a Land Survey sheet took 858 ms against
+        /// Hydrographic's 173 for one level. The rows are sampled once here and marched once per
+        /// level, so N levels cost the sampling plus N cheap classification passes.</para>
+        ///
+        /// <para><b>Bit-identical to calling <see cref="Extract"/> per level, and that is not a
+        /// hope.</b> <see cref="Extract"/> IS this, with one level — there is one implementation,
+        /// so the two cannot drift. Within a level the cells are visited in the same
+        /// <c>(j, i)</c> order and every crossing is the same expression on the same operands,
+        /// so <see cref="Stitch"/> sees the same input and A3's seam guarantee is untouched.</para>
+        ///
+        /// <para>The cell-centre sample a saddle resolves by (§6.1) is taken <b>once per cell</b>
+        /// and shared: it is a pure function of the position, so the level that needs it second
+        /// gets the number the level that needed it first computed. Cells with no saddle at any
+        /// level never sample a centre at all.</para>
+        /// </summary>
+        public static IReadOnlyList<Polyline>[] ExtractLevels(IHeightField field, Rect2 area,
+                                                              double cellSize, double[] levels)
+        {
+            int levelCount = levels != null ? levels.Length : 0;
+            var result = new IReadOnlyList<Polyline>[levelCount];
+            for (int L = 0; L < levelCount; L++) result[L] = new List<Polyline>();
 
-            long ix0 = (long)Math.Floor(grid.MinX / cellSize + 0.5);
-            long iy0 = (long)Math.Floor(grid.MinY / cellSize + 0.5);
-            long nxL = (long)Math.Floor(grid.Width / cellSize + 0.5);
-            long nyL = (long)Math.Floor(grid.Height / cellSize + 0.5);
-            if (nxL < 1 || nyL < 1) return empty;
+            if (levelCount == 0 || field == null) return result;
+            if (area.IsEmpty) return result;
+            if (!(cellSize > 0.0) || double.IsInfinity(cellSize) || double.IsNaN(cellSize)) return result;
 
-            int nx = (int)nxL;
-            int ny = (int)nyL;
+            long ix0, iy0;
+            int nx, ny;
+            if (!Lattice(area, cellSize, out ix0, out iy0, out nx, out ny)) return result;
 
             double weldEps = cellSize * Tuning.WeldFraction;
 
@@ -131,14 +155,15 @@ namespace Archivist.Generation.Geometry
             double[] xs = new double[nx + 1];
             for (int i = 0; i <= nx; i++) xs[i] = (ix0 + i) * cellSize;
 
-            // Two rolling rows: every corner is sampled exactly once (§13.8).
+            // Two rolling rows: every corner is sampled exactly once (§13.8), for every level.
             double[] below = new double[nx + 1];
             double[] above = new double[nx + 1];
 
             double yBase = iy0 * cellSize;
             for (int i = 0; i <= nx; i++) below[i] = field.Height01(xs[i], yBase);
 
-            var segs = new List<Seg>();
+            var segs = new List<Seg>[levelCount];
+            for (int L = 0; L < levelCount; L++) segs[L] = new List<Seg>();
 
             for (int j = 0; j < ny; j++)
             {
@@ -154,49 +179,108 @@ namespace Archivist.Generation.Geometry
                     double v01 = above[i];
                     double v11 = above[i + 1];
 
-                    bool in00 = v00 >= level01;
-                    bool in10 = v10 >= level01;
-                    bool in11 = v11 >= level01;
-                    bool in01 = v01 >= level01;
-
-                    int code = (in00 ? 1 : 0) | (in10 ? 2 : 0) | (in11 ? 4 : 0) | (in01 ? 8 : 0);
-                    if (code == 0 || code == 15) continue;
-
                     double xlo = xs[i];
                     double xhi = xs[i + 1];
 
-                    // Only edges with a sign change carry a crossing. Bottom/top always interpolate
-                    // left-to-right and left/right always bottom-to-top, so the crossing shared by
-                    // two cells (or by two rects) is produced by the same expression on both sides.
-                    V2 eB = default, eR = default, eT = default, eL = default;
-                    if (in00 != in10) eB = new V2(xlo + (xhi - xlo) * Frac(v00, v10, level01), ylo);
-                    if (in10 != in11) eR = new V2(xhi, ylo + (yhi - ylo) * Frac(v10, v11, level01));
-                    if (in01 != in11) eT = new V2(xlo + (xhi - xlo) * Frac(v01, v11, level01), yhi);
-                    if (in00 != in01) eL = new V2(xlo, ylo + (yhi - ylo) * Frac(v00, v01, level01));
+                    // One centre sample per CELL, not per level, and only if some level needs
+                    // it. Pure in its position, so sharing it changes no number.
+                    bool centreTaken = false;
+                    double centre = 0.0;
 
-                    bool centreInside = false;
-                    if (code == 5 || code == 10)
+                    for (int L = 0; L < levelCount; L++)
                     {
-                        // §6.1: saddles resolve by the sign of the cell-centre sample, always.
-                        // (index + 0.5) * cellSize keeps the centre identical across rects.
-                        double cx = (ix0 + i + 0.5) * cellSize;
-                        double cy = (iy0 + j + 0.5) * cellSize;
-                        centreInside = field.Height01(cx, cy) >= level01;
-                    }
+                        double level01 = levels[L];
 
-                    Emit(code, centreInside, eB, eR, eT, eL, segs);
+                        bool in00 = v00 >= level01;
+                        bool in10 = v10 >= level01;
+                        bool in11 = v11 >= level01;
+                        bool in01 = v01 >= level01;
+
+                        int code = (in00 ? 1 : 0) | (in10 ? 2 : 0) | (in11 ? 4 : 0) | (in01 ? 8 : 0);
+                        if (code == 0 || code == 15) continue;
+
+                        // Only edges with a sign change carry a crossing. Bottom/top always
+                        // interpolate left-to-right and left/right always bottom-to-top, so the
+                        // crossing shared by two cells (or by two rects) is produced by the same
+                        // expression on both sides.
+                        V2 eB = default, eR = default, eT = default, eL = default;
+                        if (in00 != in10) eB = new V2(xlo + (xhi - xlo) * Frac(v00, v10, level01), ylo);
+                        if (in10 != in11) eR = new V2(xhi, ylo + (yhi - ylo) * Frac(v10, v11, level01));
+                        if (in01 != in11) eT = new V2(xlo + (xhi - xlo) * Frac(v01, v11, level01), yhi);
+                        if (in00 != in01) eL = new V2(xlo, ylo + (yhi - ylo) * Frac(v00, v01, level01));
+
+                        bool centreInside = false;
+                        if (code == 5 || code == 10)
+                        {
+                            // §6.1: saddles resolve by the sign of the cell-centre sample, always.
+                            // (index + 0.5) * cellSize keeps the centre identical across rects.
+                            if (!centreTaken)
+                            {
+                                double cx = (ix0 + i + 0.5) * cellSize;
+                                double cy = (iy0 + j + 0.5) * cellSize;
+                                centre = field.Height01(cx, cy);
+                                centreTaken = true;
+                            }
+                            centreInside = centre >= level01;
+                        }
+
+                        Emit(code, centreInside, eB, eR, eT, eL, segs[L]);
+                    }
                 }
 
                 double[] swap = below; below = above; above = swap;
             }
 
-            List<Polyline> stitched = Stitch(segs, weldEps);
+            for (int L = 0; L < levelCount; L++)
+            {
+                List<Polyline> stitched = Stitch(segs[L], weldEps);
 
-            var clipped = new List<Polyline>(stitched.Count);
-            for (int i = 0; i < stitched.Count; i++) ClipToRect(stitched[i], area, weldEps, clipped);
+                var clipped = new List<Polyline>(stitched.Count);
+                for (int i = 0; i < stitched.Count; i++) ClipToRect(stitched[i], area, weldEps, clipped);
 
-            clipped.Sort(Compare);
-            return clipped;
+                clipped.Sort(Compare);
+                result[L] = clipped;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// §6.2's lattice for one area: the corner indices and counts every extraction over that
+        /// area will use. False when the area cannot carry a single cell.
+        ///
+        /// <para>Corners land on multiples of <paramref name="cellSize"/> measured from the
+        /// domain origin, then one cell of margin so a line crossing the border is built from
+        /// complete cells on both sides. That is what makes two rects sharing a border agree
+        /// (A3), and it is why the indices are returned rather than the rect: a caller that
+        /// re-derived <c>ix0</c> from a snapped rect would be a second implementation of the
+        /// one rule this file exists to keep.</para>
+        ///
+        /// <para><b>Public because something outside now needs the same lattice.</b>
+        /// <c>Render</c> caches the corner samples for an area so that several plates of one
+        /// quarter — three offices, one cut (Q1.2) — sample the field once between them. That
+        /// cache is only sound if it lays its raster on exactly these corners, so it asks here
+        /// rather than repeating the arithmetic.</para>
+        /// </summary>
+        public static bool Lattice(Rect2 area, double cellSize,
+                                   out long ix0, out long iy0, out int nx, out int ny)
+        {
+            ix0 = 0; iy0 = 0; nx = 0; ny = 0;
+
+            if (area.IsEmpty) return false;
+            if (!(cellSize > 0.0) || double.IsInfinity(cellSize) || double.IsNaN(cellSize)) return false;
+
+            Rect2 grid = area.SnapOut(cellSize).Expanded(cellSize);
+
+            ix0 = (long)Math.Floor(grid.MinX / cellSize + 0.5);
+            iy0 = (long)Math.Floor(grid.MinY / cellSize + 0.5);
+            long nxL = (long)Math.Floor(grid.Width / cellSize + 0.5);
+            long nyL = (long)Math.Floor(grid.Height / cellSize + 0.5);
+            if (nxL < 1 || nyL < 1) return false;
+
+            nx = (int)nxL;
+            ny = (int)nyL;
+            return true;
         }
 
         /// <summary>Linear interpolation parameter of level between two quantised corner values.</summary>

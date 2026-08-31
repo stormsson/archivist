@@ -5,6 +5,7 @@ using UnityEngine;
 using Archivist.Building.Binders;
 using Archivist.Building.Handling;
 using Archivist.Building.Interactables;
+using Archivist.Building.Shelving;
 using Archivist.Building.Sheets;
 using Archivist.Generation;
 using Archivist.Generation.Sheets;
@@ -64,6 +65,26 @@ namespace Archivist.Building.Collection
 
         // ---- capture -----------------------------------------------------------------------
 
+        /// <summary>Which shelf and which slot, while a capture is being assembled. A struct
+        /// rather than a nested dictionary because three fields travel together and a
+        /// <c>KeyValuePair</c> of a pair is a thing nobody can read twice.</summary>
+        readonly struct Filed
+        {
+            public readonly string ShelfId;
+            public readonly int Row;
+            public readonly int Column;
+
+            public Filed(string shelfId, int row, int column)
+            {
+                ShelfId = shelfId; Row = row; Column = column;
+            }
+
+            /// <summary>Not on a shelf. Named rather than <c>default</c> because the -1s are the
+            /// contract <see cref="BinderRecord.Row"/> states, and <c>default</c> would quietly
+            /// write zeroes — a slot that exists.</summary>
+            public static Filed None { get { return new Filed(null, -1, -1); } }
+        }
+
         /// <summary>
         /// The room as it stands. Asked of the scene rather than of a list this component keeps:
         /// paper is created by a crate, moved by two hands and destroyed by filing, and a private
@@ -84,6 +105,25 @@ namespace Archivist.Building.Collection
                         onTables[pile[i]] = new KeyValuePair<string, int>(tables[t].TableId, i);
             }
 
+            // The shelves the same way, and for the same reason: asked of the furniture rather
+            // than of a list kept here. A slot's occupant is its child, so this walks the room's
+            // slots rather than a tally that could disagree with them.
+            var onShelves = new Dictionary<BinderView, Filed>();
+            Shelf[] shelves = FindObjectsByType<Shelf>(FindObjectsSortMode.None);
+            for (int h = 0; h < shelves.Length; h++)
+            {
+                IReadOnlyList<ShelfSlot> slots = shelves[h].Slots;
+                for (int i = 0; i < slots.Count; i++)
+                {
+                    ShelfSlot slot = slots[i];
+                    if (slot == null) continue;
+
+                    BinderView filed = slot.Occupant;
+                    if (filed != null)
+                        onShelves[filed] = new Filed(shelves[h].ShelfId, slot.Row, slot.Column);
+                }
+            }
+
             var records = new List<BinderRecord>();
             BinderView[] all = BinderSpawner.AllInScene();
             for (int i = 0; i < all.Length; i++)
@@ -94,8 +134,10 @@ namespace Archivist.Building.Collection
                 PaperWhere where = PaperWhere.Floor;
                 string tableId = null;
                 int anchor = -1;
+                Filed slot = Filed.None;
 
                 KeyValuePair<string, int> seat;
+                Filed filed;
                 if (ReferenceEquals(binder, carried)) where = PaperWhere.Hands;
                 else if (onTables.TryGetValue(binder, out seat))
                 {
@@ -103,10 +145,16 @@ namespace Archivist.Building.Collection
                     tableId = seat.Key;
                     anchor = seat.Value;
                 }
+                else if (onShelves.TryGetValue(binder, out filed))
+                {
+                    where = PaperWhere.Shelf;
+                    slot = filed;
+                }
 
                 records.Add(new BinderRecord(binder.Number, binder.IslandSeed, binder.IslandName,
                                              new List<SheetId>(binder.Contents), where, tableId,
-                                             anchor, PoseOf(binder.transform)));
+                                             anchor, PoseOf(binder.transform),
+                                             slot.ShelfId, slot.Row, slot.Column));
             }
 
             var loose = new List<LooseSheetRecord>();
@@ -181,7 +229,8 @@ namespace Archivist.Building.Collection
         {
             if (record == null) return;
 
-            BinderView binder = Binders.Recreate(record.Number, record.IslandSeed, record.IslandName);
+            BinderView binder = Binders.Recreate(record.Number, record.IslandSeed,
+                                                 record.IslandName);
             if (binder == null) return;
 
             int refused = 0;
@@ -229,6 +278,31 @@ namespace Archivist.Building.Collection
                                      record.Anchor + " of table " + record.TableId + ", which " +
                                      "refused it — no such anchor, or another island's paper is " +
                                      "already on it. Put on the floor where it was standing.", table);
+                    break;
+
+                case PaperWhere.Shelf:
+                    Shelf shelf = ShelfCalled(record.ShelfId);
+
+                    // The two faults are worth telling apart for the same reason the table's are:
+                    // a missing shelf means the ids have moved under the save, and a refused slot
+                    // means the shelf's numbers changed and (row, column) no longer names a place.
+                    // The second is the expected one — it is what the six fields cost — and the
+                    // binder is left standing where it was rather than guessing at a neighbour.
+                    if (shelf == null)
+                    {
+                        Debug.LogWarning("[RoomPaper] Binder_" + record.Number + " says it is on " +
+                                         "shelf " + record.ShelfId + " and no shelf in the scene " +
+                                         "has that id — put on the floor where it was standing.", this);
+                        break;
+                    }
+
+                    if (shelf.Restore(binder, record.Row, record.Column)) return;
+
+                    Debug.LogWarning("[RoomPaper] Binder_" + record.Number + " was filed in slot r" +
+                                     (record.Row + 1) + "c" + (record.Column + 1) + " of shelf " +
+                                     record.ShelfId + ", which refused it — the slot is gone or " +
+                                     "something else is in it. Put on the floor where it was " +
+                                     "standing.", shelf);
                     break;
             }
 
@@ -359,6 +433,20 @@ namespace Archivist.Building.Collection
             CartographyTable[] tables = FindObjectsByType<CartographyTable>(FindObjectsSortMode.None);
             for (int i = 0; i < tables.Length; i++)
                 if (tables[i].TableId == tableId) return tables[i];
+
+            return null;
+        }
+
+        /// <summary>The shelf with that id, or null. The same walk as <see cref="TableCalled"/>:
+        /// a handful of shelves, once per restored binder, against holding an index that would
+        /// have to be kept in step with a room nobody rebuilds twice.</summary>
+        Shelf ShelfCalled(string shelfId)
+        {
+            if (string.IsNullOrEmpty(shelfId)) return null;
+
+            Shelf[] shelves = FindObjectsByType<Shelf>(FindObjectsSortMode.None);
+            for (int i = 0; i < shelves.Length; i++)
+                if (shelves[i].ShelfId == shelfId) return shelves[i];
 
             return null;
         }

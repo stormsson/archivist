@@ -83,7 +83,9 @@ everything, non-interactive, not listed in the cabinet with the others.
 `CartographyBoardBench.QuickLay` therefore defaults it **off**, with the reason
 recorded at the call site.
 
-**Unresolved.** Spec §7 still lists it as an ordinary cabinet row.
+**Resolved 2026-08-30 — Q4.4.** It becomes the board's base: drawn beneath
+everything, non-interactive, never a cabinet row. The finding is acted on, not
+overruled.
 
 ### F-S1.7 — the sheets do not look like the mockups
 
@@ -97,9 +99,15 @@ This is a `RenderRequest` layer and palette decision, not a geometry one, and it
 changes how every sheet on the board reads. Nothing in `spec.md` currently says
 which is intended.
 
-**Unresolved.**
+**Resolved 2026-08-30 — Q2.2.** `Fill` is off on every plate, and an office
+*is* a `LayerMask` subset. The mockups win.
 
 ### F-S1.8 — R6.9 is contradicted by the generator
+
+**Resolved 2026-08-30 — R6.9 is retired (`../../quarters/requirements.md` §5).**
+Boards fill, deliberately: four plates complete an office's layer and completing
+it is the point. The finding stands as measured; the requirement it contradicted
+is the thing that gave way.
 
 R6.9: *"Full coverage of an island is impossible by design. A board can be worked
 out but never filled."*
@@ -123,3 +131,22 @@ whether seating the last sheet is a moment the game recognises.
   shipping path — `MapCrate.Render` for the raster and `BoardSheetView.Create`
   for the slab. Nothing in the bench is a parallel implementation, so a bench
   that works is evidence the product will.
+
+
+---
+
+## Closure note (2026-08-30, branch `rework1`)
+
+F-S1.1, F-S1.2, F-S1.4 and F-S1.5 stand as measured and are unaffected — they
+record what the old survey cutter produced, and remain the evidence for what a
+solved board looked like.
+
+F-S1.6, F-S1.7 and F-S1.8 are closed above by Q4.4, Q2.2 and the retirement of
+R6.9. All three were closed by *changing the design to agree with the
+measurement*, which is the order this document asks for.
+
+The geometry these findings describe is superseded: the island is now cut 2 × 2
+on one axis shared by every office (Q1.1–Q1.4), so F-S1.4's 73.4° crossing and
+F-S1.5's median depth of 3 describe a cutter that no longer runs. They are kept
+because they are the reason the new model exists — the disagreement they made
+visible is what moved from geometry into content.

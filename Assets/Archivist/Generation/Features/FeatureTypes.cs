@@ -26,6 +26,21 @@ namespace Archivist.Generation.Features
         /// <summary>Number of members of <see cref="FeatureClass"/>. Kept next to the enum so
         /// a UI or export that walks every class cannot silently stop one short.</summary>
         public const int Count = 8;
+
+        /// <summary>
+        /// Every class, in enum order. A fixed array and never <c>Enum.GetValues</c>: §4.1
+        /// forbids enum reflection, and a walk whose order came from reflection would put the
+        /// order of a drawing at the mercy of the runtime.
+        ///
+        /// <para>Append only, and the same rule <c>Offices.All</c> keeps: adding a member here
+        /// without adding it to <c>FeatureMatrix</c>'s table is caught by <see cref="Count"/>,
+        /// and adding it to neither means a class nothing draws.</para>
+        /// </summary>
+        public static readonly FeatureClass[] All =
+        {
+            FeatureClass.Coast, FeatureClass.Contour, FeatureClass.Peak, FeatureClass.River,
+            FeatureClass.Settlement, FeatureClass.Grid, FeatureClass.Sounding, FeatureClass.Poi
+        };
     }
 
     public readonly struct FeatureId

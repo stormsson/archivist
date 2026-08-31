@@ -15,6 +15,10 @@ namespace Archivist.Building.Collection
     /// temporarily switched off by the debug flags on <see cref="Generation.Island"/>.
     /// The flag is needed because the whole-island survey (R2.2a) borrows one of the three
     /// offices, so office alone would collide with that office's own survey.</para>
+    ///
+    /// <para><b><see cref="Number"/> is the quarter</b>, for everything except a detail sheet:
+    /// 1 NW, 2 NE, 3 SW, 4 SE (Q1.1), and 1 for the island's chart. A plate is therefore named
+    /// by island, office and corner, which is exactly how a binder is read.</para>
     /// </summary>
     public readonly struct SheetId : IEquatable<SheetId>
     {

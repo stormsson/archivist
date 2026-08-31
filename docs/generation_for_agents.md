@@ -25,20 +25,49 @@ geometric is ever cached or stored (R1.11, R3.1). `Island` exposes `Params`,
 `Field`, `LandBounds`, `Coastline`, `Features`, `Names`, `Service`, `Surveys`,
 `SurveyFor(Office)`, `WholeIslandSurvey`, `TotalSheets`.
 
-⚠ **Cost per island is disputed and nobody should quote a number here yet.**
+**Cost per island: ~123 ms optimised, ~484 ms unoptimised. Both figures were
+always right.** (Resolved 2026-08-30; see `rework1/03-findings.md` R4.)
 
-This file recorded **~118 ms** (A8 median, inside the 250 ms budget), and
-dismissed a ~455 ms reading as a loaded machine, citing two clean runs at 117.3
-and 118.3 ms. That does not reproduce. An idle machine now measures **~467 ms**,
-and — this is the part that rules out the obvious explanation — a snapshot of the
-tree taken *before* the POC-03-era refactoring measures **469.5 ms** on the same
-machine in the same session. So the 4× gap is not something recent work
-introduced.
+The 4× gap that this section called unexplained is the **build configuration**.
+`Tools/run-acceptance.sh` runs `dotnet build` with no `-c`, so the harness is a
+Debug, `Optimize=false` build. Same tree, same machine, same seeds, ten-island
+medians:
 
-Three possibilities remain: the ~118 ms was measured on very different hardware;
-it predates something that made generation four times more expensive; or it was
-wrong. Until someone instruments `Island.FromSeed` per stage and finds out, treat
-both figures as unverified. A8's island-generation clause currently **fails**.
+| build | `Island.FromSeed` |
+|---|---|
+| optimised | **122.9 ms** |
+| unoptimised | **484.0 ms** |
+
+The ~118 ms recorded here is the optimised number; the ~467 ms A8 reports is the
+unoptimised one. The 250 ms budget sits between them, which is why A8's
+island-generation clause fails while nothing is wrong. It also explains why the
+figure was stable across three shapes of `Tuning` and across a pre-POC-03
+snapshot: none of those changed the build.
+
+**Where the time goes** — instrumented per stage, which is what this section
+asked for. Percentages are the same in both builds:
+
+| stage | unoptimised | share |
+|---|---|---|
+| Coastline contour | 332 ms | **68.6%** |
+| `ComputeLandBounds` | 76 ms | **15.8%** |
+| `ServiceRule` | 32 ms | 6.6% |
+| POIs | 17 ms | 3.5% |
+| Settlements | 17 ms | 3.5% |
+| Peaks | 12 ms | 2.5% |
+| Rivers | 7 ms | 1.4% |
+| `IslandParams`, `IslandField` ctor, Names, cutters | ~0 ms | ~0% |
+
+**84% was two scans of the whole 16 km domain** — 256 km², of which the island's
+land bounds are 42.8 km², **16.7%**. The field constructor is free because it is
+lazy; the cost is in sampling it.
+
+**Both were fixed.** `Tools/run-acceptance.sh` now builds and runs `-c Release`,
+and `Island.FromSeed` extracts the coastline over the land bounds grown by
+`Tuning.CoastlineMarginCells` rather than over the domain. A8's island-generation
+clause reads **53.7 ms** against its 250 ms budget, and A2's digest is unchanged
+at `B7F03092AEF93B76` — the clipped extraction is bit-identical on the
+acceptance seeds.
 
 **Re-measured when tuning became configurable, and the slow figure held.** Eight
 `fast` runs on the same idle machine, medians of ten islands each:
