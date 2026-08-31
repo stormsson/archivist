@@ -323,8 +323,8 @@ namespace Archivist.Generation
                 PoiScaleDenominator = source.Int("PoiScaleDenominator", DefaultPoiScaleDenominator);
             LoadedFrom = source.Path;
             problems = source.Problems;
-            Refingerprint();
             parameters = BuildParameters();
+            Refingerprint();
         }
 
         /// <summary>Every parameter, in the order <c>Tuning.cs</c> declares them.</summary>
@@ -739,98 +739,23 @@ namespace Archivist.Generation
         /// </summary>
         public static ulong Fingerprint { get; private set; }
 
+        /// <summary>
+        /// Rebuilds <see cref="Fingerprint"/> from <see cref="Parameters"/>.
+        ///
+        /// <para>The walk is the table, not a second list beside it. Every value's name and
+        /// number reach the hash exactly once, in <c>Tuning.cs</c> declaration order, which is
+        /// the order <see cref="Parameters"/> is built in and the order the fingerprint's
+        /// stability depends on: reordering the table changes the fingerprint without changing
+        /// a single island.</para>
+        ///
+        /// <para>Runs after <c>BuildParameters</c>, never before it. The reload paths are safe
+        /// either way — the table is built once and its readers are closures over the live
+        /// fields, so a value written after it was built is the value this reads.</para>
+        /// </summary>
         static void Refingerprint()
         {
             ulong h = 14695981039346656037UL;   // FNV-1a offset basis
-            Mix(ref h, "DomainMetres", DomainMetres);
-            Mix(ref h, "NominalRadiusFrac", NominalRadiusFrac);
-            Mix(ref h, "NominalRadiusJitter", NominalRadiusJitter);
-            Mix(ref h, "SeaLevel", SeaLevel);
-            Mix(ref h, "FeatureScale", FeatureScale);
-            Mix(ref h, "WarpAmp", WarpAmp);
-            Mix(ref h, "FbmOctaves", FbmOctaves);
-            Mix(ref h, "FbmLacunarity", FbmLacunarity);
-            Mix(ref h, "FbmGain", FbmGain);
-            Mix(ref h, "MaxDepth", MaxDepth);
-            Mix(ref h, "MountainousEdge0", MountainousEdge0);
-            Mix(ref h, "MountainousEdge1", MountainousEdge1);
-            Mix(ref h, "FjordedEdge0", FjordedEdge0);
-            Mix(ref h, "FjordedEdge1", FjordedEdge1);
-            Mix(ref h, "FjordedCutAmplitude", FjordedCutAmplitude);
-            Mix(ref h, "FjordedCutFrequency", FjordedCutFrequency);
-            Mix(ref h, "AtollRingRadius", AtollRingRadius);
-            Mix(ref h, "AtollRingCore", AtollRingCore);
-            Mix(ref h, "AtollRingWidth", AtollRingWidth);
-            Mix(ref h, "BaseCell", BaseCell);
-            Mix(ref h, "PaperDetailMm", PaperDetailMm);
-            Mix(ref h, "MaxLod", MaxLod);
-            Mix(ref h, "ContourStep", ContourStep);
-            Mix(ref h, "WeldFraction", WeldFraction);
-            Mix(ref h, "MmPerMetre", MmPerMetre);
-            Mix(ref h, "MaxPaperContourLod", MaxPaperContourLod);
-            Mix(ref h, "CoastlineMarginCells", CoastlineMarginCells);
-            Mix(ref h, "GradientStep", GradientStep);
-            Mix(ref h, "SheetWidthMm", SheetWidthMm);
-            Mix(ref h, "SheetHeightMm", SheetHeightMm);
-            Mix(ref h, "SheetMarginMm", SheetMarginMm);
-            Mix(ref h, "QuarterScaleFineDenominator", QuarterScaleFineDenominator);
-            Mix(ref h, "QuarterScaleDenominator", QuarterScaleDenominator);
-            Mix(ref h, "WholeIslandScaleDenominator", WholeIslandScaleDenominator);
-            Mix(ref h, "WholeIslandFallbackScaleDenominator", WholeIslandFallbackScaleDenominator);
-            Mix(ref h, "GridPitchPaperMm", GridPitchPaperMm);
-            Mix(ref h, "ServiceRadiusFrac", ServiceRadiusFrac);
-            Mix(ref h, "ServedThreshold", ServedThreshold);
-            Mix(ref h, "SoundingDepth", SoundingDepth);
-            Mix(ref h, "CullSampleGrid", CullSampleGrid);
-            Mix(ref h, "PeakElevationFrac", PeakElevationFrac);
-            Mix(ref h, "PeakNmsRadius", PeakNmsRadius);
-            Mix(ref h, "PeakNamedCount", PeakNamedCount);
-            Mix(ref h, "SettlementLattice", SettlementLattice);
-            Mix(ref h, "SettlementCoastDist", SettlementCoastDist);
-            Mix(ref h, "SettlementFlatGrad", SettlementFlatGrad);
-            Mix(ref h, "SettlementShelterRadius", SettlementShelterRadius);
-            Mix(ref h, "SettlementMinSpacing", SettlementMinSpacing);
-            Mix(ref h, "SettlementShelterWeight", SettlementShelterWeight);
-            Mix(ref h, "SettlementFlatnessWeight", SettlementFlatnessWeight);
-            Mix(ref h, "RiverStep", RiverStep);
-            Mix(ref h, "RiverJitterRad", RiverJitterRad);
-            Mix(ref h, "RiverMergeDist", RiverMergeDist);
-            Mix(ref h, "RiverMaxSteps", RiverMaxSteps);
-            Mix(ref h, "RiverMinLength", RiverMinLength);
-            Mix(ref h, "SoundingLattice", SoundingLattice);
-            Mix(ref h, "PeakLattice", PeakLattice);
-            Mix(ref h, "PoiLattice", PoiLattice);
-            Mix(ref h, "PoiMinSpacing", PoiMinSpacing);
-            Mix(ref h, "PoiCountMountainousMin", PoiCountMountainousMin);
-            Mix(ref h, "PoiCountMountainousMax", PoiCountMountainousMax);
-            Mix(ref h, "PoiCountFjordedMin", PoiCountFjordedMin);
-            Mix(ref h, "PoiCountFjordedMax", PoiCountFjordedMax);
-            Mix(ref h, "PoiCountAtollMin", PoiCountAtollMin);
-            Mix(ref h, "PoiCountAtollMax", PoiCountAtollMax);
-            Mix(ref h, "PoiShoreBand", PoiShoreBand);
-            Mix(ref h, "PoiSteepShoreGrad", PoiSteepShoreGrad);
-            Mix(ref h, "PoiSeaArchGrad", PoiSeaArchGrad);
-            Mix(ref h, "PoiBlowholeCoastDist", PoiBlowholeCoastDist);
-            Mix(ref h, "PoiSpringMinElevation", PoiSpringMinElevation);
-            Mix(ref h, "PoiSpringConvergence", PoiSpringConvergence);
-            Mix(ref h, "PoiOpenGrad", PoiOpenGrad);
-            Mix(ref h, "PoiFlatGrad", PoiFlatGrad);
-            Mix(ref h, "PoiModerateGradMin", PoiModerateGradMin);
-            Mix(ref h, "PoiModerateGradMax", PoiModerateGradMax);
-            Mix(ref h, "PoiErraticElevMinFrac", PoiErraticElevMinFrac);
-            Mix(ref h, "PoiErraticElevMaxFrac", PoiErraticElevMaxFrac);
-            Mix(ref h, "PoiTreeElevMinFrac", PoiTreeElevMinFrac);
-            Mix(ref h, "PoiTreeElevMaxFrac", PoiTreeElevMaxFrac);
-            Mix(ref h, "PoiTreeSettlementDist", PoiTreeSettlementDist);
-            Mix(ref h, "PoiChapelSettlementDist", PoiChapelSettlementDist);
-            Mix(ref h, "PoiTowerPeakDist", PoiTowerPeakDist);
-            Mix(ref h, "PoiCairnPeakFrac", PoiCairnPeakFrac);
-            Mix(ref h, "PoiHeadlandShelterMax", PoiHeadlandShelterMax);
-            Mix(ref h, "PoiJettyShelterMin", PoiJettyShelterMin);
-            Mix(ref h, "DetailSheetWidthMm", DetailSheetWidthMm);
-            Mix(ref h, "DetailSheetHeightMm", DetailSheetHeightMm);
-            Mix(ref h, "DetailSheetMarginMm", DetailSheetMarginMm);
-            Mix(ref h, "PoiScaleDenominator", PoiScaleDenominator);
+            for (int i = 0; i < parameters.Count; i++) Mix(ref h, parameters[i].Name, parameters[i].Value);
             Fingerprint = h;
         }
 
