@@ -27,13 +27,8 @@ namespace Archivist.Building.Interactables
     /// be found again after the game is closed (§9), while the binding says which island is on it
     /// today. It is <b>derived</b> from this table's place in the scene rather than drawn, so an
     /// unsaved scene and a saved one agree — see <see cref="TableId"/> for why a drawn GUID is
-    /// the wrong mechanism here. Written to the field on first validate in a real scene only:
-    /// <c>PrefabUtility.LoadPrefabContents</c> loads into a <i>preview scene</i> where
-    /// <c>IsPartOfPrefabAsset</c> is false and <c>GetCurrentPrefabStage</c> is null, so without
-    /// <c>EditorSceneManager.IsPreviewSceneObject</c> an id gets written into the prefab asset
-    /// and every instance inherits it and shares one board. Both failures are silent, and the
-    /// symptom — two tables quietly sharing a board, or a binder standing on an anchor its table
-    /// has never heard of — does not look like an identity bug.</para>
+    /// the wrong mechanism here, and <see cref="SceneIdentity"/> for how it is arrived at and
+    /// pinned.</para>
     ///
     /// <para><b>What the verb is depends on what is in the player's hands</b>, and this is the
     /// one interactable where that is true of the <i>label</i> and not only of availability.
@@ -119,80 +114,19 @@ namespace Archivist.Building.Interactables
         /// </summary>
         public string TableId
         {
-            get { return string.IsNullOrEmpty(tableId) ? Derived() : tableId; }
-        }
-
-        /// <summary>
-        /// This table's place in the scene, as 32 hex characters — a GUID's shape, from a hash
-        /// rather than a draw, so two runs of the same scene agree without anything being
-        /// written down.
-        ///
-        /// <para>FNV-1a, twice, and deliberately not <c>string.GetHashCode</c>: that is
-        /// randomised per process on modern runtimes, which would make this the very thing it
-        /// exists to stop being — a different answer every time the game starts.</para>
-        /// </summary>
-        string Derived()
-        {
-            Transform t = transform;
-            string path = t.name;
-            while (t.parent != null)
-            {
-                t = t.parent;
-                path = t.name + "/" + path;
-            }
-
-            UnityEngine.SceneManagement.Scene scene = gameObject.scene;
-            string where = (string.IsNullOrEmpty(scene.path) ? scene.name : scene.path) + ":" + path;
-
-            return Hash(where, 14695981039346656037UL).ToString("x16")
-                 + Hash(where, 0xCBF29CE484222325UL ^ 0x9E3779B97F4A7C15UL).ToString("x16");
-        }
-
-        static ulong Hash(string text, ulong basis)
-        {
-            ulong hash = basis;
-            for (int i = 0; i < text.Length; i++)
-            {
-                hash ^= text[i];
-                hash *= 1099511628211UL;
-            }
-            return hash;
+            get { return string.IsNullOrEmpty(tableId) ? SceneIdentity.Derive(this) : tableId; }
         }
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Writes the derived id into the field, in a real scene only, so that it is pinned
-        /// against this table later being renamed or reparented. Every guard here is a way an id
-        /// ends up shared: a prefab asset's instances all inherit one, and a preview scene looks
-        /// like neither a prefab asset nor a prefab stage — see the class comment.
-        ///
-        /// <para><b>The value is derived, not drawn.</b> Marking the component dirty does not
-        /// save the scene, and nothing makes anybody save it; a drawn GUID that never reached
-        /// disk would be re-drawn on the next domain reload and the table's whole history would
-        /// move with it. Writing the same value this table would have derived anyway means the
-        /// unsaved case and the saved case agree.</para>
-        /// </summary>
         void OnValidate()
         {
-            if (!string.IsNullOrEmpty(tableId)) return;
-            if (UnityEditor.PrefabUtility.IsPartOfPrefabAsset(this)) return;
-            if (UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage() != null) return;
-            if (UnityEditor.SceneManagement.EditorSceneManager.IsPreviewSceneObject(this)) return;
-            if (!gameObject.scene.IsValid()) return;
-
-            tableId = Derived();
-            UnityEditor.EditorUtility.SetDirty(this);
+            SceneIdentity.Pin(this, ref tableId);
         }
 
-        /// <summary>For the one case the rule above cannot serve: two tables that must not share
-        /// a board and do — a table duplicated in the Hierarchy arrives holding its original's
-        /// serialised id. This is also how a table is deliberately given somebody else's history:
-        /// paste the id in by hand.</summary>
         [ContextMenu("Mint a new table id")]
         void MintTableId()
         {
-            tableId = System.Guid.NewGuid().ToString("N");
-            UnityEditor.EditorUtility.SetDirty(this);
+            SceneIdentity.Mint(this, ref tableId);
         }
 #endif
 

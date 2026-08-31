@@ -28,6 +28,26 @@ namespace Archivist.Render
                             (byte)(a.A + (b.A - a.A) * t + 0.5));
         }
 
+        /// <summary>
+        /// The colour channels scaled, alpha left alone — darkening a pen must not also make it
+        /// transparent. Rounds rather than truncates, matching <see cref="Lerp"/> and
+        /// <see cref="Over"/>: truncating drifts one per channel, which can split a colour on a
+        /// single channel — <c>16324f</c> = (22,50,79) at <c>f = 0.55</c> diverges on green alone,
+        /// 27.5 rounding one way and truncating the other while 12.1 and 43.45 agree.
+        /// </summary>
+        public Rgba Scaled(double f)
+        {
+            return new Rgba(ScaleChannel(R, f), ScaleChannel(G, f), ScaleChannel(B, f), A);
+        }
+
+        static byte ScaleChannel(byte v, double f)
+        {
+            double s = v * f + 0.5;
+            if (s <= 0.0) return 0;
+            if (s >= 255.0) return 255;
+            return (byte)s;
+        }
+
         /// <summary>Source-over composite at coverage [0,1]. Used by strokes (§7).</summary>
         public static Rgba Over(Rgba dst, Rgba src, double coverage)
         {

@@ -21,19 +21,12 @@ namespace Archivist.Generation.Sheets
     /// of <see cref="QuarterLadder"/> at which one quarter fits the map area. A small island
     /// therefore sits in blank margin and a large one crowds its sheets — physical size made
     /// legible without a scale bar, which suits a game with no readouts (R4.9).</para>
-    ///
-    /// <para><b>What this replaced.</b> <c>SurveyCutter</c> (931 lines), <c>CoastWalkCutter</c>
-    /// (390) and <c>RectCull</c> (86) chose a rotation per office by PCA, walked the shore for
-    /// Hydrographic, tiled a lattice, and culled candidate rects by land fraction. All of it
-    /// existed to answer <i>which rectangles</i>, and the answer is now four. The year draw and
-    /// the whole-island paper ladder are the two pieces carried across; see
-    /// <c>docs/rework1/01-removal.md</c> §2.</para>
     /// </summary>
     public static class QuarterCutter
     {
         /// <summary>
-        /// IMPLEMENTATION CHOICE, carried over from the cutter this replaced. The eras of
-        /// §2 are not in v1 (R1.6), so a year is a label on a sheet and nothing reads it.
+        /// IMPLEMENTATION CHOICE. The eras of §2 are not in v1 (R1.6), so a year is a label
+        /// on a sheet and nothing reads it.
         /// </summary>
         const int YearMinInclusive = 1860;
         const int YearMaxExclusive = 1936;
@@ -127,7 +120,7 @@ namespace Archivist.Generation.Sheets
         /// <para><b>One per island, not one per office.</b> The base's job is to be the thing
         /// that does not move while <c>Q</c>/<c>E</c> flips the layers over it; a chart per
         /// office would make the reference flicker along with everything else. Which office made
-        /// it is drawn from <see cref="StreamNames.WholeIsland"/>, exactly as before.</para>
+        /// it is drawn from <see cref="StreamNames.WholeIsland"/>.</para>
         ///
         /// <para><c>Range(0, 3)</c>, not <c>Offices.Count</c>: the chart is a reconnaissance map
         /// of the whole island and Antiquarian has no island-scale remit. Widening the draw would
@@ -203,48 +196,19 @@ namespace Archivist.Generation.Sheets
 
         /// <summary>
         /// The finest rung at which one quarter fits the map area, and the orientation that
-        /// gets it there (Q1.6). Rungs are tried in order and both orientations are tried at
-        /// each, so a coarser scale is never taken to keep the paper the way up it started.
-        ///
-        /// <para>Falls through to the coarsest rung rather than throwing. An island too large
-        /// for 1:25000 would have to be over 25 km across, which the 16 km domain makes
-        /// impossible; a slightly clipped plate beats a hard stop on an otherwise valid
-        /// seed.</para>
-        ///
-        /// <para>Same shape as <see cref="ChooseChartPaper"/>, deliberately: the chart has
-        /// always chosen its orientation this way, and a quarter choosing it differently would
-        /// be a second rule for one question.</para>
+        /// gets it there (Q1.6).
         /// </summary>
         public static void ChooseQuarterPaper(Rect2 landBounds, out MapScale scale,
                                               out SheetFormat format)
         {
             double quarterWidth = landBounds.IsEmpty ? 0.0 : landBounds.Width * 0.5;
             double quarterHeight = landBounds.IsEmpty ? 0.0 : landBounds.Height * 0.5;
-
-            SheetFormat portrait = SheetFormat.A1;
-            SheetFormat landscape = portrait.Landscape;
-
-            SheetFormat preferred = quarterWidth > quarterHeight ? landscape : portrait;
-            SheetFormat alternate = quarterWidth > quarterHeight ? portrait : landscape;
-
-            MapScale[] ladder = QuarterLadder;
-
-            for (int i = 0; i < ladder.Length; i++)
-            {
-                if (Fits(ladder[i], preferred, quarterWidth, quarterHeight))
-                { scale = ladder[i]; format = preferred; return; }
-                if (Fits(ladder[i], alternate, quarterWidth, quarterHeight))
-                { scale = ladder[i]; format = alternate; return; }
-            }
-
-            scale = ladder[ladder.Length - 1];
-            format = preferred;
+            ChoosePaper(quarterWidth, quarterHeight, QuarterLadder, out scale, out format);
         }
 
         /// <summary>
-        /// The chart's scale and orientation. Unchanged from the cutter this replaced: the
-        /// island has to fit one sheet, so the ladder is 1:25000 then 1:50000, and the paper is
-        /// turned to whichever orientation suits the bounds.
+        /// The chart's scale and orientation: the island has to fit one sheet, so the ladder is
+        /// 1:25000 then 1:50000.
         ///
         /// <para>This is the one place a plate is not portrait A1 (Q1.5 governs the quarters).
         /// The chart is not a quarter, is never laid beside one, and is drawn under everything —
@@ -254,22 +218,41 @@ namespace Archivist.Generation.Sheets
         {
             double width = landBounds.IsEmpty ? 0.0 : landBounds.Width;
             double height = landBounds.IsEmpty ? 0.0 : landBounds.Height;
+            MapScale[] ladder = { MapScale.WholeIsland, MapScale.WholeIslandFallback };
+            ChoosePaper(width, height, ladder, out scale, out format);
+        }
 
+        /// <summary>
+        /// One rule for one question: an extent and a ladder in, a rung and an orientation out.
+        /// Quarters and chart differ in nothing else, and a quarter choosing its paper
+        /// differently would be a second rule for one question.
+        ///
+        /// <para>Rungs are tried in order and both orientations at each, so a coarser scale is
+        /// never taken to keep the paper the way up it started.</para>
+        ///
+        /// <para>Falls through to the coarsest rung rather than throwing. An island too large
+        /// for 1:25000 would have to be over 25 km across, which the 16 km domain makes
+        /// impossible; a slightly clipped plate beats a hard stop on an otherwise valid
+        /// seed.</para>
+        /// </summary>
+        static void ChoosePaper(double width, double height, MapScale[] ladder,
+                                out MapScale scale, out SheetFormat format)
+        {
             SheetFormat portrait = SheetFormat.A1;
             SheetFormat landscape = portrait.Landscape;
 
             SheetFormat preferred = width > height ? landscape : portrait;
             SheetFormat alternate = width > height ? portrait : landscape;
 
-            MapScale[] ladder = { MapScale.WholeIsland, MapScale.WholeIslandFallback };
-
-            for (int s = 0; s < ladder.Length; s++)
+            for (int i = 0; i < ladder.Length; i++)
             {
-                if (Fits(ladder[s], preferred, width, height)) { scale = ladder[s]; format = preferred; return; }
-                if (Fits(ladder[s], alternate, width, height)) { scale = ladder[s]; format = alternate; return; }
+                if (Fits(ladder[i], preferred, width, height))
+                { scale = ladder[i]; format = preferred; return; }
+                if (Fits(ladder[i], alternate, width, height))
+                { scale = ladder[i]; format = alternate; return; }
             }
 
-            scale = MapScale.WholeIslandFallback;
+            scale = ladder[ladder.Length - 1];
             format = preferred;
         }
 
@@ -280,8 +263,8 @@ namespace Archivist.Generation.Sheets
         }
 
         /// <summary>
-        /// The survey's year. Carried across unchanged, sub-stream and all: it is indexed by
-        /// <c>(int)office</c>, so the ordinal warning on <see cref="Office"/> still binds.
+        /// The survey's year, indexed by <c>(int)office</c>, so the ordinal warning on
+        /// <see cref="Office"/> still binds.
         ///
         /// <para>The chart draws from its own stream so it does not inherit the same year as
         /// that office's quarters — a reconnaissance sheet and a detail survey by one office

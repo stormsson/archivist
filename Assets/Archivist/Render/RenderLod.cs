@@ -1,12 +1,13 @@
 using System;
 using Archivist.Generation;
+using Archivist.Generation.Geometry;
 
 namespace Archivist.Render
 {
     /// <summary>
     /// §7's LOD rule. Contours.LodForScale derives detail from a SCALE; a raster needs it
-    /// from a PIXEL SIZE. Same ladder, same global lattice — implemented here rather than in
-    /// Generation so that assembly stays untouched.
+    /// from a PIXEL SIZE. One ladder — <see cref="Contours.LodForCell"/> — and this decides
+    /// only what cell it will accept.
     ///
     /// Why it matters: the fill's water edge is computed per pixel from the analytic field.
     /// If the coastline stroke came from a polyline extracted at some fixed LOD, the line
@@ -42,20 +43,13 @@ namespace Archivist.Render
         public static int ForGroundCell(double targetCellMetres, double slack)
         {
             if (targetCellMetres <= 0 || double.IsNaN(targetCellMetres)) return Tuning.MaxLod;
-            // Integer halving rather than log2: the result feeds a branch, and §4.4 forbids
-            // trusting a transcendental's last ulp at a threshold.
-            //
-            // NEAREST power-of-two cell, not the first one strictly finer. Halving until
-            // cell <= target overshoots by up to 2x in each axis — 4x the cells — for a
-            // difference no eye can find: a 0.93 m pixel would take a 0.5 m cell when a
-            // 1.0 m cell is within 8%. Measured, that overshoot was most of a sheet's
-            // render time. sqrt(2) is the log-space midpoint between two rungs.
-            double accept = targetCellMetres * slack;
 
-            int lod = 0;
-            double cell = Tuning.BaseCell;
-            while (cell > accept && lod < Tuning.MaxLod) { cell *= 0.5; lod++; }
-            return lod;
+            // The slack asks for the NEAREST power-of-two cell, not the first one strictly finer.
+            // Accepting only cell <= target overshoots by up to 2x in each axis — 4x the cells —
+            // for a difference no eye can find: a 0.93 m pixel would take a 0.5 m cell when a
+            // 1.0 m cell is within 8%. Measured, that overshoot was most of a sheet's render
+            // time. sqrt(2) is the log-space midpoint between two rungs.
+            return Contours.LodForCell(targetCellMetres * slack, Tuning.MaxLod);
         }
 
         public static int ForPixelsPerMetre(double pixelsPerMetre)

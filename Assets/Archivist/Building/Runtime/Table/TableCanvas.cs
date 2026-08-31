@@ -16,7 +16,7 @@ namespace Archivist.Building.Table
     /// provisional — measured off <c>1b-empty-table.png</c> at 1442 px and scaled to a 1920
     /// canvas, a guess about a screen nobody has played on — and a prefab would freeze it into a
     /// binary asset where adjusting a hairline is a merge conflict. All of them live in
-    /// <see cref="CabinetStyle"/>; none in this file.</para>
+    /// <see cref="TableStyle"/>; none in this file.</para>
     ///
     /// <para><b>UGUI, not UI Toolkit.</b> <c>InteractionPrompt</c> and
     /// <c>SceneParts.BuildInteractionUi</c> are already legacy UGUI, and the assembly definition
@@ -31,12 +31,13 @@ namespace Archivist.Building.Table
     /// alive between openings, and — the part that matters — stops this canvas swallowing
     /// clicks meant for the room while the player is walking around it.</para>
     ///
-    /// <para><b>Why an <see cref="IslandGenerator"/> is wanted.</b> A sheet's name needs the
-    /// whole island — <c>SheetNaming.NameFor</c> takes an <see cref="Island"/> deliberately, so a
-    /// UI cannot hide a 340 ms generation inside a call it makes once per visible row (C7.7a). So
-    /// the island is resolved once per opening, through the generator's cache when there is one.
-    /// Without a generator it falls back to <c>Island.FromSeed</c>: correct but uncached, and for
-    /// a test bench rather than for play.</para>
+    /// <para><b>Why an <see cref="IslandGenerator"/> is wanted.</b> The island's name is a
+    /// function of its seed and nothing caches it here (R1.11), so naming the header means
+    /// holding the whole <see cref="Island"/>. It is resolved once per opening, through the
+    /// generator's cache when there is one — never per drawn row, which would hide a 340 ms
+    /// generation inside a UI call (C7.7a). Without a generator it falls back to
+    /// <c>Island.FromSeed</c>: correct but uncached, and for a test bench rather than for
+    /// play.</para>
     /// </summary>
     [RequireComponent(typeof(Canvas))]
     [RequireComponent(typeof(CanvasScaler))]
@@ -75,10 +76,10 @@ namespace Archivist.Building.Table
         public bool IsShown { get { return canvas != null && canvas.enabled; } }
 
         /// <summary>What the office field reads when the board has no layers — an island whose
-        /// binders hold nothing but the chart. Assembled from <see cref="SheetNaming.Separator"/>
+        /// binders hold nothing but the chart. Assembled from <see cref="OfficeLabels.Separator"/>
         /// so the placeholder and a real code cannot disagree about the middle dot.</summary>
         public static readonly string NoLayerCode =
-            TableStyle.UnknownName + SheetNaming.Separator + TableStyle.UnknownName;
+            TableStyle.UnknownName + OfficeLabels.Separator + TableStyle.UnknownName;
 
         /// <summary>The same, for the name.</summary>
         public const string NoLayerName = "No office";
@@ -202,12 +203,6 @@ namespace Archivist.Building.Table
         /// <summary>
         /// Writes the OFFICE field of the header: whose hand the board is showing (Q4.3).
         ///
-        /// <para><b>It used to say SHEET, and there is no selected sheet any more.</b> Nothing
-        /// is selected, dragged or placed on a board (Q4.2) — a plate lies at its quarter and
-        /// nowhere else — so the field spent its life reading "None selected". What a player
-        /// needs to know is which of two or three offices they are looking at, because the whole
-        /// point of <c>Q</c>/<c>E</c> is that the ground does not change and the hand does.</para>
-        ///
         /// <para><b>Display only.</b> It reports the board's layer; it does not choose one.
         /// <c>BoardControls</c> owns that, and this follows through <c>BoardView.Changed</c>.</para>
         ///
@@ -230,10 +225,10 @@ namespace Archivist.Building.Table
 
             Office office = board.ActiveLayer;
 
-            officeNameText.text = SheetNaming.OfficeTitleFor(office);
+            officeNameText.text = OfficeLabels.OfficeTitleFor(office);
             officeNameText.color = TableStyle.Ink;
             officeCodeText.text = TableStyle.Spaced(
-                SheetNaming.PrefixFor(office) + SheetNaming.Separator
+                OfficeLabels.PrefixFor(office) + OfficeLabels.Separator
                 + (board.LayerIndex + 1) + "/" + count);
         }
 
@@ -249,8 +244,8 @@ namespace Archivist.Building.Table
         }
 
         /// <summary>Plates land one per frame while a board opens (C5.6), so this fires
-        /// repeatedly. Nothing in the header depends on which plates are down yet, so it does
-        /// nothing — kept as the seam W5 writes the office-layer caption into.</summary>
+        /// repeatedly. Rewriting the office field each time is cheap and keeps the header
+        /// honest about the layer the board switched to.</summary>
         void OnBoardChanged()
         {
             ShowOffice();
@@ -292,8 +287,8 @@ namespace Archivist.Building.Table
         }
 
         /// <summary>
-        /// The header of <c>1b-empty-table.png</c>: ISLAND and its name, a rule, SHEET and the
-        /// selected sheet's name and code.
+        /// The header of <c>1b-empty-table.png</c>: ISLAND and its name, a rule, OFFICE and the
+        /// active layer's name and code.
         ///
         /// <para><b>Laid out with layout groups rather than fixed x positions</b>, which is the
         /// one place in this view where that is worth the cost. In the mockup the island name

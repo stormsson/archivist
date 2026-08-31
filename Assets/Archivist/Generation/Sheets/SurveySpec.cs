@@ -59,12 +59,12 @@ namespace Archivist.Generation.Sheets
         /// The ground this sheet is <b>of</b>, in metres — which is not the same as the ground
         /// its paper could hold.
         ///
-        /// <para><b>A quarter plate is its quarter</b> (Q1.1). It used to take its extent from
-        /// the paper, and on a 6.9 km island at 1:10000 that meant a 3456 x 3136 m quarter drawn
-        /// on 7610 x 5140 m of ground: each plate covered 90% of the island, neighbours
-        /// overlapped by 55%, and the four "quarters" of an office were four near-identical
-        /// drawings stacked on each other. Q1.4's "quarters tile exactly" was true of the rects
-        /// and of nothing anyone could see.</para>
+        /// <para><b>A quarter plate's extent is its quarter, never its paper</b> (Q1.1). Take it
+        /// from the paper and on a 6.9 km island at 1:10000 a 3456 x 3136 m quarter is drawn on
+        /// 7610 x 5140 m of ground: every plate carries 90% of the island, neighbours overlap by
+        /// 55%, and an office's four "quarters" are four near-identical drawings stacked on each
+        /// other — Q1.4's "quarters tile exactly" true of the rects and of nothing anyone can
+        /// see.</para>
         ///
         /// <para><b>Independent by construction.</b> Because a plate's extent is its own quarter
         /// and the quarters tile, four plates rendered separately meet exactly — so a binder
@@ -88,15 +88,6 @@ namespace Archivist.Generation.Sheets
         /// </summary>
         public readonly bool IsDetail;
 
-        public Sheet(SurveySpec survey, int number, V2 centreGround)
-        {
-            Survey = survey; Number = number; CentreGround = centreGround;
-            RotationDeg = survey.RotationDeg;
-            GroundWidth = survey.SheetGroundWidth;
-            GroundHeight = survey.SheetGroundHeight;
-            IsDetail = false;
-        }
-
         /// <summary>A sheet of an explicit patch of ground — a quarter plate, whose extent is
         /// its quarter and not its paper.</summary>
         public Sheet(SurveySpec survey, int number, V2 centreGround,
@@ -106,20 +97,6 @@ namespace Archivist.Generation.Sheets
             RotationDeg = survey.RotationDeg;
             GroundWidth = groundWidth;
             GroundHeight = groundHeight;
-            IsDetail = false;
-        }
-
-        /// <summary>
-        /// Explicit per-sheet rotation (D-H2). The lattice offices keep one rotation per
-        /// survey (R2.4); the Hydrographic coast-walk orients each sheet to its own stretch
-        /// of shore, so its Survey.RotationDeg is nominal and this value governs.
-        /// </summary>
-        public Sheet(SurveySpec survey, int number, V2 centreGround, double rotationDeg)
-        {
-            Survey = survey; Number = number; CentreGround = centreGround;
-            RotationDeg = rotationDeg;
-            GroundWidth = survey.SheetGroundWidth;
-            GroundHeight = survey.SheetGroundHeight;
             IsDetail = false;
         }
 

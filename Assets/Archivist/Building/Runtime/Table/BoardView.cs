@@ -24,11 +24,8 @@ namespace Archivist.Building.Table
     /// overlapping by a fifth read, or is it a heap — with <i>it reads</i>. Every number that
     /// produced that result is carried over unchanged, including the rotation negation below,
     /// which is the one thing in the transform that is easy to get wrong in a way that still
-    /// looks plausible. <b>Nothing about the geometry is reopened here.</b> What does change is
-    /// that the board starts empty: <see cref="Show"/> builds the rig and puts <i>nothing</i> on
-    /// the mounting sheet, and <see cref="Lay"/>, <see cref="Seat"/> and <see cref="Remove"/>
-    /// are the only ways a slab arrives or leaves. This class holds no input and no UGUI, so the
-    /// same board can be driven by a test, a bench or a pointer.</para>
+    /// looks plausible. <b>Nothing about the geometry is reopened here.</b> This class holds no
+    /// input and no UGUI, so the same board can be driven by a test, a bench or a pointer.</para>
     ///
     /// <para><b>The sheet list arrives through <see cref="ISheetSource"/> and never through the
     /// ledger</b> (§4.3). A single <c>ledger.IssuedSheets(seed)</c> in a view makes the eventual
@@ -50,8 +47,8 @@ namespace Archivist.Building.Table
     /// <b>borrowing</b> overload — the one that takes a <c>Texture2D</c> and does not destroy
     /// it. Uploading twice so each object owns what it draws costs about 36 MB of duplicate
     /// VRAM across a 48-sheet board (F-S1.3); one texture with two owners and one
-    /// <c>Destroy</c> is worse still, because the first <see cref="Remove"/> would blank every
-    /// thumbnail on screen. <c>ownsTexture</c> is what makes the third option possible.</para>
+    /// <c>Destroy</c> is worse still, because destroying one slab would blank every thumbnail on
+    /// screen. <c>ownsTexture</c> is what makes the third option possible.</para>
     ///
     /// <para><b>Nothing here is an asset.</b> Every mesh, material and texture is created at
     /// runtime with <c>HideFlags.DontSave</c> and destroyed in <see cref="Hide"/> and
@@ -67,15 +64,6 @@ namespace Archivist.Building.Table
     [DisallowMultipleComponent]
     public sealed class BoardView : MonoBehaviour
     {
-        /// <summary>URP Unlit's albedo map. §3.4: unlit, so the board is independent of the
-        /// room's lighting and of where its root sits — which is what makes C5.2's offset
-        /// free.</summary>
-        const string MapTextureProperty = "_BaseMap";
-
-        /// <summary>C5.1. The main camera's culling mask must exclude this layer and
-        /// <see cref="BoardCamera"/>'s must contain only it.</summary>
-        const string TableLayerName = "Table";
-
         [Header("Wiring")]
         [Tooltip("The scene's one source of islands. The board resolves its island through " +
                  "GetOrGenerate, so opening the same table twice costs one generation.")]
@@ -90,8 +78,8 @@ namespace Archivist.Building.Table
         [SerializeField] Material unlitMaterial;
 
         /// <summary>
-        /// Where the board rig is built, in world space. C5.2 puts it well clear of the room so
-        /// nothing on it can be seen, hit or lit from there.
+        /// Where this board's rig is built — <see cref="BoardRig.DefaultOrigin"/> unless a scene
+        /// says otherwise.
         ///
         /// <para>The rig is a root object at this position rather than a child of this
         /// component, which is the bench's arrangement kept on purpose: a <c>BoardView</c> lives
@@ -99,7 +87,7 @@ namespace Archivist.Building.Table
         /// parenting the board to it would drop a 120-unit island on the floor of the archive.
         /// The board's position is a property of the board, not of whoever holds it.</para>
         /// </summary>
-        [SerializeField] Vector3 boardOrigin = new Vector3(0f, -500f, 0f);
+        [SerializeField] Vector3 boardOrigin = BoardRig.DefaultOrigin;
 
         /// <summary>
         /// The sheets this board may offer (§4.3). <c>[SerializeReference]</c> so a future
@@ -115,25 +103,6 @@ namespace Archivist.Building.Table
         /// </summary>
         [SerializeReference] ISheetSource sheetSource;
 
-        /// <summary>One laid-out sheet. Seated is a board fact and lives here rather than on the
-        /// slab: C4.6 is explicit that a seated sheet stores <b>no pose</b> — its pose is
-        /// <c>Sheet.CentreGround</c> / <c>RotationDeg</c> and nothing else — so what has to be
-        /// remembered is a flag, and the slab already knows everything else.</summary>
-        sealed class Laid
-        {
-            public readonly BoardSheetView View;
-
-            /// <summary>When this sheet was laid down, as a monotonic counter. §3.3 orders
-            /// unseated sheets "in the order they were laid down", and <c>List.Sort</c> is not a
-            /// stable sort — it will happily permute equal elements — so that order has to be a
-            /// value in the comparison rather than a property of the list.</summary>
-            public readonly int LaidAt;
-
-            public bool Seated;
-
-            public Laid(BoardSheetView view, int laidAt) { View = view; LaidAt = laidAt; }
-        }
-
         /// <summary>The worker's stop flag. A board can be closed while its rasters are still
         /// being produced, and a cancelled job must not keep rendering sheets nobody will
         /// upload. <c>volatile</c> because it is written on the main thread and read on the
@@ -145,23 +114,9 @@ namespace Archivist.Building.Table
         readonly Dictionary<SheetId, SheetRender> renders = new Dictionary<SheetId, SheetRender>();
         readonly Dictionary<SheetId, Texture2D> textures = new Dictionary<SheetId, Texture2D>();
 
-        readonly Dictionary<SheetId, Laid> placed = new Dictionary<SheetId, Laid>();
-        readonly List<Laid> layOrder = new List<Laid>();
-        readonly List<BoardSheetView> onTable = new List<BoardSheetView>();
+        readonly Dictionary<SheetId, BoardSheetView> placed = new Dictionary<SheetId, BoardSheetView>();
+        readonly List<BoardSheetView> drawOrder = new List<BoardSheetView>();
 
-        /// <summary>
-        /// The group table of G4.2, and the board's placements mirrored into it so the store's
-        /// one invariant — <i>a member is on the board exactly when its group is</i> — is true
-        /// of a real board rather than of a store nobody drives.
-        ///
-        /// <para>Mirrored rather than made authoritative for the placements: C4.6 says the
-        /// transform is the pose, and making the store the pose authority would mean a
-        /// <see cref="Lay"/> per drag frame. The mirror is one-directional — every
-        /// <i>committed</i> mutation goes both places, and the store's pose for a loose sheet is
-        /// a memo. What it <b>is</b> authoritative about is membership, the frame and which group
-        /// a sheet is in, none of which change at pointer speed except the frame, which
-        /// <see cref="MoveGroup"/> writes directly.</para>
-        /// </summary>
         string stateId;
 
         GameObject boardRoot;
@@ -193,11 +148,10 @@ namespace Archivist.Building.Table
 
         Coroutine build;
         RenderJob job;
-        int nextLaidAt;
 
         /// <summary>True once the rig exists. Textures may still be landing — C5.7 is explicit
         /// that opening never blocks, so "showing" and "finished rendering" are different
-        /// states and only the first gates <see cref="Lay"/>.</summary>
+        /// states and only the first gates a plate.</summary>
         public bool IsShowing { get; private set; }
 
         /// <summary>The island this board is bound to, or 0 while hidden (C4.1's unbound
@@ -265,10 +219,10 @@ namespace Archivist.Building.Table
             for (int o = 0; o < Offices.All.Length; o++)
             {
                 Office office = Offices.All[o];
-                foreach (Laid entry in layOrder)
+                foreach (BoardSheetView view in drawOrder)
                 {
-                    if (entry.View == null) continue;
-                    SheetId id = entry.View.Id;
+                    if (view == null) continue;
+                    SheetId id = view.Id;
                     if (id.WholeIsland || id.Office != office) continue;
 
                     layers.Add(office);
@@ -286,9 +240,9 @@ namespace Archivist.Building.Table
 
         void ApplyLayer()
         {
-            for (int i = 0; i < layOrder.Count; i++)
+            for (int i = 0; i < drawOrder.Count; i++)
             {
-                BoardSheetView view = layOrder[i].View;
+                BoardSheetView view = drawOrder[i];
                 if (view == null) continue;
 
                 SheetId id = view.Id;
@@ -379,18 +333,6 @@ namespace Archivist.Building.Table
             ApplyView();
         }
 
-        /// <summary>Every sheet the source offers for this island, in the source's order (§4.3
-        /// makes that order part of the contract). Not filtered by what is on the table — a
-        /// sheet appears here whether it is in the drawer or laid out; <see cref="IsOnTable"/>
-        /// crosses the two, which is the cabinet's job in C7.4.</summary>
-        public IReadOnlyList<SheetId> Available { get { return available; } }
-
-        /// <summary>The slabs currently on the board, in <b>draw order</b> — lowest first, which
-        /// is the order their Y offsets run in (§3.3). Seated sheets are at the bottom of this
-        /// list because that is the whole visual argument that the board is being assembled.
-        /// </summary>
-        public IReadOnlyList<BoardSheetView> OnTable { get { return onTable; } }
-
         /// <summary>Raised after any mutation: a sheet laid, seated or removed, a texture
         /// landing, and the board opening or closing. One event and not several because every
         /// consumer so far — the cabinet, the header, the caption — rebuilds from the whole
@@ -469,88 +411,11 @@ namespace Archivist.Building.Table
             if (was) Raise();
         }
 
-        /// <summary>The sheet's raster as a texture, or null until it has landed (C5.5, C5.7).
-        /// <b>Borrowed, never owned</b> — the board destroys it in <see cref="Hide"/>, so a
-        /// cabinet row must re-ask rather than cache the reference across an opening.</summary>
-        public Texture2D TextureFor(SheetId id)
-        {
-            Texture2D texture;
-            return textures.TryGetValue(id, out texture) ? texture : null;
-        }
-
-        public bool IsOnTable(SheetId id) { return placed.ContainsKey(id); }
-
-        /// <summary>
-        /// Puts a sheet on the board at an explicit ground pose, or moves it there if it is
-        /// already down. Returns null if the board is not showing or the sheet's raster has not
-        /// landed yet.
-        ///
-        /// <para>Always <b>unseated</b>, which is C6.7: seating is not a lock, and a sheet given
-        /// an explicit pose has by definition just been placed by hand. A caller that wants the
-        /// true pose wants <see cref="Seat"/>.</para>
-        ///
-        /// <para><b>Laying a member takes it out of its group</b>: a placement carries one
-        /// derivation or none (G4.1) and this hands it a pose of its own. <b>The interaction
-        /// layer must never reach this path for a member</b> — G1.6 makes the group the unit of
-        /// interaction, so dragging a member drags the group and the write is
-        /// <see cref="MoveGroup"/>. The path exists for the callers <see cref="Remove"/> names,
-        /// and is safe here in a way it is not in the store, because
-        /// <see cref="NoteDissolution"/> puts the survivor of a dissolved pair back where it was
-        /// standing instead of at the island origin.</para>
-        /// </summary>
-        public BoardSheetView Lay(SheetId id, V2 groundPos, double rotationDeg)
-        {
-            BoardSheetView view = Put(id, groundPos, rotationDeg, seated: false);
-            if (view == null) return null;
-
-            Resort();
-            Raise();
-            return view;
-        }
-
-        /// <summary>
-        /// Snaps a sheet to its true pose — <c>Sheet.CentreGround</c> and <c>RotationDeg</c> —
-        /// and marks it seated (§6.1). Lays it first if it was in the drawer, so "seat this" is
-        /// one call whatever state the sheet was in.
-        ///
-        /// <para>The pose is read from the sheet, not stored, which is C4.6 and the reason A6 can
-        /// delete the pose fields out of a save by hand and still get every seated sheet
-        /// back.</para>
-        /// </summary>
-        public void Seat(SheetId id)
-        {
-            Sheet sheet;
-            if (!TrySheet(id, out sheet)) return;
-
-            if (Put(id, sheet.CentreGround, sheet.RotationDeg, seated: true) == null) return;
-
-            Resort();
-            Raise();
-        }
-
-        /// <summary>Back to the cabinet (C7.5). The slab is destroyed rather than parked:
-        /// <c>BoardSheetView</c> owns its mesh, material and texture and frees them in
-        /// <c>OnDestroy</c>, and the raster it was built from stays cached, so laying the same
-        /// sheet again costs an upload and not a render.</summary>
-        public void Remove(SheetId id)
-        {
-            Laid entry;
-            if (!placed.TryGetValue(id, out entry)) return;
-
-            placed.Remove(id);
-            layOrder.Remove(entry);
-            if (entry.View != null) Discard(entry.View.gameObject);
-
-            Resort();
-            RebuildLayers();
-            Raise();
-        }
-
         /// <summary>The geometry behind an identity: centre, rotation, survey, paper. Resolved
         /// once when the board opens and held for as long as the island is, so this is a
         /// dictionary lookup and not a walk through
         /// <see cref="SheetLookup"/> on every drag frame.</summary>
-        public bool TrySheet(SheetId id, out Sheet sheet)
+        bool TrySheet(SheetId id, out Sheet sheet)
         {
             return sheets.TryGetValue(id, out sheet);
         }
@@ -577,32 +442,6 @@ namespace Archivist.Building.Table
         string Keyed(string boardId)
         {
             return string.IsNullOrEmpty(boardId) ? "BoardView#" + GetInstanceID() : boardId;
-        }
-
-        /// <summary>
-        /// Where a sheet on this board is, in ground metres and degrees. False when it is not
-        /// on the board.
-        ///
-        /// <para><b>The transform is the pose.</b> Nothing is stored: a plate lies where its
-        /// quarter says it lies, and this reads it back.</para>
-        /// </summary>
-        public bool TryPoseOf(SheetId id, out V2 groundPos, out double rotationDeg)
-        {
-            groundPos = V2.Zero;
-            rotationDeg = 0.0;
-
-            Laid entry;
-            if (!placed.TryGetValue(id, out entry) || entry.View == null) return false;
-
-            Transform t = entry.View.transform;
-            Vector3 pos = t.localPosition;
-            groundPos = Space.ToGround(new V2(pos.x, pos.z));
-
-            // The inverse of the negation in Put. F-S1.2 verified the sign by outcome; negating
-            // on the way in and not on the way out compares an angle against its own mirror
-            // image. Do not "fix" either half.
-            rotationDeg = -t.localEulerAngles.y;
-            return true;
         }
 
         // ---------------------------------------------------------------- build
@@ -658,37 +497,13 @@ namespace Archivist.Building.Table
             boardRoot = new GameObject("BoardRoot");
             boardRoot.transform.position = boardOrigin;
 
-            int layer = UnityEngine.LayerMask.NameToLayer(TableLayerName);
+            int layer = BoardRig.TableLayer;
             if (layer < 0)
-                Debug.LogWarning("[BoardView] No '" + TableLayerName + "' layer — C5.1 needs one, " +
-                                 "or the room's camera will draw the board.", this);
+                Debug.LogWarning("[BoardView] No '" + BoardRig.TableLayerName + "' layer — C5.1 " +
+                                 "needs one, or the room's camera will draw the board.", this);
 
-            BuildMountingSheet(boardRoot.transform, layer);
+            mountingMaterial = BoardRig.BuildMountingSheet(boardRoot.transform, Space, layer);
             BuildCamera(boardRoot.transform, layer);
-        }
-
-        /// <summary>The pale surface the sheets sit on. A quad, because the board has no
-        /// thickness worth modelling and a plane would import a mesh nobody can tune. Its
-        /// collider goes: C8.8 raycasts the Table layer for slabs, and a full-board collider
-        /// would swallow every miss.</summary>
-        void BuildMountingSheet(Transform parent, int layer)
-        {
-            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            quad.name = "MountingSheet";
-            Discard(quad.GetComponent<Collider>());
-
-            quad.transform.SetParent(parent, false);
-            quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            quad.transform.localScale = new Vector3((float)Space.BoardWidth, (float)Space.BoardHeight, 1f);
-            quad.transform.localPosition = new Vector3(0f, -0.01f, 0f);
-
-            mountingMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-            mountingMaterial.name = "M_MountingSheet";
-            mountingMaterial.hideFlags = HideFlags.DontSave;
-            mountingMaterial.color = new Color(0.94f, 0.94f, 0.93f);
-            quad.GetComponent<MeshRenderer>().sharedMaterial = mountingMaterial;
-
-            if (layer >= 0) quad.layer = layer;
         }
 
         /// <summary>The board camera of §5.1: orthographic, looking down −Y.
@@ -707,37 +522,17 @@ namespace Archivist.Building.Table
         /// </summary>
         void BuildCamera(Transform parent, int layer)
         {
-            var go = new GameObject("BoardCamera");
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, 50f, 0f);
-            go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-
-            var cam = go.AddComponent<Camera>();
-            cam.orthographic = true;
-            cam.nearClipPlane = 0.01f;
-            cam.farClipPlane = 200f;
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.16f, 0.13f, 0.10f);
-
-            // ABOVE the room's camera, explicitly. A Camera created in code defaults to
+            // depth ABOVE the room's camera, explicitly. A Camera created in code defaults to
             // depth 0, and POC04_Room's Main Camera is also depth 0 — equal depths leave the
             // render order undefined, so the room draws over the board about as often as not.
-            // The symptom is the worst kind: the cabinet appears (Screen Space Overlay, always
+            // The symptom is the worst kind: the chrome appears (Screen Space Overlay, always
             // on top) while the main area shows the room, which reads as "the board failed to
             // build" rather than "two cameras are arguing".
-            cam.depth = 100f;
-
-            // ENABLED here, by the thing that builds it.
             //
-            // It used to be created disabled and switched on by TableSession, one line after
-            // `board.Show(seed)` — but Show is a COROUTINE, so at that point this camera did
-            // not exist yet and `BoardCamera` was still null. The enable silently did nothing
-            // and the board never appeared, while the cabinet (Screen Space Overlay, built
-            // synchronously) did. That combination reads as "the board failed to render"
-            // rather than "the camera was switched on before it was made".
-            cam.enabled = true;
-
-            if (layer >= 0) cam.cullingMask = 1 << layer;
+            // ENABLED here, by the thing that builds it: Show is a COROUTINE, so a caller that
+            // switched the camera on after calling it would be reaching for a camera that does
+            // not exist yet, and the enable would silently do nothing.
+            Camera cam = BoardRig.BuildCamera(parent, layer, depth: 100f, enabled: true);
 
             BoardCamera = cam;
             ApplyCameraRect(cam);
@@ -979,33 +774,31 @@ namespace Archivist.Building.Table
 
             Sheet sheet;
             if (!TrySheet(id, out sheet)) return;
-            if (Put(id, sheet.CentreGround, sheet.RotationDeg, seated: true) == null) return;
+            if (Put(id, sheet.CentreGround, sheet.RotationDeg) == null) return;
 
             Resort();
             RebuildLayers();
         }
 
-        /// <summary>Lay or move, without the re-sort and the event — so <see cref="Seat"/> is one
-        /// mutation and not two, and a subscriber never sees a board mid-change.
-        ///
-        /// <para><paramref name="laidAt"/> is the draw index for a sheet arriving from the store
-        /// (§9); -1 means "as if just laid down", which is every gesture.</para></summary>
-        BoardSheetView Put(SheetId id, V2 groundPos, double rotationDeg, bool seated, int laidAt = -1)
+        /// <summary>The slab itself, built from the cached raster the first time a sheet is
+        /// seen and posed every time. Without the re-sort and the event, so a subscriber never
+        /// sees a board mid-change.</summary>
+        BoardSheetView Put(SheetId id, V2 groundPos, double rotationDeg)
         {
             if (!IsShowing)
             {
-                Debug.LogWarning("[BoardView] Lay/Seat before Show — nothing to lay on.", this);
+                Debug.LogWarning("[BoardView] Nothing to lay on — the rig is not built.", this);
                 return null;
             }
 
-            Laid entry;
-            if (!placed.TryGetValue(id, out entry))
+            BoardSheetView view;
+            if (!placed.TryGetValue(id, out view))
             {
                 SheetRender render;
                 if (!renders.TryGetValue(id, out render))
                 {
                     // C5.7: the board opens before its rasters land, so this is a real state and
-                    // not a bug. The cabinet keeps a row undraggable until TextureFor answers.
+                    // not a bug.
                     Debug.LogWarning("[BoardView] " + id + " has not been rendered yet.", this);
                     return null;
                 }
@@ -1021,107 +814,73 @@ namespace Archivist.Building.Table
                     return null;
                 }
 
-                BoardSheetView view = BoardSheetView.Create(
+                view = BoardSheetView.Create(
                     render.Sheet, id, render.IslandName, map,
-                    SlabMaterial, MapTextureProperty, UnitsPerMetre);
+                    SlabMaterial, BoardRig.MapTextureProperty, UnitsPerMetre);
                 view.transform.SetParent(boardRoot.transform, false);
 
-                int layer = UnityEngine.LayerMask.NameToLayer(TableLayerName);
-                if (layer >= 0) SetLayerRecursive(view.gameObject, layer);
+                int layer = BoardRig.TableLayer;
+                if (layer >= 0) BoardRig.SetLayerRecursive(view.gameObject, layer);
 
-                int at = laidAt >= 0 ? laidAt : nextLaidAt;
-                if (at >= nextLaidAt) nextLaidAt = at + 1;
-
-                entry = new Laid(view, at);
-                placed.Add(id, entry);
-                layOrder.Add(entry);
+                placed.Add(id, view);
+                drawOrder.Add(view);
             }
 
-            entry.Seated = seated;
-            WritePose(entry.View, groundPos, rotationDeg);
-            return entry.View;
+            WritePose(view, groundPos, rotationDeg);
+            return view;
         }
 
-        /// <summary>
-        /// A ground pose onto a slab, and the only place this class writes one. Y is left
-        /// exactly as it is: it is set by <see cref="Resort"/> from the draw index, because
-        /// sheets overlap and order is a design element and not an accident (§3.3).
-        ///
-        /// <para>Ground X maps to board X and ground Y to board Z, so a ground rotation that
-        /// takes +X toward +Y is a Unity yaw that takes +X toward +Z — and Unity's positive yaw
-        /// goes the other way. Hence the negation, which <see cref="TryPoseOf"/> undoes on the
-        /// way back out. Get this wrong and the board looks plausible but mirrored, which is
-        /// the hardest kind of wrong to see; F-S1.2 verified the pair by outcome, so do not
-        /// "fix" either half.</para>
-        /// </summary>
+        /// <summary>A ground pose onto a slab, and the only place this class writes one. Y is
+        /// left exactly as it is: it is set by <see cref="Resort"/> from the draw index, because
+        /// sheets overlap and order is a design element and not an accident (§3.3). The yaw is
+        /// <see cref="BoardRig.BoardRotation"/>'s, sign included.</summary>
         void WritePose(BoardSheetView view, V2 groundPos, double rotationDeg)
         {
             V2 centre = Space.ToBoard(groundPos);
             Transform t = view.transform;
 
             t.localPosition = new Vector3((float)centre.X, t.localPosition.y, (float)centre.Y);
-            t.localRotation = Quaternion.Euler(0f, -(float)rotationDeg, 0f);
+            t.localRotation = BoardRig.BoardRotation(rotationDeg);
         }
 
-        /// <summary>
-        /// §3.3's draw order, applied as Y offsets <c>SheetSeparation</c> apart: seated sheets
-        /// lowest, in office then sheet-number order because that is the order a solved survey
-        /// reads in; unseated sheets above them, in the order they were laid down.
-        ///
-        /// <para>A seated sheet sinking below the unseated ones is the whole visual argument that
-        /// the board is being assembled, so this runs after every mutation rather than only when
-        /// something is added.</para>
-        ///
-        /// <para>Tiers 3 and 4 — selected topmost, dragged above that — are not applied here:
-        /// they are properties of a pointer, and a view that owned them would need to be told
-        /// about selection. The drag layer lifts its own slab.</para>
-        /// </summary>
+        /// <summary>§3.3's draw order, applied as Y offsets <c>SheetSeparation</c> apart.
+        /// Re-run after every plate lands rather than only appending, because a plate that
+        /// belongs low in the stack raises every plate already above it.</summary>
         void Resort()
         {
-            layOrder.Sort(CompareDrawOrder);
+            drawOrder.Sort(CompareDrawOrder);
 
-            onTable.Clear();
             float separation = Separation;
 
-            for (int i = 0; i < layOrder.Count; i++)
+            for (int i = 0; i < drawOrder.Count; i++)
             {
-                Laid entry = layOrder[i];
-                if (entry.View == null) continue;
+                BoardSheetView view = drawOrder[i];
+                if (view == null) continue;
 
-                Vector3 p = entry.View.transform.localPosition;
-                entry.View.transform.localPosition = new Vector3(p.x, i * separation, p.z);
-                onTable.Add(entry.View);
+                Vector3 p = view.transform.localPosition;
+                view.transform.localPosition = new Vector3(p.x, i * separation, p.z);
             }
         }
 
-        /// <summary>Seated before unseated, then a total order inside each tier: seated sheets by
-        /// identity — the chart first, then office, then number — and unseated by
-        /// <see cref="Laid.LaidAt"/>. Both keys are total, so the result does not depend on
-        /// <c>List.Sort</c> being stable, which it is not. Ordering seated sheets by identity
-        /// rather than by arrival is also what makes a reopened board look like the one that was
-        /// closed (C4.7): a board that reordered itself between two openings would be
-        /// unreadable.</summary>
-        int CompareDrawOrder(Laid a, Laid b)
+        /// <summary>A total order over identity — the chart first, then office, then number.
+        /// Total, so the result does not depend on <c>List.Sort</c> being stable, which it is
+        /// not; over identity rather than over arrival, so two openings of one island stack the
+        /// same way while rasters land in whatever order the renderer finished them
+        /// (C4.7).</summary>
+        static int CompareDrawOrder(BoardSheetView a, BoardSheetView b)
         {
-            if (a.Seated != b.Seated) return a.Seated ? -1 : 1;
+            SheetId ia = a.Id, ib = b.Id;
 
-            if (a.Seated)
-            {
-                SheetId ia = a.View.Id, ib = b.View.Id;
+            // The chart is under everything (Q4.4), whatever office borrowed it. Office first
+            // would put it above the plates of every office ordered after its own, and a chart
+            // covers the whole island: those layers would show nothing else.
+            int byWhole = (ia.WholeIsland ? 0 : 1).CompareTo(ib.WholeIsland ? 0 : 1);
+            if (byWhole != 0) return byWhole;
 
-                // The chart is under everything (Q4.4), whatever office borrowed it. Office
-                // first would put it above the plates of every office ordered after its own,
-                // and a chart covers the whole island: those layers would show nothing else.
-                int byWhole = (ia.WholeIsland ? 0 : 1).CompareTo(ib.WholeIsland ? 0 : 1);
-                if (byWhole != 0) return byWhole;
+            int byOffice = ((int)ia.Office).CompareTo((int)ib.Office);
+            if (byOffice != 0) return byOffice;
 
-                int byOffice = ((int)ia.Office).CompareTo((int)ib.Office);
-                if (byOffice != 0) return byOffice;
-
-                return ia.Number.CompareTo(ib.Number);
-            }
-
-            return a.LaidAt.CompareTo(b.LaidAt);
+            return ia.Number.CompareTo(ib.Number);
         }
 
         // ------------------------------------------------------------- lifetime
@@ -1149,12 +908,7 @@ namespace Archivist.Building.Table
             get
             {
                 if (unlitMaterial != null) return unlitMaterial;
-                if (slabMaterial == null)
-                {
-                    slabMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-                    slabMaterial.name = "M_BoardSheet";
-                    slabMaterial.hideFlags = HideFlags.DontSave;
-                }
+                if (slabMaterial == null) slabMaterial = BoardRig.UnlitSlab();
                 return slabMaterial;
             }
         }
@@ -1184,7 +938,7 @@ namespace Archivist.Building.Table
 
             renders.Clear();
             placed.Clear();
-            layOrder.Clear();
+            drawOrder.Clear();
 
             // The office selection goes with them, for the reason the viewport is dropped a few
             // lines down: a board closed on Garrison must not open the NEXT island on Garrison.
@@ -1198,8 +952,6 @@ namespace Archivist.Building.Table
             // Nothing but pixels dies here. There is no model to keep (Q4.7): the board is a
             // view of what is in the binders on the table, so closing it costs nothing and
             // reopening it rebuilds from the same place it built from the first time.
-            nextLaidAt = 0;
-            onTable.Clear();
             available.Clear();
             sheets.Clear();
 
@@ -1236,13 +988,6 @@ namespace Archivist.Building.Table
 
             if (Application.isPlaying) Destroy(thing);
             else DestroyImmediate(thing);
-        }
-
-        static void SetLayerRecursive(GameObject go, int layer)
-        {
-            go.layer = layer;
-            for (int i = 0; i < go.transform.childCount; i++)
-                SetLayerRecursive(go.transform.GetChild(i).gameObject, layer);
         }
     }
 }

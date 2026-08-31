@@ -96,7 +96,10 @@ namespace Archivist.Building.Shelving
         bool armed;         // the hands held a binder when reach was last worked out
         bool reachStale = true;
 
-        public string ShelfId { get { return string.IsNullOrEmpty(shelfId) ? Derived() : shelfId; } }
+        public string ShelfId
+        {
+            get { return string.IsNullOrEmpty(shelfId) ? SceneIdentity.Derive(this) : shelfId; }
+        }
 
         public int RowAmount { get { return rowAmount; } }
         public int SlotsPerRow { get { return slotsPerRow; } }
@@ -327,63 +330,19 @@ namespace Archivist.Building.Shelving
 
         // ---- identity ---------------------------------------------------------------------------
 
-        /// <summary>This shelf's place in the scene as 32 hex characters — a GUID's shape from a
-        /// hash rather than a draw, so two runs of one scene agree without anything being written
-        /// down. FNV-1a rather than <c>string.GetHashCode</c>, which is randomised per process and
-        /// would make this the very thing it exists to stop being.</summary>
-        string Derived()
-        {
-            Transform t = transform;
-            string path = t.name;
-            while (t.parent != null)
-            {
-                t = t.parent;
-                path = t.name + "/" + path;
-            }
-
-            UnityEngine.SceneManagement.Scene scene = gameObject.scene;
-            string where = (string.IsNullOrEmpty(scene.path) ? scene.name : scene.path) + ":" + path;
-
-            return Hash(where, 14695981039346656037UL).ToString("x16")
-                 + Hash(where, 0xCBF29CE484222325UL ^ 0x9E3779B97F4A7C15UL).ToString("x16");
-        }
-
-        static ulong Hash(string text, ulong basis)
-        {
-            ulong hash = basis;
-            for (int i = 0; i < text.Length; i++)
-            {
-                hash ^= text[i];
-                hash *= 1099511628211UL;
-            }
-            return hash;
-        }
-
 #if UNITY_EDITOR
-        /// <summary>Pins the derived id into the field in a real scene, and keeps the debug cubes
-        /// in step with the checkbox. Every guard on the id is a way one ends up shared — see
-        /// <c>CartographyTable.OnValidate</c>, which this follows exactly.</summary>
+        /// <summary>Pins this shelf's id, and keeps the debug cubes in step with the
+        /// checkbox.</summary>
         void OnValidate()
         {
             ApplyDebugVolumes();
-
-            if (!string.IsNullOrEmpty(shelfId)) return;
-            if (UnityEditor.PrefabUtility.IsPartOfPrefabAsset(this)) return;
-            if (UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage() != null) return;
-            if (UnityEditor.SceneManagement.EditorSceneManager.IsPreviewSceneObject(this)) return;
-            if (!gameObject.scene.IsValid()) return;
-
-            shelfId = Derived();
-            UnityEditor.EditorUtility.SetDirty(this);
+            SceneIdentity.Pin(this, ref shelfId);
         }
 
-        /// <summary>For two shelves that must not share a history and do — a shelf duplicated in
-        /// the Hierarchy arrives holding its original's serialised id.</summary>
         [ContextMenu("Mint a new shelf id")]
         void MintShelfId()
         {
-            shelfId = System.Guid.NewGuid().ToString("N");
-            UnityEditor.EditorUtility.SetDirty(this);
+            SceneIdentity.Mint(this, ref shelfId);
         }
 
         /// <summary>

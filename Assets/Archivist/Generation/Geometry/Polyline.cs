@@ -41,30 +41,5 @@ namespace Archivist.Generation.Geometry
                 return r;
             }
         }
-
-        /// <summary>Uniform resample by arc length. Used by §10.1 PCA, which must not be vertex-weighted.</summary>
-        public List<V2> SampleByArcLength(double step)
-        {
-            var outPts = new List<V2>();
-            if (_points.Length == 0 || step <= 0) return outPts;
-            outPts.Add(_points[0]);
-            double carry = 0;
-            int n = Closed ? _points.Length : _points.Length - 1;
-            for (int i = 0; i < n; i++)
-            {
-                V2 a = _points[i];
-                V2 b = _points[(i + 1) % _points.Length];
-                double seg = V2.Dist(a, b);
-                if (seg <= 0) continue;
-                double t = step - carry;
-                while (t <= seg)
-                {
-                    outPts.Add(V2.Lerp(a, b, t / seg));
-                    t += step;
-                }
-                carry = seg - (t - step);
-            }
-            return outPts;
-        }
     }
 }

@@ -19,10 +19,10 @@ namespace Archivist.Render
     /// resolves by (§6.1), which falls between corners — falls through to the real field. A miss
     /// is <i>slower, never wrong</i>, which is the failure mode worth having.</para>
     ///
-    /// <para><b>The lattice comes from <c>Contours.Lattice</c>, not from arithmetic repeated
-    /// here.</b> A raster laid on corners half a cell from the ones the extraction reads would
-    /// miss every time and still produce correct output — a silent 1.0x. Asking is what keeps
-    /// that impossible.</para>
+    /// <para><b>The lattice comes from <c>Contours</c> — its extent, its corner coordinates and
+    /// its index rounding — not from arithmetic repeated here.</b> A raster laid on corners half
+    /// a cell from the ones the extraction reads would miss every time and still produce correct
+    /// output — a silent 1.0x. Asking is what keeps that impossible.</para>
     ///
     /// <para><b><c>float</c> is exact here, not an approximation.</b> §4.4 quantises
     /// <c>Height01</c> at 2⁻¹⁶, so every value is <c>k/65536</c> with <c>k ≤ 65536</c>: 17
@@ -84,11 +84,7 @@ namespace Archivist.Render
         void Fill()
         {
             int width = nx + 1;
-
-            // Hoisted exactly as Contours does it — (latticeIndex * cellSize), never an
-            // accumulated sum — so a corner has one abscissa whoever computes it.
-            var xs = new double[width];
-            for (int i = 0; i < width; i++) xs[i] = (ix0 + i) * cellSize;
+            double[] xs = Contours.Abscissae(ix0, nx, cellSize);
 
             IHeightField field = inner;
             float[] into = samples;
@@ -109,15 +105,15 @@ namespace Archivist.Render
         /// The sample, from the raster when the point is a corner of this lattice and from the
         /// field otherwise.
         ///
-        /// <para>The index is recovered by rounding rather than by division-and-floor, and the
-        /// hit is confirmed by rebuilding the corner's own coordinate and comparing: a point
-        /// that is merely <i>near</i> a corner must miss, because answering it with the corner's
-        /// value would be a different number from the one the field would give.</para>
+        /// <para><see cref="Contours.IndexOf"/> gives the nearest corner; the hit is confirmed by
+        /// rebuilding that corner's own coordinate and comparing, so a point merely <i>near</i> a
+        /// corner misses. Answering it with the corner's value would be a different number from
+        /// the one the field would give.</para>
         /// </summary>
         public double Height01(double x, double y)
         {
-            long i = (long)System.Math.Floor(x / cellSize + 0.5) - ix0;
-            long j = (long)System.Math.Floor(y / cellSize + 0.5) - iy0;
+            long i = Contours.IndexOf(x, cellSize) - ix0;
+            long j = Contours.IndexOf(y, cellSize) - iy0;
 
             if (i >= 0 && i <= nx && j >= 0 && j <= ny
                 && (ix0 + i) * cellSize == x && (iy0 + j) * cellSize == y)

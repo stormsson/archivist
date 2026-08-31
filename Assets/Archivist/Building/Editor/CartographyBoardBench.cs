@@ -41,11 +41,6 @@ namespace Archivist.Building.Editor
     {
         const string BoardRootName = "BoardRoot (bench)";
 
-        /// <summary>Well clear of the room, per spec C5.2. The Table layer already isolates the
-        /// board from the room's camera and raycasts, so this is belt-and-braces — but it also
-        /// means a stray sheet at the wrong scale cannot appear in the middle of the floor.</summary>
-        static readonly Vector3 BoardOrigin = new Vector3(0f, -500f, 0f);
-
         int islandIndex;
         int maxSheets = 60;
         bool hydrographic = true, landSurvey = true, garrison = true, antiquarian = true;
@@ -159,16 +154,16 @@ namespace Archivist.Building.Editor
             BoardSpace space = BoardSpace.ForIsland(island.LandBounds, padding, unitsPerMetre);
 
             var root = new GameObject(BoardRootName);
-            root.transform.position = BoardOrigin;
+            root.transform.position = BoardRig.DefaultOrigin;
 
-            BuildMountingSheet(root.transform, space);
+            int layer = BoardRig.TableLayer;
+            BoardRig.BuildMountingSheet(root.transform, space, layer);
 
             // Rasterising happens through the crate's own path, so what lands on the board is
             // the same image that would land on the floor — only the resolution differs.
             List<SheetRender> renders = MapCrate.RenderForBoard(island, sheets, pxPerMetre);
 
-            Material unlit = UnlitPaper();
-            int layer = LayerMask.NameToLayer("Table");
+            Material unlit = BoardRig.UnlitSlab();
 
             for (int i = 0; i < renders.Count; i++)
             {
@@ -178,9 +173,9 @@ namespace Archivist.Building.Editor
                 // Sized in board units inside the quad's own vertices, so localScale stays
                 // at one and this loop only ever sets a pose. BoardSheetView adds the C5.4
                 // marker itself.
-                BoardSheetView view = BoardSheetView.Create(render, unlit, "_BaseMap", unitsPerMetre);
+                BoardSheetView view = BoardSheetView.Create(render, unlit, BoardRig.MapTextureProperty, unitsPerMetre);
 
-                if (layer >= 0) SetLayerRecursive(view.gameObject, layer);
+                if (layer >= 0) BoardRig.SetLayerRecursive(view.gameObject, layer);
 
                 V2 centre = space.ToBoard(sheet.CentreGround);
 
@@ -190,14 +185,10 @@ namespace Archivist.Building.Editor
                 view.transform.localPosition = new Vector3(
                     (float)centre.X, i * separation, (float)centre.Y);
 
-                // Ground X maps to board X and ground Y to board Z, so a ground rotation that
-                // takes +X toward +Y is a Unity yaw that takes +X toward +Z — and Unity's
-                // positive yaw goes the other way. Hence the negation. Get this wrong and the
-                // board looks plausible but mirrored, which is the hardest kind of wrong to see.
-                view.transform.localRotation = Quaternion.Euler(0f, -(float)sheet.RotationDeg, 0f);
+                view.transform.localRotation = BoardRig.BoardRotation(sheet.RotationDeg);
             }
 
-            BuildCamera(root.transform, space);
+            BuildCamera(root.transform, space, layer);
             Frame(root.transform, space);
 
             Rect2 land = island.LandBounds;
@@ -208,50 +199,13 @@ namespace Archivist.Building.Editor
                 $"  @ {unitsPerMetre} units/m", root);
         }
 
-        /// <summary>The pale surface the sheets sit on. A quad, because the board has no
-        /// thickness worth modelling and a plane would import a mesh nobody can tune.</summary>
-        static void BuildMountingSheet(Transform parent, BoardSpace space)
+        /// <summary>The board camera, framing the whole mounting sheet — the bench has no
+        /// viewport and nothing moves the view. Left off and behind the room's camera: the
+        /// bench's deliverable is looked at through the Scene view.</summary>
+        static void BuildCamera(Transform parent, BoardSpace space, int layer)
         {
-            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            quad.name = "MountingSheet";
-            Object.DestroyImmediate(quad.GetComponent<Collider>());
-
-            quad.transform.SetParent(parent, false);
-            quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            quad.transform.localScale = new Vector3(
-                (float)space.BoardWidth, (float)space.BoardHeight, 1f);
-            quad.transform.localPosition = new Vector3(0f, -0.01f, 0f);
-
-            var material = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-            material.name = "M_MountingSheet";
-            material.hideFlags = HideFlags.DontSave;
-            material.color = new Color(0.94f, 0.94f, 0.93f);
-            quad.GetComponent<MeshRenderer>().sharedMaterial = material;
-
-            int layer = LayerMask.NameToLayer("Table");
-            if (layer >= 0) quad.layer = layer;
-        }
-
-        /// <summary>The board camera of spec §5.1. Built here so S1 leaves behind the rig S2
-        /// needs, rather than a throwaway view.</summary>
-        static void BuildCamera(Transform parent, BoardSpace space)
-        {
-            var go = new GameObject("BoardCamera");
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, 50f, 0f);
-            go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-
-            var cam = go.AddComponent<Camera>();
-            cam.orthographic = true;
+            Camera cam = BoardRig.BuildCamera(parent, layer, depth: 0f, enabled: false);
             cam.orthographicSize = (float)space.BoardHeight * 0.5f;
-            cam.nearClipPlane = 0.01f;
-            cam.farClipPlane = 200f;
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.16f, 0.13f, 0.10f);
-            cam.enabled = false;   // S2 turns it on; S1 is looked at through the Scene view
-
-            int layer = LayerMask.NameToLayer("Table");
-            if (layer >= 0) cam.cullingMask = 1 << layer;
         }
 
         /// <summary>Snaps the Scene view to look straight down at the board. S1's whole
@@ -268,28 +222,11 @@ namespace Archivist.Building.Editor
             view.Repaint();
         }
 
-        /// <summary>Unlit, per spec §3.4 — the mockups are flat and evenly lit, and an unlit
-        /// board is independent of the room's lighting and of where its root sits.</summary>
-        static Material UnlitPaper()
-        {
-            var material = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-            material.name = "M_BoardSheet";
-            material.hideFlags = HideFlags.DontSave;
-            return material;
-        }
-
         static TableOptions LoadOptions()
         {
             string[] found = AssetDatabase.FindAssets("t:TableOptions");
             if (found.Length == 0) return null;
             return AssetDatabase.LoadAssetAtPath<TableOptions>(AssetDatabase.GUIDToAssetPath(found[0]));
-        }
-
-        static void SetLayerRecursive(GameObject go, int layer)
-        {
-            go.layer = layer;
-            for (int i = 0; i < go.transform.childCount; i++)
-                SetLayerRecursive(go.transform.GetChild(i).gameObject, layer);
         }
     }
 }

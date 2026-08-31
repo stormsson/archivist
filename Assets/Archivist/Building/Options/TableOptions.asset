@@ -21,7 +21,3 @@ MonoBehaviour:
   boardZoomStep: 1.15
   wheelSensitivity: 0.03
   boardPixelsPerMetre: 0.35
-  positionTolerance: 0.12
-  rotationToleranceDeg: 8
-  settleSeconds: 0.18
-  sheetTurnDegreesPerSecond: 90

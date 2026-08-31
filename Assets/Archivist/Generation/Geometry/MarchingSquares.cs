@@ -51,12 +51,32 @@ namespace Archivist.Generation.Geometry
         }
 
         /// <summary>
+        /// §6.2's ladder: the coarsest lod whose cell is at most <paramref name="acceptCell"/>,
+        /// capped at <paramref name="maxLod"/>. That is clamped ceil(log2(BaseCell / acceptCell)),
+        /// computed by halving BaseCell in an integer loop instead of trusting the last ulp of a
+        /// transcendental that feeds an int branch (§4.4). Every rung is a power of two times
+        /// BaseCell, so the loop is exact.
+        ///
+        /// <para>The ceiling is a parameter because the paper path and the raster path stop at
+        /// different rungs — see <see cref="Tuning.MaxPaperContourLod"/> — on the one ladder.
+        /// A non-positive or NaN <paramref name="acceptCell"/> yields 0, so callers that mean
+        /// something else by it guard before asking.</para>
+        /// </summary>
+        public static int LodForCell(double acceptCell, int maxLod)
+        {
+            int lod = 0;
+            double cell = Tuning.BaseCell;
+            while (lod < maxLod && cell > acceptCell)
+            {
+                cell *= 0.5;
+                lod++;
+            }
+            return lod;
+        }
+
+        /// <summary>
         /// §6.2: targetGroundCell = PaperDetailMm / 1000 * scaleDenominator,
         /// lod = clamp(ceil(log2(BaseCell / targetGroundCell)), 0, MaxPaperContourLod).
-        ///
-        /// ceil(log2(a/b)) is the smallest L with a / 2^L &lt;= b, so this halves BaseCell in an
-        /// integer loop instead of trusting the last ulp of a transcendental that feeds an
-        /// int branch (§4.4).
         ///
         /// <para>The result is capped at <see cref="Tuning.MaxPaperContourLod"/>, because the
         /// paper rule alone asks for detail the FIELD does not have — see that constant for the
@@ -78,14 +98,7 @@ namespace Archivist.Generation.Geometry
             double targetGroundCell = Tuning.PaperDetailMm / Tuning.MmPerMetre * scaleDenominator;
             if (!(targetGroundCell > 0.0)) return Tuning.MaxPaperContourLod;
 
-            int lod = 0;
-            double cell = Tuning.BaseCell;
-            while (lod < Tuning.MaxPaperContourLod && cell > targetGroundCell)
-            {
-                cell *= 0.5;
-                lod++;
-            }
-            return lod;
+            return LodForCell(targetGroundCell, Tuning.MaxPaperContourLod);
         }
 
         // ------------------------------------------------------------ contour
@@ -150,10 +163,7 @@ namespace Archivist.Generation.Geometry
 
             double weldEps = cellSize * Tuning.WeldFraction;
 
-            // Corner x's are hoisted so that two rects sharing a border compute bit-identical
-            // abscissae: always (latticeIndex * cellSize), never an accumulated sum.
-            double[] xs = new double[nx + 1];
-            for (int i = 0; i <= nx; i++) xs[i] = (ix0 + i) * cellSize;
+            double[] xs = Abscissae(ix0, nx, cellSize);
 
             // Two rolling rows: every corner is sampled exactly once (§13.8), for every level.
             double[] below = new double[nx + 1];
@@ -272,8 +282,8 @@ namespace Archivist.Generation.Geometry
 
             Rect2 grid = area.SnapOut(cellSize).Expanded(cellSize);
 
-            ix0 = (long)Math.Floor(grid.MinX / cellSize + 0.5);
-            iy0 = (long)Math.Floor(grid.MinY / cellSize + 0.5);
+            ix0 = IndexOf(grid.MinX, cellSize);
+            iy0 = IndexOf(grid.MinY, cellSize);
             long nxL = (long)Math.Floor(grid.Width / cellSize + 0.5);
             long nyL = (long)Math.Floor(grid.Height / cellSize + 0.5);
             if (nxL < 1 || nyL < 1) return false;
@@ -281,6 +291,32 @@ namespace Archivist.Generation.Geometry
             nx = (int)nxL;
             ny = (int)nyL;
             return true;
+        }
+
+        /// <summary>
+        /// The coordinates of one lattice run's corners: <c>(i0 + i) * cell</c> for i in [0, n].
+        ///
+        /// <para>Hoisted, and always that product — never an accumulated sum — so that two rects
+        /// sharing a border compute bit-identical abscissae (A3, §13.3).</para>
+        /// </summary>
+        public static double[] Abscissae(long i0, int n, double cell)
+        {
+            double[] xs = new double[n + 1];
+            for (int i = 0; i <= n; i++) xs[i] = (i0 + i) * cell;
+            return xs;
+        }
+
+        /// <summary>
+        /// The lattice index a coordinate rounds to. Rounding rather than division-and-floor, so
+        /// a corner recovers its own index whichever side of it the arithmetic lands on.
+        ///
+        /// <para>The result is the NEAREST corner, not a containment test: a caller asking whether
+        /// a point <i>is</i> a corner must rebuild <see cref="Abscissae"/>'s product for that index
+        /// and compare, because a point merely near a corner has a different field value.</para>
+        /// </summary>
+        public static long IndexOf(double v, double cell)
+        {
+            return (long)Math.Floor(v / cell + 0.5);
         }
 
         /// <summary>Linear interpolation parameter of level between two quantised corner values.</summary>

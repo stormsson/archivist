@@ -77,9 +77,6 @@ namespace Archivist.Generation.Determinism
         /// <summary>Whole-island survey year, indexed by office. [index = (int)Office]</summary>
         public const string YearWholeIsland = "yearWholeIsland";
 
-        /// <summary>Hydrographic coast-walk region: shore anchor point and disc radius.</summary>
-        public const string CoastRegion = "coastRegion";
-
         // --- naming (Naming/) ------------------------------------------------------------
         /// <summary>Which phonology the island speaks (§9).</summary>
         public const string Names = "names";

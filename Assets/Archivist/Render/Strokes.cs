@@ -40,32 +40,12 @@ namespace Archivist.Render
         // placeholder "to be replaced wholesale". These are placeholders too. RenderTuning.cs
         // holds no colours and may not be edited, so the colour constants live in source.
         //
-        // The PALETTE-DERIVED ink — coast and river — is NOT here: it lives in Ink.cs, because
-        // FieldCoast draws the same coastline whenever the fill is on and the two paths must
-        // use one derivation or an island renders in two different inks depending on the layer
-        // mask. Ask Ink for it; never re-derive it locally.
-        //
-        // Marks and soundings ARE here, because they are not palette-derived — they must read
-        // as ink over whatever band they land on — and nothing but this file draws them.
-
-        /// <summary>Brown-black drafting ink for the discrete marks.</summary>
-        static readonly Rgba MarkInk = Rgba.FromHex("2e2318");
+        // Coast, river, grid and mark ink are the office's own, and come from OfficeStyle.
+        // Soundings ARE here, because their colour is not the office's — a dot on the dark sea
+        // bands has to be light to be seen — and nothing but this file draws them.
 
         /// <summary>Soundings sit on the dark sea bands, so their dot is light, not dark.</summary>
         static readonly Rgba SoundingInk = Rgba.FromHex("dfeaf1");
-
-        /// <summary>
-        /// The Garrison grid: a washed-out blue-grey, and the one line on a plate that is not
-        /// drafting ink.
-        ///
-        /// <para>A grid is a reference printed <i>over</i> a map, not a thing the map is made
-        /// of, and it crosses everything — so at <c>MarkInk</c>'s weight it would read as the
-        /// dominant feature of a sheet whose actual subject is underneath it. A5b measured
-        /// <b>56% of Garrison's plates carrying nothing but a coastline and this grid</b>, which
-        /// is exactly the case where getting its colour wrong turns an office into
-        /// graph paper.</para>
-        /// </summary>
-        static readonly Rgba GridInk = Rgba.FromHex("8899a6");
 
         // ------------------------------------------------------------- geometry
         //
@@ -166,15 +146,7 @@ namespace Archivist.Render
             Rect2 groundRect = QueryRect(req, gi, buf, widest);
             if (groundRect.IsEmpty) return;
 
-            // Ink.cs owns both derivations, so this fallback coast is the same colour as the
-            // FieldCoast one IslandRenderer draws when the fill is on (§7).
-            // Ink.cs owns both derivations. Which one applies is decided by whether this
-            // render has a fill under it: on bare paper a "pen on water" colour is a blue line
-            // on cream, and a river taken from the shallow band disappears.
-            // Over a fill the palette derivations are right — a pen on water is what they are.
-            // On bare paper the office's own inks are, and that is where a plate lives (Q2.2).
-            // The office's inks, fill or no fill. The palette derivations were right when one
-            // global relief palette was the only colour a plate had; an office has its own now.
+            // The office's own inks, fill or no fill (Q2.2).
             bool hasFill = (req.Layers & LayerMask.Fill) != 0;
             Rgba coastInk = style.Ink;
             Rgba riverInk = style.Water;

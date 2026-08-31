@@ -7,14 +7,14 @@ namespace Archivist.Building.Table
     /// Tuning for the cartography table — every number spec §10 lists, and no others.
     ///
     /// <para><b>One asset.</b> These numbers are read from a board space, a draw-order stack, a
-    /// texture budget, a snap test and an input handler, none of which owns them; scattered,
-    /// there is no place to answer "what is this table set to". Two of them are also the
+    /// texture budget and an input handler, none of which owns them; scattered, there is no
+    /// place to answer "what is this table set to". Two of them are also the
     /// <i>same</i> number seen twice (C5.5: the board slab and the cabinet thumbnail share one
     /// render, so they must share one pixel density or the cache silently renders twice).</para>
     ///
     /// <para><b>A ScriptableObject rather than consts</b>, for the reason
     /// <see cref="Archivist.Building.Handling.HandlingOptions"/> gives: these are feel values,
-    /// settled by dragging a sheet until the tolerance stops feeling either generous or fussy.
+    /// settled with a hand on the wheel until the zoom stops feeling either coarse or sluggish.
     /// An asset can be edited <i>in play mode and the edit is kept</i>; consts mean exit play
     /// mode, edit, recompile, re-enter, and lose the board you were looking at. The defaults are
     /// starting points — findings go in <c>docs/UI/cartography_table/findings.md</c>.</para>
@@ -155,17 +155,6 @@ namespace Archivist.Building.Table
         /// </summary>
         public const float DefaultBoardPixelsPerMetre = 0.35f;
 
-        public const float DefaultPositionTolerance = 0.12f;
-
-        public const float DefaultRotationToleranceDeg = 8f;
-
-        public const float DefaultSettleSeconds = 0.18f;
-
-        /// <summary>Moved here from <c>HandlingOptions</c> by C8.16, and deliberately lower
-        /// than the 120 the hands used: turning a sheet on a board is an aiming movement
-        /// against an 8° tolerance, not a gesture.</summary>
-        public const float DefaultSheetTurnDegreesPerSecond = 90f;
-
         [Header("Board space")]
         [Tooltip("Board world units per ground metre (§3.1). 0.01 makes one unit 100 m, so a " +
                  "12 km island is ~120 units — float precision and ortho camera sizes both " +
@@ -217,28 +206,6 @@ namespace Archivist.Building.Table
                  "sharp a plate looks on screen. ~0.24 fills a 1920-wide view at zoom 1.")]
         [SerializeField, Min(0.01f)] float boardPixelsPerMetre = DefaultBoardPixelsPerMetre;
 
-        [Header("Snap")]
-        [Tooltip("Position tolerance as a fraction of the sheet's SHORTER ground dimension " +
-                 "(C6.1), not a distance in metres. A detail sheet covering 275 m and an A1 " +
-                 "covering 1485 m should not share a tolerance in metres; as a fraction, both " +
-                 "feel the same to place.")]
-        [SerializeField, Min(0f)] float positionTolerance = DefaultPositionTolerance;
-
-        [Tooltip("Rotation tolerance in degrees (C6.2). Absolute, because rotation error does " +
-                 "not scale with sheet size. Compared modulo 360, not 180 — a sheet placed " +
-                 "upside down is not placed (C6.3).")]
-        [SerializeField, Min(0f)] float rotationToleranceDeg = DefaultRotationToleranceDeg;
-
-        [Tooltip("Seconds for a sheet released inside tolerance to ease to its exact true " +
-                 "pose (C6.5). Smoothstep, the same easing PlayerHands.Advance already uses, " +
-                 "so seating reads as the same kind of movement as taking a sheet.")]
-        [SerializeField, Min(0f)] float settleSeconds = DefaultSettleSeconds;
-
-        [Header("Board sheet")]
-        [Tooltip("Degrees per second while Q or E is held on the board. Moved here from " +
-                 "HandlingOptions by C8.16 — the room no longer turns paper, the table does.")]
-        [SerializeField, Min(1f)] float sheetTurnDegreesPerSecond = DefaultSheetTurnDegreesPerSecond;
-
         public float BoardUnitsPerMetre { get { return boardUnitsPerMetre; } }
         public float BoardPadding { get { return boardPadding; } }
         public float SheetSeparation { get { return sheetSeparation; } }
@@ -248,25 +215,5 @@ namespace Archivist.Building.Table
         public float BoardZoomStep { get { return boardZoomStep; } }
         public float WheelSensitivity { get { return wheelSensitivity; } }
         public float BoardPixelsPerMetre { get { return boardPixelsPerMetre; } }
-        public float PositionTolerance { get { return positionTolerance; } }
-        public float RotationToleranceDeg { get { return rotationToleranceDeg; } }
-        public float SettleSeconds { get { return settleSeconds; } }
-        public float SheetTurnDegreesPerSecond { get { return sheetTurnDegreesPerSecond; } }
-
-        /// <summary>
-        /// The loaded <c>TableOptions</c> asset, or null.
-        ///
-        /// <para>An asset is not a scene object, so <c>FindFirstObjectByType</c> cannot see one;
-        /// but it IS loaded whenever anything on the table serialises a reference to it, which
-        /// <see cref="BoardView"/> does. So the loaded-object search finds the one the
-        /// board is already using — which is the point: two components on one table reading two
-        /// different assets would be a board that glows at one tolerance and seats at
-        /// another.</para>
-        /// </summary>
-        public static TableOptions FindLoaded()
-        {
-            TableOptions[] all = Resources.FindObjectsOfTypeAll<TableOptions>();
-            return all != null && all.Length > 0 ? all[0] : null;
-        }
     }
 }

@@ -58,19 +58,17 @@ namespace Archivist.Render
             {
                 // The unprinted sheet, in this office's stock (R2.6). A buffer starts at zero,
                 // which is black — so a plate with Fill off (Q2.2) and no paper under it is ink
-                // on a black rectangle, which is what this looked like before the line existed.
+                // on a black rectangle.
                 buf.Fill(style.Paper);
             }
 
             if (h01 != null)
             {
                 double halfWidthPx = GroundImage.MmToPx(RenderTuning.CoastWidthMm, req.PixelsPerPaperMm) * 0.5;
-                // Ink.CoastInk is the single derivation both coast paths call, so this line
-                // and the Strokes vector fallback are the same colour by construction — they
-                // were NOT when each path derived its own (one rounded, one truncated).
-                // The office's own pen, not one derived from the fill. With a wash the fill
-                // IS the office's colour, so deriving from it would give a coastline that
-                // vanishes into the water it is the edge of.
+                // The office's own pen, the same one Strokes' vector fallback uses, so the two
+                // coast paths are one colour by construction. Not derived from the fill: with a
+                // wash the fill IS the office's colour, and the coastline would vanish into the
+                // water it is the edge of.
                 FieldCoast.Draw(h01, buf.Width, buf.Height, island.Params.SeaLevel,
                                 halfWidthPx, style.Ink, buf);
             }

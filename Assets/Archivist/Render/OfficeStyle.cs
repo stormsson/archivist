@@ -250,17 +250,12 @@ namespace Archivist.Render
         {
             var palette = new Rgba[Bands.Count];
 
-            Rgba deep = Darken(style.Wash, 0.88);
+            Rgba deep = style.Wash.Scaled(0.88);
             for (int i = 0; i < Bands.SeaBandCount; i++)
                 palette[i] = i < 2 ? deep : style.Wash;
 
             for (int i = Bands.SeaBandCount; i < Bands.Count; i++) palette[i] = style.Paper;
             return palette;
-        }
-
-        static Rgba Darken(Rgba c, double f)
-        {
-            return new Rgba((byte)(c.R * f + 0.5), (byte)(c.G * f + 0.5), (byte)(c.B * f + 0.5), c.A);
         }
     }
 }
