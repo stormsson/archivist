@@ -79,7 +79,7 @@ which is what W0 is for.
 | **W7** | the save, narrowed | **done** — format version 3 |
 | **W9** | the render budget | **done** — R15, R21, R22 |
 | **W5** | the passive board | **done** — R17 `Q`/`E`, R24 the gate and the base underneath |
-| **W6** | loose plates, filing at the rack | **not started**, and partly blocked: there are no racks |
+| **W6** | loose plates, filing at the rack | **not started**. The rack exists (`Shelf`, `ShelfSlot`, `PF_Shelf`); what it is waiting on is the room — `../space/small_room.md` |
 | **W8** | the populated room | **not started**, blocked on two numbers |
 
 All 13 gated checks pass. Generation is **9x** faster than when this started
@@ -90,11 +90,9 @@ carrying six times the resolution.
 
 - **A7's rewrite** — still `Cost.VerySlow` and off the gate; its subject matter is
   the PCA rotation separation Q1.2 deleted.
-- **A stale `BoardInteractor`** in `POC04_Room.unity`, carrying a missing script,
-  and a `TableCanvas.interactor` field pointing at nothing. Cleared by re-running
-  the rig builder; harmless until then.
-- **The second and later `BindingAnchors`** on the table prefab, to be removed so a
-  table holds one binder (F-R19.3, settled by R20).
+- **The stale `BoardInteractor`** in `POC04_Room.unity` and **the second and later
+  `BindingAnchors`** on the table prefab (F-R19.3) are **cleared** — the scene
+  carries no missing script and the table holds one binder.
 
 ---
 
@@ -135,7 +133,7 @@ agreement to 4×10⁻⁶ m), and no `System.Random`, no wall-clock, no enum refl
 | 1 | **Antiquarian** — conform to four quarters, or keep POI detail sheets as a second class read in hand? | nothing now | postponed (`01-removal.md` §5); that office is being reworked separately |
 | 2 | **The supply** — Q7.4 / D-Q2. A pre-populated room is finite; R1.2 says the islands are not | **W8** | decides the long arc, not the model |
 | 3 | **Archive capacity** — `space/requirements.md` S3.2's missing input | **W8**, and the real room | now *computable*: plates per island at a fixed paper size |
-| 4 | **Racks** — W6 files a loose plate "at the rack" and there are none | **W6** | furniture, and downstream of (3) |
+| 4 | **The room** — W6 files a loose plate "at the rack", and there is one rack standing in a debug box | **W6** | `../space/small_room.md`; the rack itself is built |
 
 Draw order and where merge lives are settled and built. (2) and (3) are the only
 things standing between the plan and W8, and (3) has been blocking the real room
