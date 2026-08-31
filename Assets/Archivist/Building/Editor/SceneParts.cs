@@ -121,6 +121,43 @@ namespace Archivist.Building.Editor
             AssetDatabase.CreateAsset(m, path);
         }
 
+        /// <summary>
+        /// A see-through material, made once as a project asset and shared by everything that
+        /// asks for it.
+        ///
+        /// <para>URP's transparent surface is set the long way round on purpose: the shader reads
+        /// the keyword, the inspector reads the floats and the sorting reads the queue, and a
+        /// material that sets only some of them looks right in the scene view and wrong in a
+        /// build.</para>
+        /// </summary>
+        internal static Material MakeTranslucent(Shader shader, string name, Color tint)
+        {
+            var path = $"{MatDir}/{name}.mat";
+
+            var found = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (found != null) return found;
+            if (shader == null) return null;
+
+            var m = new Material(shader);
+            m.SetColor("_BaseColor", tint);
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0f);
+            if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 0f);
+            m.SetFloat("_ZWrite", 0f);
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+
+            AssetDatabase.CreateAsset(m, path);
+            AssetDatabase.SaveAssets();
+            return m;
+        }
+
         // --------------------------------------------------------------------
 
         internal static GameObject NewChild(string name, Transform parent)

@@ -103,6 +103,9 @@ namespace Archivist.Building.Shelving
 
         public int RowAmount { get { return rowAmount; } }
         public int SlotsPerRow { get { return slotsPerRow; } }
+        public float SlotWidth { get { return slotWidth; } }
+        public float SlotHeight { get { return slotHeight; } }
+        public float Depth { get { return depth; } }
 
         void Awake() { ApplyDebugVolumes(); }
 
@@ -345,9 +348,14 @@ namespace Archivist.Building.Shelving
             SceneIdentity.Mint(this, ref shelfId);
         }
 
+        /// <summary>Installed by <c>ShelfGridBuilder</c> at editor load. Building a grid is
+        /// edit-time work — dialogs, <c>Undo</c>, project assets — and lives in an assembly this
+        /// one cannot reference, but the button belongs on the component the numbers are on.
+        /// </summary>
+        public static System.Action<Shelf> Builder;
+
         /// <summary>
         /// Destroys every slot under this shelf and builds the grid again from the six numbers.
-        /// Undoable, and it asks first when there is anything to lose.
         ///
         /// <para><b>Destructive on purpose</b> — see the class comment. The alternative, an
         /// additive rebuild that leaves existing slots alone, makes the numbers a lie after the
@@ -356,146 +364,7 @@ namespace Archivist.Building.Shelving
         [ContextMenu("Rebuild slots")]
         public void RebuildSlots()
         {
-            var existing = new List<ShelfSlot>();
-            GetComponentsInChildren(true, existing);
-
-            if (existing.Count > 0 &&
-                !UnityEditor.EditorUtility.DisplayDialog(
-                    "Rebuild " + name + "?",
-                    existing.Count + " slot(s) will be destroyed and rebuilt from the current " +
-                    "numbers. Anything edited by hand — a moved slot, a deleted one, a binder " +
-                    "standing in one — goes with them.",
-                    "Rebuild", "Cancel"))
-                return;
-
-            for (int i = 0; i < existing.Count; i++)
-                if (existing[i] != null)
-                    UnityEditor.Undo.DestroyObjectImmediate(existing[i].gameObject);
-
-            Material debug = DebugMaterial();
-
-            for (int r = 0; r < rowAmount; r++)
-                for (int c = 0; c < slotsPerRow; c++)
-                    BuildSlot(r, c, debug);
-
-            Rescan();
-            ApplyDebugVolumes();
-
-            UnityEditor.EditorUtility.SetDirty(this);
-            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
-
-            Debug.Log($"[Shelf] {name}: rebuilt {rowAmount * slotsPerRow} slot(s) — " +
-                      $"{rowAmount} x {slotsPerRow}, {slotWidth:0.###} x {slotHeight:0.###} x " +
-                      $"{depth:0.###} m.", this);
-        }
-
-        void BuildSlot(int row, int column, Material debug)
-        {
-            var go = new GameObject("Slot_r" + (row + 1) + "c" + (column + 1));
-            UnityEditor.Undo.RegisterCreatedObjectUndo(go, "Rebuild shelf slots");
-
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = AnchorLocal(row, column);
-            go.transform.localRotation = Quaternion.identity;
-            go.layer = gameObject.layer;
-
-            var slot = go.AddComponent<ShelfSlot>();
-            slot.Configure(row, column, slotWidth, slotHeight, depth);
-
-            Box(go.transform, VolumeName, 1f, debug, showDebugVolumes);
-
-            // Fractionally larger, so it wraps the debug cube and the binder inside rather than
-            // fighting either for the same pixels — and it starts off, because a shelf that lit
-            // every slot at once would say nothing about which one is under the aim.
-            Box(go.transform, ShelfSlot.AimName, 1.02f, AimMaterial(), false);
-        }
-
-        /// <summary>One of a slot's two boxes: the debug cube and the aim light are the same shape
-        /// in the same place, and differ only in size, material and whether they start on.</summary>
-        void Box(Transform slot, string name, float swell, Material material, bool on)
-        {
-            // A primitive brings its own collider; the slot's own box is the one the player aims
-            // at, and a second one here would be a target that vanishes with the debug view.
-            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            DestroyImmediate(cube.GetComponent<BoxCollider>());
-
-            cube.name = name;
-            cube.transform.SetParent(slot, false);
-            cube.transform.localPosition = new Vector3(0f, slotHeight * 0.5f, -depth * 0.5f);
-            cube.transform.localScale = new Vector3(slotWidth, slotHeight, depth) * swell;
-            cube.layer = gameObject.layer;
-
-            var renderer = cube.GetComponent<MeshRenderer>();
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-            renderer.enabled = on;
-
-            if (material != null) renderer.sharedMaterial = material;
-        }
-
-        /// <summary>
-        /// The translucent material the debug cubes share, made once as a project asset.
-        ///
-        /// <para>Translucent rather than solid, and that is the point of it: a wall of forty
-        /// opaque boxes hides the shelf they are supposed to be lined up against.</para>
-        /// </summary>
-        static Material DebugMaterial()
-        {
-            return Translucent("M_ShelfSlot_Debug", "Universal Render Pipeline/Lit",
-                               new Color(0.95f, 0.75f, 0.25f, 0.18f));
-        }
-
-        /// <summary>
-        /// The aim light's material — <b>Unlit</b>, unlike the debug cube's.
-        ///
-        /// <para>A highlight that took the room's lighting would be dimmest exactly where the
-        /// shelves are darkest, which is where a player most needs to see which slot they are
-        /// pointing at. Its colour is written per slot through a property block, so the white
-        /// here is only what an untinted one would be.</para>
-        /// </summary>
-        static Material AimMaterial()
-        {
-            return Translucent("M_ShelfSlot_Aim", "Universal Render Pipeline/Unlit",
-                               new Color(1f, 1f, 1f, 0.35f));
-        }
-
-        /// <summary>
-        /// A see-through material, made once as a project asset and shared by every slot in the
-        /// room.
-        ///
-        /// <para>URP's transparent surface is set the long way round on purpose: the shader reads
-        /// the keyword, the inspector reads the floats and the sorting reads the queue, and a
-        /// material that sets only some of them looks right in the scene view and wrong in a
-        /// build.</para>
-        /// </summary>
-        static Material Translucent(string name, string shaderName, Color colour)
-        {
-            string path = "Assets/Archivist/Building/Materials/" + name + ".mat";
-
-            var found = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (found != null) return found;
-
-            Shader shader = Shader.Find(shaderName);
-            if (shader == null) return null;
-
-            var m = new Material(shader);
-            m.SetColor("_BaseColor", colour);
-            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0f);
-            if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
-
-            m.SetFloat("_Surface", 1f);
-            m.SetFloat("_Blend", 0f);
-            m.SetFloat("_ZWrite", 0f);
-            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-            m.SetOverrideTag("RenderType", "Transparent");
-            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-
-            UnityEditor.AssetDatabase.CreateAsset(m, path);
-            UnityEditor.AssetDatabase.SaveAssets();
-            return m;
+            if (Builder != null) Builder(this);
         }
 
         /// <summary>
@@ -516,13 +385,12 @@ namespace Archivist.Building.Shelving
             Gizmos.matrix = transform.localToWorldMatrix;
             Gizmos.color = new Color(0.95f, 0.75f, 0.25f, 0.65f);
 
+            Vector3 centre, size;
+            ShelfSlot.SlotBox(slotWidth, slotHeight, depth, out centre, out size);
+
             for (int r = 0; r < rowAmount; r++)
                 for (int c = 0; c < slotsPerRow; c++)
-                {
-                    Vector3 anchor = AnchorLocal(r, c);
-                    Gizmos.DrawWireCube(anchor + new Vector3(0f, slotHeight * 0.5f, -depth * 0.5f),
-                                        new Vector3(slotWidth, slotHeight, depth));
-                }
+                    Gizmos.DrawWireCube(AnchorLocal(r, c) + centre, size);
 
             Gizmos.matrix = previous;
             WarnIfScaled();

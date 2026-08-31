@@ -60,6 +60,10 @@ namespace Archivist.Building.Shelving
         /// </summary>
         public const string AimName = "Aim";
 
+        /// <summary>How much larger an aim box is than the thing it wraps, so the two do not
+        /// fight for the same pixels.</summary>
+        public const float AimSwell = 1.02f;
+
         /// <summary>Green for an act that will happen, red for one that is refused, and
         /// <b>nothing at all</b> for a slot with nothing to do. An empty slot aimed at with empty
         /// hands stays dark: the light means "this will happen if you press", so lighting a slot
@@ -182,12 +186,27 @@ namespace Archivist.Building.Shelving
             BoxCollider box = Volume;
             if (box == null) box = volume = gameObject.AddComponent<BoxCollider>();
 
-            // Behind the face, not through it. The anchor is the bottom-front-centre of the
-            // opening, so the volume runs back along -Z and up along +Y from it — which keeps
-            // a solid collider out of the aisle the player walks down.
-            box.size = new Vector3(width, height, depth);
-            box.center = new Vector3(0f, height * 0.5f, -depth * 0.5f);
+            Vector3 centre, size;
+            SlotBox(width, height, depth, out centre, out size);
+            box.center = centre;
+            box.size = size;
             box.isTrigger = false;
+        }
+
+        /// <summary>
+        /// The shape of a slot's opening in its own local metres, and the one statement of it —
+        /// the collider, the debug cube and the shelf's preview gizmo all ask here, so changing
+        /// which way a slot runs back cannot leave one of the three promising the old shape.
+        ///
+        /// <para>Behind the face, not through it: the anchor is the bottom-front-centre of the
+        /// opening, so the volume runs back along -Z and up along +Y from it — which keeps a
+        /// solid collider out of the aisle the player walks down.</para>
+        /// </summary>
+        public static void SlotBox(float width, float height, float depth,
+                                   out Vector3 centre, out Vector3 size)
+        {
+            centre = new Vector3(0f, height * 0.5f, -depth * 0.5f);
+            size = new Vector3(width, height, depth);
         }
 
         // ---- the verbs ----------------------------------------------------------------------
@@ -351,7 +370,7 @@ namespace Archivist.Building.Shelving
             go.transform.SetParent(binder.transform, false);
             go.transform.localPosition = box.center;
             go.transform.localRotation = Quaternion.identity;
-            go.transform.localScale = box.size * 1.02f;
+            go.transform.localScale = box.size * AimSwell;
 
             go.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
 
