@@ -42,23 +42,9 @@ namespace Archivist.Building.Collection
     public static class ArchiveFormat
     {
         /// <summary>The format's version, the <c>archive</c> member of the root object. A reader
-        /// that does not recognise it refuses the whole document rather than half-reading it.
-        /// </summary>
-        /// <summary>
-        /// 4. Version 1 carried a <c>boards</c> section and sheet numbers that were a
-        /// cull-dependent 1..N; version 2 carried a binder's office; version 3 knew only three
-        /// places a binder could be. A mismatched version makes the file unreadable, which is the
-        /// correct outcome — a v1 save names plates that no longer exist, and a v2 save describes
-        /// a binder model that does not.
-        ///
-        /// <para>The office is gone because a binder no longer has one (Q3.1): it names an
-        /// island and holds whatever offices' plates are in it, which is read off the contents.
-        /// The field existed for the one case that could not be inferred — an empty binder — and
-        /// empty binders do not exist (F-R19.2).</para>
-        ///
-        /// <para>The fourth place is a shelf (R4.2). A v3 save cannot describe one, so every
-        /// binder in it would come back on the floor with no warning that anything was lost —
-        /// refusing it outright says so once, loudly.</para>
+        /// that does not recognise it refuses the whole document rather than half-reading
+        /// it: a file from another version names places and fields this one does not, and paper
+        /// silently coming back somewhere else is worse than a save that says it was refused.
         /// </summary>
         public const int Version = 4;
 

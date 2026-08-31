@@ -22,11 +22,6 @@ namespace Archivist.Building.Table
     /// added, so the serif is asked of the OS by name and the sans is Unity's built-in face.
     /// Letter-spaced small caps do not exist in legacy <see cref="Text"/>, so
     /// <see cref="Spaced"/> fakes them with a space between characters.</para>
-    ///
-    /// <para>Was <c>CabinetStyle</c>, inside the cabinet it was named for. The cabinet is gone
-    /// (Q4.2) and the header outlived it; what went with the cabinet were the row, thumbnail,
-    /// section, group and snap-hint values, and the column's width fraction — the board camera
-    /// now has the whole screen.</para>
     /// </summary>
     public static class TableStyle
     {
@@ -115,8 +110,7 @@ namespace Archivist.Building.Table
         /// Letter-spaced small caps, faked. Legacy <see cref="Text"/> has no tracking, so a
         /// space goes between every character and the string is upper-cased with the invariant
         /// culture — invariant because a code like <c>CH·01</c> is an identifier and a Turkish
-        /// locale must not render it differently from an English one, which is the same reason
-        /// <see cref="SheetNaming.CodeFor"/> formats its digits invariantly.
+        /// locale must not render it differently from an English one.
         /// </summary>
         public static string Spaced(string text)
         {

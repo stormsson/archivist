@@ -90,9 +90,9 @@ namespace Archivist.Building.Table
 
         /// <summary>
         /// Board units back to ground metres — the exact inverse of <see cref="ToBoard"/>.
-        /// Pass board (X, Z), not (X, Y). This is the direction a drag runs in: the pointer
-        /// hits the board plane, and <see cref="SheetFit"/> answers in ground metres, because
-        /// the truth it compares against (<c>Sheet.CentreGround</c>) is ground.
+        /// Pass board (X, Z), not (X, Y). This is the direction a pointer hit on the board
+        /// plane runs in: the truth it is compared against (<c>Sheet.CentreGround</c>) is
+        /// ground.
         /// </summary>
         public V2 ToGround(V2 boardPoint)
         {

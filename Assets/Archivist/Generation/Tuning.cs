@@ -144,36 +144,29 @@ namespace Archivist.Generation
         public const double DefaultSheetMarginMm = 40.0;
 
 
-        // Whole-island index sheets, and the fallback when even that will not fit. Both are
-        // small-scale by construction: the point is one sheet covering the entire island, so
-        // the denominator follows the largest island rather than any paper-detail rule.
-        // 1:50000 exists only as the fallback — it is used when 1:25000 still overflows the
-        // sheet, which is why the two are named apart instead of being one clamped value.
-        /// <summary>
-        /// The middle rung of the quarter ladder (Q1.6). A quarter of an island has to fit one
-        /// A1 map area, and the two rungs that already existed are too far apart to do it: a
-        /// 6.9 km island's quarter needs about 1:6700, which 1:2500 cannot reach and 1:25000
-        /// overshoots into 73% blank paper. Three rungs — 2500, 10000, 25000 — keep R2.3's
-        /// "three or four fixed values" and give a small island, an ordinary one and a large
-        /// one each a scale that fills its sheet.
-        /// </summary>
-        /// <summary>The fine rung of the quarter ladder (Q1.6). Replaced 1:2500, which no
-        /// island's quarter could ever reach — a quarter of even a small island is kilometres
-        /// across, and 1:2500 on an A1 covers 1285 x 1902 m.</summary>
+        /// <summary>The fine rung of the quarter ladder (Q1.6). A quarter of even a small
+        /// island is kilometres across, and 1:2500 on an A1 covers only 1285 x 1902 m.</summary>
         public const int    DefaultQuarterScaleFineDenominator = 5000;
 
+        /// <summary>The middle rung of the quarter ladder (Q1.6). A quarter has to fit one A1
+        /// map area; three rungs — 5000, 10000, 25000 — keep R2.3's "three or four fixed
+        /// values" and give a small island, an ordinary one and a large one each a scale that
+        /// fills its sheet.</summary>
         public const int    DefaultQuarterScaleDenominator = 10000;
 
+        /// <summary>Whole-island index sheets, and the fallback when even that will not fit.
+        /// Both are small-scale by construction: the point is one sheet covering the entire
+        /// island, so the denominator follows the largest island rather than any paper-detail
+        /// rule. 1:50000 is reached only when 1:25000 still overflows the sheet, which is why
+        /// the two are named apart instead of being one clamped value.</summary>
         public const int    DefaultWholeIslandScaleDenominator = 25000;
         public const int    DefaultWholeIslandFallbackScaleDenominator = 50000;
 
         // --- grid (D4 / §6.4) ---
-        // D4 gave two pitches: 1000 m at 1:25000 and 200 m at 1:5000. Both are exactly
-        // 40 mm on paper, so the rule was always a paper-space one and the table was a
-        // two-row sample of it. Stated as the rule, it extends to any scale (1:2500 ->
-        // 100 m) instead of needing a new row each time a scale is added. Only D4's first
-        // row is a live case; nothing draws at 1:5000 any more, so that row is now just an
-        // illustration of the rule.
+        // D4's two pitches — 1000 m at 1:25000, 200 m at 1:5000 — are both exactly 40 mm on
+        // paper, so the rule is a paper-space one and the table was a two-row sample of it.
+        // Stated as the rule it holds at any scale, and both of D4's rows are live: 1:25000
+        // is the coarse rung and 1:5000 the fine one.
         public const double DefaultGridPitchPaperMm = 40.0;
 
         // --- service rule (D1 / §7.4) ---
@@ -181,15 +174,9 @@ namespace Archivist.Generation
         public const double DefaultServedThreshold = 0.50;
         public const double DefaultSoundingDepth = -4.0;
 
-        /// <summary>
-        /// Sampling density for a rect, as an n x n lattice. 16.
-        ///
-        /// <para><b>The cull it was named for is gone</b> — every office gets the same four
-        /// quarters and nothing decides whether a rect survives (Q1.2), so <c>RectCull</c> and
-        /// both <c>LandFractionMin</c> thresholds went with it. This survives because
-        /// <c>Editor/IslandDebugWindow</c> samples a sheet the same way to say whether it is
-        /// worth drawing, and 16 x 16 is still the right density for that.</para>
-        /// </summary>
+        /// <summary>Sampling density for a rect, as an n x n lattice. Its one caller is
+        /// <c>Editor/IslandDebugWindow</c>, which samples a sheet this way to say whether it is
+        /// worth drawing; 16 x 16 is the right density for that.</summary>
         public const int    DefaultCullSampleGrid = 16;       // 16x16 per rect
 
 
@@ -306,7 +293,8 @@ namespace Archivist.Generation
         public const double DefaultPoiCairnPeakFrac = 0.50;
 
         /// <summary>A headland is exposed: shelter at or below this (see
-        /// <see cref="ShelterMeasure"/>; 0.50 is an exposed headland, 0.84 a straight coast).</summary>
+        /// <see cref="Features.ShelterMeasure"/>; 0.50 is an exposed headland, 0.84 a straight
+        /// coast).</summary>
         public const double DefaultPoiHeadlandShelterMax = 0.55;
 
         /// <summary>A jetty needs a sheltered coast (spec §1.2, "reuse §7.2's shelter

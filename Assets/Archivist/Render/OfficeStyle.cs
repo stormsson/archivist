@@ -60,9 +60,9 @@ namespace Archivist.Render
         public readonly double Weight;
 
         /// <summary>
-        /// A flat tone laid over the water, or <see cref="Rgba.Transparent"/> for an office that
-        /// leaves the sea blank. <see cref="Washes"/> says why this is the strongest signal an
-        /// office has.
+        /// A flat tone laid over the water, zero alpha for an office that leaves the sea blank
+        /// (<see cref="HasWash"/>). The sea is the widest area on a plate, so whether it is
+        /// toned at all is the strongest far signal an office has (§4.1).
         /// </summary>
         public readonly Rgba Wash;
 

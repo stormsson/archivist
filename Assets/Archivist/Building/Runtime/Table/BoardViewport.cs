@@ -4,8 +4,8 @@ namespace Archivist.Building.Table
 {
     /// <summary>
     /// Where the board camera is looking: a zoom factor and a centre in board units, plus the
-    /// arithmetic that keeps the two honest. It is the whole of the interactive framing of
-    /// G10.1's second half — the pan that G10.1 recorded as owed and did not build.
+    /// arithmetic that keeps the two honest. The whole of the board's interactive framing
+    /// (G10.1).
     ///
     /// <para><b>C8.13 is fully superseded, and this class is what supersedes it.</b> C8.13's
     /// "no zoom, no pan" existed for absolute seating — the mounting sheet's extent was the
@@ -14,11 +14,9 @@ namespace Archivist.Building.Table
     /// described and the player cannot zoom out past it, so the original composition is a place
     /// the board returns to rather than a state it has lost.</para>
     ///
-    /// <para><b>This is view state, and it is deliberately not board state.</b> Nothing here
-    /// goes into <c>BoardStore</c>. That store holds player facts about paper — placements,
-    /// membership, frames — and §4.2 and G4.4 shape it to be persisted; a camera is not a fact
-    /// about the archive and a save that restored someone's scroll position would be saving the
-    /// wrong thing. So the viewport is made in <c>BoardView.BuildCamera</c>, dies in
+    /// <para><b>This is view state, and it is deliberately not a player fact.</b> Nothing here
+    /// is persisted: what a save holds is facts about the archive (§4.2, G4.4), and a camera is
+    /// not one. So the viewport is made in <c>BoardView.BuildCamera</c>, dies in
     /// <c>Teardown</c>, and is reset to <see cref="TableOptions.BoardZoom"/> centred on every
     /// <c>Show</c>. A player who zoomed in, closed the table and came back gets the board as the
     /// spec composes it, not as they last left it.</para>

@@ -19,19 +19,13 @@ namespace Archivist.Building.Table
     /// mounting sheet, an orthographic camera looking straight down — plus the sheets currently
     /// laid on it and one cached raster per sheet the table is allowed to offer.
     ///
-    /// <para><b>This is <c>CartographyBoardBench</c> productionised, not rewritten.</b> Slice S1
-    /// answered the one question it existed to ask — does a board of ground-scale sheets
-    /// overlapping by a fifth read, or is it a heap — with <i>it reads</i>. Every number that
-    /// produced that result is carried over unchanged, including the rotation negation below,
-    /// which is the one thing in the transform that is easy to get wrong in a way that still
-    /// looks plausible. <b>Nothing about the geometry is reopened here.</b> This class holds no
-    /// input and no UGUI, so the same board can be driven by a test, a bench or a pointer.</para>
+    /// <para><b>No input and no UGUI here</b>, so the same board can be driven by a test, a
+    /// bench or a pointer.</para>
     ///
     /// <para><b>The sheet list arrives through <see cref="ISheetSource"/> and never through the
-    /// ledger</b> (§4.3). A single <c>ledger.IssuedSheets(seed)</c> in a view makes the eventual
-    /// swap to a <c>FolderSheetSource</c> a silent hunt through the UI, because the wrong call
-    /// still compiles and still returns sheets. The default source is built here from
-    /// <c>generator.Ledger</c> and can be replaced before <see cref="Show"/>.</para>
+    /// ledger</b> (§4.3 — see <see cref="ISheetSource"/> for why that is a rule and not a
+    /// preference). The default source is built here from <c>generator.Ledger</c> and can be
+    /// replaced before <see cref="Show"/>.</para>
     ///
     /// <para><b>Rendering is off the main thread and uploads one texture per frame</b> (C5.6).
     /// Island generation is a third of a second of engine-free C# that must not happen inline,
@@ -45,15 +39,15 @@ namespace Archivist.Building.Table
     /// <c>IslandRenderer</c> pass runs once into a cached <see cref="SheetRender"/>, the upload
     /// runs once into <c>textures</c>, and slabs are built through <c>BoardSheetView</c>'s
     /// <b>borrowing</b> overload — the one that takes a <c>Texture2D</c> and does not destroy
-    /// it. Uploading twice so each object owns what it draws costs about 36 MB of duplicate
-    /// VRAM across a 48-sheet board (F-S1.3); one texture with two owners and one
-    /// <c>Destroy</c> is worse still, because destroying one slab would blank every thumbnail on
-    /// screen. <c>ownsTexture</c> is what makes the third option possible.</para>
+    /// it. The cache is the single owner: a slab that destroyed what it draws would blank every
+    /// other reader of the same raster, and a second upload per reader costs about 36 MB of
+    /// duplicate VRAM across a 48-sheet board (F-S1.3). <c>ownsTexture</c> is what makes one
+    /// texture with one owner and many readers possible.</para>
     ///
     /// <para><b>Nothing here is an asset.</b> Every mesh, material and texture is created at
     /// runtime with <c>HideFlags.DontSave</c> and destroyed in <see cref="Hide"/> and
-    /// <c>OnDestroy</c>. A cached texture is owned by nobody else: the cabinet borrows it while
-    /// the table is open and must not hold it across a close.</para>
+    /// <c>OnDestroy</c>. A cached texture dies with the board, so anything that borrows one
+    /// must not hold it across a close.</para>
     ///
     /// <para><b>There is no model</b> (Q4.1, Q4.7). A plate lies at its ground rect and
     /// nowhere else, so the board is derived from the binders on the table every time it opens.
@@ -134,10 +128,9 @@ namespace Archivist.Building.Table
         int layerIndex = -1;
 
         /// <summary>
-        /// Where the camera is looking (G10.1, and C8.13 superseded outright). Made in
-        /// <see cref="BuildCamera"/> and destroyed with the rig, which is what makes "reset on
-        /// every Show" true by construction rather than by a line someone has to remember.
-        ///
+        /// Where the camera is looking (G10.1). Made in <see cref="BuildCamera"/> and destroyed
+        /// with the rig, which is what makes "reset on every Show" true by construction rather
+        /// than by a line someone has to remember.
         /// </summary>
         BoardViewport viewport;
 
@@ -264,8 +257,7 @@ namespace Archivist.Building.Table
         /// <para><b>A covered band is unreachable, not merely hidden.</b> At zoom 1 the camera's
         /// half-height is the board's, so <c>BoardViewport</c>'s travel is zero on both axes and
         /// no pan can bring the occluded strip out from under the header — the top of the island
-        /// is simply gone. Rendering into the visible rectangle instead is the same argument the
-        /// cabinet column was answered with, and costs nothing elsewhere:
+        /// is simply gone. Rendering into the visible rectangle instead costs nothing elsewhere:
         /// <c>Camera.aspect</c>, <c>ScreenPointToRay</c> and <c>WorldToScreenPoint</c> all follow
         /// the rect, so the viewport's arithmetic is unchanged.</para>
         ///
@@ -284,9 +276,7 @@ namespace Archivist.Building.Table
         }
 
         /// <summary>The ground &lt;-&gt; board transform (§3.1). Default until <see cref="Show"/>
-        /// resolves an island; a drag handler converts a pointer hit with
-        /// <c>Space.ToGround</c> before asking <see cref="SheetFit"/> anything, because the truth
-        /// it compares against is in ground metres.</summary>
+        /// resolves an island.</summary>
         public BoardSpace Space { get; private set; }
 
         /// <summary>The camera's current zoom, in <see cref="TableOptions.BoardZoom"/>'s units:
@@ -301,11 +291,6 @@ namespace Archivist.Building.Table
         /// <summary>
         /// Slides the view by a board-unit delta, clamped so the view cannot leave the mounting
         /// sheet (see <see cref="BoardViewport"/> for the rule and for what it means at zoom 1).
-        ///
-        /// <para><b>A view transform and nothing else.</b> Nothing here touches a placement, a
-        /// group, a frame or a tolerance: <c>SheetFit</c>'s reach is in ground metres and
-        /// <c>GlowingHintRange</c> is in board units, so what fuses and what the hint covers is
-        /// exactly what it was before the pan. The board model cannot tell this happened.</para>
         /// </summary>
         public void MoveView(Vector2 deltaBoard)
         {
@@ -320,8 +305,8 @@ namespace Archivist.Building.Table
         /// move on screen — the pointer's, in practice. Clamped to
         /// <see cref="TableOptions.BoardZoomMin"/>..<see cref="TableOptions.BoardZoomMax"/>.
         ///
-        /// <para>Same guarantee as <see cref="MoveView"/>: this is the camera and nothing but
-        /// the camera. A sheet under the cursor before a notch is the same sheet under the
+        /// <para>The camera and nothing but the camera, as with <see cref="MoveView"/>. A sheet
+        /// under the cursor before a notch is the same sheet under the
         /// cursor after it, because the anchor is held fixed and because every screen-to-ground
         /// question already goes through the camera rather than around it.</para>
         /// </summary>
@@ -335,7 +320,7 @@ namespace Archivist.Building.Table
 
         /// <summary>Raised after any mutation: a sheet laid, seated or removed, a texture
         /// landing, and the board opening or closing. One event and not several because every
-        /// consumer so far — the cabinet, the header, the caption — rebuilds from the whole
+        /// consumer rebuilds from the whole
         /// board rather than reacting to a specific change, and a fine-grained event set that
         /// nothing subscribes to individually is API nobody can safely change later.</summary>
         public event Action Changed;
@@ -413,8 +398,7 @@ namespace Archivist.Building.Table
 
         /// <summary>The geometry behind an identity: centre, rotation, survey, paper. Resolved
         /// once when the board opens and held for as long as the island is, so this is a
-        /// dictionary lookup and not a walk through
-        /// <see cref="SheetLookup"/> on every drag frame.</summary>
+        /// dictionary lookup and not a walk through <see cref="SheetLookup"/>.</summary>
         bool TrySheet(SheetId id, out Sheet sheet)
         {
             return sheets.TryGetValue(id, out sheet);
@@ -482,8 +466,8 @@ namespace Archivist.Building.Table
             BuildRig();
             CollectAvailable();
 
-            // The rig is up and the cabinet has its rows; C5.7's "opens on the mounting sheet
-            // with the cabinet filling in as textures land" starts here.
+            // C5.7: the board opens on the mounting sheet and fills in as textures land, so
+            // it is showing from here.
             IsShowing = true;
             Raise();
 
@@ -508,14 +492,10 @@ namespace Archivist.Building.Table
 
         /// <summary>The board camera of §5.1: orthographic, looking down −Y.
         ///
-        /// <para><b>No longer framing the whole board, and no longer fixed</b> (G10.1,
-        /// superseding C8.13). C8.13 existed for absolute seating — the mounting sheet's extent
-        /// was the player's only clue to where a sheet belonged — and G1.9 takes that out of
-        /// scope, so the far corners carry no information, while at the old framing a Land Survey
-        /// slab was 35% of the viewport height. <see cref="BoardViewport"/> holds the framing,
-        /// <see cref="TableOptions.BoardZoom"/> is only where it starts, and
-        /// <see cref="MoveView"/> / <see cref="ZoomViewAbout"/> are the whole of what may move
-        /// it.</para>
+        /// <para><b>The framing is not this method's</b> (G10.1).
+        /// <see cref="BoardViewport"/> holds it, <see cref="TableOptions.BoardZoom"/> is where
+        /// it starts, and <see cref="MoveView"/> / <see cref="ZoomViewAbout"/> are the whole of
+        /// what may move it.</para>
         ///
         /// <para>The viewport is made <b>here</b>, with the rig, so it dies with the rig: a board
         /// reopening on the last player's zoom would be view state outliving its view.</para>
@@ -608,7 +588,7 @@ namespace Archivist.Building.Table
         ///
         /// <para>Taken once, when the board opens. Issuance does not stop because a table is
         /// open, so a crate opened afterwards can add sheets this list will not have — that is
-        /// deliberate for now: a cabinet that grew rows under the player mid-drag is a worse
+        /// deliberate for now: a board that grew plates under the player is a worse
         /// failure than one that is a delivery out of date, and nothing yet asks for the other
         /// behaviour. <c>LedgerSheetSource</c> already hands back a copy for exactly this
         /// reason, so the list here cannot be mutated underneath us either way.</para>
@@ -724,8 +704,7 @@ namespace Archivist.Building.Table
         }
 
         /// <summary>
-        /// The map, and only the map, as a texture — the cabinet's thumbnail (C5.5) and nothing
-        /// the board itself draws.
+        /// The map, and only the map, as a texture — one upload per sheet, cached here (C5.5).
         ///
         /// <para><b>The one vertical flip, again.</b> <see cref="ImageBuffer"/> is RGBA32,
         /// row-major, TOP-LEFT origin and <c>Texture2D</c> is BOTTOM-LEFT, so raw bytes come out
@@ -804,9 +783,8 @@ namespace Archivist.Building.Table
                 }
 
                 // The BORROWING overload: the slab is textured from this board's own cache
-                // rather than uploading a second copy of pixels that already exist. One raster,
-                // one upload, two readers — the slab and the cabinet thumbnail (C5.5). The slab
-                // will not destroy it; Hide()/OnDestroy() here own every cached texture.
+                // rather than uploading a second copy of pixels that already exist (C5.5). The
+                // slab will not destroy it; Hide()/OnDestroy() here own every cached texture.
                 Texture2D map;
                 if (!textures.TryGetValue(id, out map) || map == null)
                 {

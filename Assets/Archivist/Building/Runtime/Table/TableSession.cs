@@ -143,15 +143,14 @@ namespace Archivist.Building.Table
                 return;
             }
 
-            // throwIfNotFound on all four: every one of these exists in the asset today, and
-            // a typo that silently produced a null action would show up as a key that does
-            // nothing, which is the same symptom as half a dozen unrelated faults.
-            // The board's input, made if the scene has none. It is the one part of the rig that
-            // only ever existed because somebody ran the rig builder, and a scene written by a
-            // menu item drifts behind the code — this one sat a week behind it, with Q/E bound
-            // to nothing and no symptom but a key that did not work.
+            // The board's input, made if the scene has none: it is the one part of the rig that
+            // exists only because somebody ran the rig builder, and a scene written by a menu
+            // item drifts behind the code with no symptom but a key that does not work.
             BoardControls.EnsureInScene(inputActions);
 
+            // throwIfNotFound on all four: every one of these exists in the asset today, and a
+            // typo that silently produced a null action would show up as a key that does nothing
+            // — the same symptom as half a dozen unrelated faults.
             playerMap = inputActions.FindActionMap("Player", throwIfNotFound: true);
             tableMap = inputActions.FindActionMap("Table", throwIfNotFound: true);
             uiMap = inputActions.FindActionMap("UI", throwIfNotFound: true);
@@ -284,9 +283,8 @@ namespace Archivist.Building.Table
         /// argument, "which cabinet is this?" is answered by whoever opened it and cannot be
         /// inherited.</para>
         ///
-        /// <para>This is §4.3's seam used as designed, keeping <see cref="ISheetSource"/>'s rule
-        /// intact: nothing in the UI layer references <c>SheetLedger</c> directly. The session is
-        /// the composition root that constructs the source and hands it in.</para>
+        /// <para>The session is the composition root <see cref="ISheetSource"/>'s rule requires:
+        /// it constructs the source and hands it in.</para>
         ///
         /// <para><paramref name="source"/> may be null, and null is not an error: it means
         /// "leave the board's source alone", which is what the one-argument overload exists to

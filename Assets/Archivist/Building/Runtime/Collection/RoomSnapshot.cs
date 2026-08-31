@@ -34,7 +34,7 @@ namespace Archivist.Building.Collection
     /// <summary>
     /// One binder as a value: which binder it is, what is filed in it, and where it lies.
     ///
-    /// <para><b>Contents are identities</b> (R1.11) — the same list <see cref="BinderView"/>
+    /// <para><b>Contents are identities</b> (R1.11) — the same list a <c>BinderView</c>
     /// holds, in filing order, because a binder that reordered itself between two sessions would
     /// make the same pile of paper look like a different one.</para>
     /// </summary>

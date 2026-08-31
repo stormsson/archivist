@@ -610,8 +610,13 @@ an office from, so if the field does not survive the file it is gone.
 
 - **`SheetNaming` printed a quarter as `02`.** A plate's number *is* its corner
   (Q1.1), so the code line named a series that does not exist and hid the one fact
-  a player places it by. It reads `HY·NE` now, falling back to two digits outside
-  1..4 — which is a detail sheet, and would be a plate from some future cut.
+  a player places it by. The `HY·NE` formatter written to fix it was never wired to
+  anything and has since been removed with the rest of the file's dead surface
+  (`SheetNaming` is now `OfficeLabels`, 263 lines to 59); the header builds its
+  label from `PrefixFor` + `Separator` and does not show the corner at all. The
+  finding stands and is **not** addressed: if a plate header is to carry its corner,
+  `HY·NE` is the form, falling back to two digits outside 1..4 — which is a detail
+  sheet, and would be a plate from some future cut.
 - **`SheetTestBench` summoned `LandSurvey:7`.** A survey has four sheets. The
   bench found nothing and said nothing.
 - **The bench also poured every office into one folder**, which `BinderView` now

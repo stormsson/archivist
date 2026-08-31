@@ -25,9 +25,9 @@ namespace Archivist.Generation
     /// nesting by column, which is exactly the rule that makes hand-edited YAML fail in ways
     /// people cannot see. Here a line ending in a colon opens a section and every
     /// <c>key: value</c> after it belongs to that section however it is indented. The section
-    /// is only ever used to tell the author they have filed a key somewhere surprising —
-    /// <see cref="Tuning.SectionOf"/> is the authority on where a key really lives — so
-    /// getting it wrong costs a warning, never a wrong number.</para>
+    /// is only ever used to tell the author they have filed a key somewhere surprising: a key
+    /// is matched by its name alone, so getting the section wrong costs a warning, never a
+    /// wrong number.</para>
     /// </summary>
     public static class Yaml
     {

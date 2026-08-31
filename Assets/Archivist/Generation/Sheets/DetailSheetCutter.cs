@@ -6,10 +6,9 @@ using Archivist.Generation.Geometry;
 namespace Archivist.Generation.Sheets
 {
     /// <summary>
-    /// POC-03 spec §2 — the detail sheet cutter, and the third cutter beside
-    /// <see cref="SurveyCutter"/>'s lattice and <see cref="CoastWalkCutter"/>'s shore walk.
-    /// The simplest of the three: <b>one small sheet per qualifying POI, centred on it, seeded
-    /// rotation, no walking and no tiling</b>.
+    /// POC-03 spec §2 — the detail sheet cutter, beside <see cref="QuarterCutter"/>'s four
+    /// fixed rects: <b>one small sheet per qualifying POI, centred on it, seeded rotation, no
+    /// tiling</b>.
     ///
     /// <para>What a detail sheet is: one thing, drawn close, with just enough of its
     /// surroundings to say where it was (requirements §1). It gives no position — no grid
@@ -39,7 +38,7 @@ namespace Archivist.Generation.Sheets
         /// <param name="spec">
         /// The Antiquarian survey spec — <see cref="SheetFormat.DetailSheet"/> at
         /// <see cref="MapScale.PoiDetail"/>. Its <c>RotationDeg</c> is nominal: every sheet
-        /// carries its own (§2.2), the same arrangement <see cref="CoastWalkCutter"/> uses.
+        /// carries its own (§2.2).
         /// </param>
         public static Survey Cut(IReadOnlyList<Poi> pois, ServiceRule service, SurveySpec spec)
         {
@@ -110,10 +109,6 @@ namespace Archivist.Generation.Sheets
         /// An axis angle, folded into [0, 180) and quantised. A rect and the same rect turned
         /// half a turn are the same rect, so 190° and 10° must be one value or two islands with
         /// the same geometry would digest differently.
-        ///
-        /// <para>Was <c>Rotations.NormaliseAxisDeg</c>, in <c>SurveyCutter</c>. The quarter cut
-        /// has no rotation at all (Q1.2), so the rest of that class went with the cutter and
-        /// this — its one surviving caller's one need — came here.</para>
         /// </summary>
         static double NormaliseAxisDeg(double deg)
         {

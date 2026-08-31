@@ -229,14 +229,14 @@ namespace Archivist.Generation.Field
         }
 
         /// <summary>
-        /// §5.2: <c>(h01 - SeaLevel) / (1 - SeaLevel) * MaxElevation</c> above sea,
+        /// Elevation for an already-known Height01. §5.2:
+        /// <c>(h01 - SeaLevel) / (1 - SeaLevel) * MaxElevation</c> above sea,
         /// <c>(h01 - SeaLevel) / SeaLevel * MaxDepth</c> below. Both branches are 0 at sea level,
         /// so the field is continuous across the coast; below sea the numerator is negative, which
         /// is what makes the depth negative.
-        /// </summary>
-        /// <summary>
-        /// Elevation for an already-known Height01. Public so a renderer that INTERPOLATES
-        /// h01 between coarse samples can convert without re-evaluating the field.
+        ///
+        /// <para>Public so a renderer that INTERPOLATES h01 between coarse samples can convert
+        /// without re-evaluating the field.</para>
         /// </summary>
         public double ElevationFrom(double h01)
         {

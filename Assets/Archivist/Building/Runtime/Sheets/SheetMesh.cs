@@ -7,11 +7,11 @@ namespace Archivist.Building.Sheets
     /// A sheet of paper as a solid slab: a box with its underside at local y = 0, so
     /// positioning one means "put its underside here" rather than "put its middle here".
     ///
-    /// <para><b>Why a solid, and why not two planes.</b> A sheet used to be a flat quad for the
-    /// paper and a second flat quad 0.2 mm above it for the map. Two almost-coplanar surfaces
-    /// is the textbook z-fighting setup, and it flickered at grazing angles — which is the
-    /// angle a sheet on the floor is always seen at. The map is now composited into the paper
-    /// texture, so a sheet is <i>one</i> surface and cannot fight itself at any separation.</para>
+    /// <para><b>Why a solid, and why not two planes.</b> A paper quad with a map quad 0.2 mm
+    /// above it is the textbook z-fighting setup, and it flickers at grazing angles — which is
+    /// the angle a sheet on the floor is always seen at. The map is composited into the paper
+    /// texture instead, so a sheet is <i>one</i> surface and cannot fight itself at any
+    /// separation.</para>
     ///
     /// <para>Thickness then does the rest: sheets stack with real clearance instead of relying
     /// on sub-millimetre offsets to stay apart.</para>
@@ -72,13 +72,11 @@ namespace Archivist.Building.Sheets
                         outward, EdgeUv, EdgeUv, EdgeUv, EdgeUv);
             }
 
-            // DontSave, and it is load-bearing. A sheet GameObject carries
-            // HideFlags.DontSaveInEditor so it can never be written into a scene, which also
-            // takes it out of the serialized object graph. Anything it is the only owner of
-            // therefore looks unreferenced to UnloadUnusedAssets on the next play-mode
-            // transition or domain reload, and gets collected — leaving a sheet that is
-            // positioned, parented, enabled and visible, and draws nothing at all.
-            // SheetView destroys these itself in OnDestroy, so nothing leaks.
+            // DontSave, and it is load-bearing. This mesh has no owner in any serialized
+            // object graph — only the renderer SheetView puts it on — so without the flag
+            // UnloadUnusedAssets collects it on the next play-mode transition or domain reload,
+            // leaving a sheet that is positioned, parented, enabled and visible and draws
+            // nothing at all. SheetView destroys it in OnDestroy, so nothing leaks.
             var mesh = new Mesh { name = name, hideFlags = HideFlags.DontSave };
             mesh.SetVertices(verts);
             mesh.SetNormals(norms);

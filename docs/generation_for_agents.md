@@ -120,7 +120,11 @@ Named streams currently in use — do not repurpose:
 `character`, `radius`, `field`, `falloff`, `settlements`, `rivers`[peakIndex],
 `names`, `names.island`, `names.settlements`[i], `names.peaks`[i],
 `wholeIsland`, `year`[office], `yearWholeIsland`[office],
-`poi`, `poi.kind`, `poi.sheet`[poiIndex], `coastRegion`.
+`poi`, `poi.kind`, `poi.sheet`[poiIndex].
+
+Named and **reserved** — claimed so the work can be added later without disturbing
+any existing feature, and equally not to be repurposed: `palette`, `peaks`,
+`coastRegion`.
 
 **They are constants now — `Determinism/StreamNames.cs`.** Call `Streams.For(seed,
 StreamNames.Poi)`, never `Streams.For(seed, "poi")`. The purpose string is seed
@@ -139,10 +143,9 @@ The three literals still spelled out in the suite — `"some.future.purpose"`,
 exist to prove that an *unregistered* stream leaves the island bit-identical
 (§4.3), so naming them would defeat the test.
 
-`coastRegion` seeds the Hydrographic coast-walk survey region — the anchor point
-on the main shore and the disc radius around it (`CoastRegionRadiusMin/Max` in
-`Tuning.cs`, and the comment above them explaining why the survey is a region
-rather than an arc per loop).
+`coastRegion` is drawn from by nothing: the quarter cut is a pure function of
+`LandBounds` and consumes no sub-stream (Q1.2). The name stays claimed because a
+purpose that has ever been drawn from must never come to name anything else.
 
 ⚠ `year`[office] and `yearWholeIsland`[office] are indexed by `(int)Office`, and
 `wholeIsland` draws `Range(0, 3)` — **not** `Offices.Count`. Renumbering the

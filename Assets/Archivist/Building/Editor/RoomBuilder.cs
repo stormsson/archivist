@@ -51,10 +51,6 @@ namespace Archivist.Building.Editor
             SceneParts.BuildGenerator(out generator, out spawner, out binders);
             SceneParts.BuildMapCrate(generator, spawner, binders);
 
-            // The hands used to be closed back to the spawner here — they held it so a dropped
-            // sheet could ask it where to land. A carried thing answers that itself now
-            // (ICarryable), so the loop is gone and nothing is wired after the fact.
-
             SceneParts.ApplyEnvironment();
 
             EditorSceneManager.MarkSceneDirty(scene);

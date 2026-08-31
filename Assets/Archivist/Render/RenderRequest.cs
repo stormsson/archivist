@@ -44,11 +44,6 @@ namespace Archivist.Render
         /// <c>PixelsPerPaperMm * 1000 / PixelsPerMetre</c> — but that is a division whose result
         /// has to be rounded back to an integer denominator, and a grid drawn at 1:9999 would be
         /// a bug nobody could see.</para>
-        ///
-        /// <para><b>Defaulted to 0 in the constructor.</b> That was a trap once — a rebuild that
-        /// forgot to name it dropped the grid from every plate in the game (F-R13.2) — and the
-        /// answer is <see cref="WithLayers"/>: nothing rebuilds a request field by field any
-        /// more, so nothing can forget a field again.</para>
         /// </summary>
         public readonly int ScaleDenominator;
 
@@ -65,10 +60,11 @@ namespace Archivist.Render
         /// field by field.</b>
         ///
         /// <para><c>IslandRenderer</c> needs one bit cleared before it hands the request to
-        /// <c>Strokes</c>, and it used to do that by naming every field into a new struct — so
-        /// when <see cref="ScaleDenominator"/> arrived it was silently dropped, and the Garrison
-        /// grid drew nothing on every plate in the game (F-R13.2). A copy that changes one thing
-        /// cannot forget the others, and this stays correct as fields are added.</para>
+        /// <c>Strokes</c>. Naming every field into a new struct instead silently drops whichever
+        /// field was added last — that is F-R13.2, where <see cref="ScaleDenominator"/> went
+        /// missing and the Garrison grid drew nothing on every plate in the game. A copy that
+        /// changes one thing cannot forget the others, and stays correct as fields are
+        /// added.</para>
         /// </summary>
         public RenderRequest WithLayers(LayerMask layers)
         {
@@ -129,10 +125,10 @@ namespace Archivist.Render
             // the ground origin, so its POSITION must survive. Normalising it to (0,0,W,H)
             // renders a correctly-sized, correctly-rotated rectangle of the WRONG GROUND.
             Rect2 frame = sheet.FrameRect;
-            // sheet.RotationDeg, NOT spec.RotationDeg. Since the Hydrographic coast-walk
-            // (D-H2) the survey's rotation is nominal and each sheet carries its own — and
-            // FrameRect is already computed from the per-sheet value, so taking the survey's
-            // here would rotate the sampling frame away from the rect it is meant to fill.
+            // sheet.RotationDeg, NOT spec.RotationDeg. The survey's rotation is nominal: only
+            // detail sheets are rotated at all (Q1.2) and the per-sheet value governs. FrameRect
+            // is already computed from it, so taking the survey's here would rotate the sampling
+            // frame away from the rect it is meant to fill.
             return new RenderRequest(frame, sheet.RotationDeg, pxPerMetre, pixelsPerPaperMm,
                                      layers, spec.Scale.Denominator);
         }

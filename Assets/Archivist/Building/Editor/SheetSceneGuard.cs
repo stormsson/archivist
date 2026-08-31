@@ -24,28 +24,19 @@ namespace Archivist.Building.Editor
     /// rule about the same fact, so it is enforced in the same place rather than in a second
     /// guard that could be added, removed or forgotten independently.</para>
     ///
-    /// <para>Deliberately a visible hook rather than a hideFlag. Sheets used to carry
-    /// <c>HideFlags.DontSaveInEditor</c>, which achieved the same thing by making them
-    /// invisible to Unity's own bookkeeping — and then their meshes were collected as
-    /// unreferenced, <c>FindObjectsByType</c> stopped returning them, and they disappeared
-    /// from the Hierarchy while still standing in the room. A save hook does one thing, says
-    /// what it does, and leaves a sheet an ordinary GameObject the rest of the time.</para>
+    /// <para>Deliberately a visible hook rather than a hideFlag on the sheets. Hiding them from
+    /// Unity's own bookkeeping keeps them out of the file too, and takes the Hierarchy, mesh
+    /// ownership and <c>FindObjectsByType</c> with it. A save hook does one thing, says what it
+    /// does, and leaves a sheet an ordinary GameObject the rest of the time.</para>
     /// </summary>
     [InitializeOnLoad]
     static class SheetSceneGuard
     {
         /// <summary>
-        /// Destroys every sheet in memory, including ones that belong to no scene.
-        ///
-        /// <para>Sheets spawned while <c>HideFlags.DontSaveInEditor</c> was in force were
-        /// never registered with a scene. That makes them invisible to the Hierarchy, to
-        /// <c>FindObjectsByType</c>, and to <c>Scene.GetRootGameObjects</c> — and it means a
-        /// scene reload does not destroy them, because there is no scene to unload them from.
-        /// They render, they collide, and nothing ordinary can reach them. Only
-        /// <c>Resources.FindObjectsOfTypeAll</c> returns them.</para>
-        ///
-        /// <para>The flag is gone, so nothing new can end up like this. This exists to sweep
-        /// up what it left behind.</para>
+        /// Destroys every sheet in memory, including any belonging to no scene. A sheet
+        /// registered with no scene renders and collides but survives a scene reload and is
+        /// reachable by nothing but <c>Resources.FindObjectsOfTypeAll</c>; this is the only
+        /// sweep that gets one out of the room.
         /// </summary>
         [MenuItem("Archivist/Quick · Purge Orphan Sheets")]
         public static void PurgeOrphans()

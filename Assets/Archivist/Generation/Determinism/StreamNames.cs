@@ -107,5 +107,13 @@ namespace Archivist.Generation.Determinism
         /// which <c>Poc02Acceptance</c> asserts by drawing from it. Do not repurpose it.
         /// </summary>
         public const string Palette = "palette";
+
+        /// <summary>
+        /// Reserved. Deliberately unused: the quarter cut is a pure function of
+        /// <c>LandBounds</c> and consumes no sub-stream (Q1.2). The name stays claimed because
+        /// <see cref="StreamNames"/>'s rule is that names are stable — a purpose that has ever
+        /// been drawn from must never name anything else. Do not repurpose it.
+        /// </summary>
+        public const string CoastRegion = "coastRegion";
     }
 }

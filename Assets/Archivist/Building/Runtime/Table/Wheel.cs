@@ -4,9 +4,7 @@ namespace Archivist.Building.Table
 {
     /// <summary>
     /// One reading of the mouse wheel, in notches. The single place the table states what a
-    /// wheel event means, because there are two things on this table a wheel drives — the
-    /// board's zoom and the cabinet's accordion — and they must not disagree about the
-    /// hardware.
+    /// wheel event means, so nothing a wheel drives here can disagree about the hardware.
     ///
     /// <para><b>The Input System does not normalise scroll, and that is the whole reason this
     /// file exists.</b> On Windows one detent is <c>WHEEL_DELTA</c>, 120. On macOS and Linux a
@@ -24,7 +22,7 @@ namespace Archivist.Building.Table
     ///
     /// <para><b>Read the device, not the event.</b> Callers pass the raw
     /// <c>Mouse.scroll.ReadValue().y</c> even when they are inside a UGUI
-    /// <c>IScrollHandler</c> — see <see cref="CabinetPanel"/>. <c>PointerEventData.scrollDelta</c>
+    /// <c>IScrollHandler</c>. <c>PointerEventData.scrollDelta</c>
     /// has already been through <c>InputSystemUIInputModule</c>'s own normalisation, so taking
     /// it would mean two different units on one table and two sensitivities to keep in step.
     /// The event is used for <i>where the pointer is</i>; the device is used for <i>how far the

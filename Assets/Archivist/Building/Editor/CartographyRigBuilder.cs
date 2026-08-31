@@ -60,8 +60,7 @@ namespace Archivist.Building.Editor
                 ("generator", (Object)generator),
             });
 
-            // Q/E. Where BoardInteractor used to sit, holding the one part of its job that was
-            // never about placement — and no longer the camera, which is fixed (BoardZoom 1).
+            // Q/E only: the board camera is fixed (BoardZoom 1), so there is nothing to zoom.
             Wire(controls, new[]
             {
                 ("board", (Object)board),
@@ -88,14 +87,6 @@ namespace Archivist.Building.Editor
                       "The scene is NOT saved.", session);
         }
 
-        /// <summary>
-        /// Opens the table from a menu, in play mode, without a keypress.
-        ///
-        /// <para>Exists because the two real ways in — aiming at the table, or the C shortcut —
-        /// both need input, and input is exactly what a harness cannot supply. This drives the
-        /// same <c>TableSession.OpenCurrentIsland</c> the keypress does, so a table that opens
-        /// here opens there; it is not a parallel path.</para>
-        /// </summary>
         /// <summary>
         /// Issues sheets into the ledger <b>without rendering any of them</b>, so a table has
         /// something to show.
@@ -136,6 +127,12 @@ namespace Archivist.Building.Editor
             Debug.Log($"[RigBuilder] Issued {issued} sheet(s) of {island.Name} — {holding}");
         }
 
+        /// <summary>
+        /// Opens the table from a menu, in play mode, without a keypress: the two real ways in
+        /// — aiming at the table, or the C shortcut — both need input, and input is what a
+        /// harness cannot supply. It drives the same <c>TableSession.OpenCurrentIsland</c> the
+        /// keypress does, so it is not a parallel path.
+        /// </summary>
         [MenuItem("Archivist/Cartography Table · Open Now")]
         public static void OpenNow()
         {

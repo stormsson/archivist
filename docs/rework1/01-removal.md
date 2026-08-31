@@ -439,6 +439,6 @@ for the tuning digest, and neither table carries a key the file does not.
 
 | where | was | now |
 |---|---|---|
-| `Table/SheetNaming.cs` | formatted a quarter as `02` | `HY·NE`; two digits only outside 1..4, which is a detail sheet |
+| `Table/SheetNaming.cs` | formatted a quarter as `02` | the formatter is gone with the file (now `Table/OfficeLabels.cs`): nothing ever called it, and the header builds its own label from `PrefixFor` + `Separator`. If a plate header is to carry its corner, `HY·NE` is the form to rebuild — two digits only outside 1..4, which is a detail sheet |
 | `Building/Editor/SheetTestBench.cs` | summoned `LandSurvey:7` | `LandSurvey:2`; a survey has four sheets |
 | `Building/Editor/CartographyBoardBench.cs` | described sheets overlapping "by a fifth" | records that its question was answered by F-S1.1 and its subject is gone |

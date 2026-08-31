@@ -68,9 +68,6 @@ namespace Archivist.Building.Editor
 
             Transform anchor = crate != null ? crate.transform : spawner.transform;
 
-            // One binder per office, the way a crate delivers (Q3.1). The bench used to make
-            // one folder and pour everything into it, which BinderView now refuses — and
-            // refuses correctly, because that folder was three offices wearing one label.
             // One folder for the lot: a binder names an island and may hold every office of it
             // (Q3.1). The bench is not modelling how a delivery is split — the crate does that —
             // it is summoning something to look at.

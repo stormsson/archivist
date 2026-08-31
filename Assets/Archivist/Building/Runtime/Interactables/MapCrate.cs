@@ -13,44 +13,19 @@ using Archivist.Render;
 namespace Archivist.Building.Interactables
 {
     /// <summary>
-    /// The crate. Aim at it, press the key, and an island comes into existence — unseen,
-    /// unmapped, and never drawn as a whole — followed by a <b>binder</b> of its sheets.
-    ///
-    /// <para><b>The island stays hidden on purpose, and not merely for the POC.</b> There is
-    /// no world geometry above an island and no spatial relationship between islands (§3.1);
-    /// the sea they sit in is never drawn. The island exists as vector data that sheets are
-    /// cut from, and the player's only access to it is paper. Showing it would answer the
-    /// question the whole game is about.</para>
+    /// The crate. Aim at it, press the key, and an island comes into existence — unseen and
+    /// never drawn as a whole (§3.1) — followed by a <b>binder</b> of its sheets.
     ///
     /// <para><b>A delivery is one binder</b> (§13, D-C1): the player's physical item is the
-    /// folder, never the sheet. Loose paper is N things to pick up one at a time and, once racks
-    /// exist, N things to file individually, for a game whose unit of work is a document rather
-    /// than a page. One binder is also one object to carry, one to shelve, and one for a map
-    /// table to take its island from (C4.2).</para>
+    /// folder, never the sheet, for a game whose unit of work is a document rather than a page.
+    /// One binder is also one object to carry, one to shelve, and one for a map table to take
+    /// its island from (C4.2).</para>
     ///
-    /// <para><b>Except for one loose sheet, which is a debug affordance and says so.</b>
-    /// Nothing can yet take a sheet <i>out</i> of a binder, so without a sheet somewhere in
-    /// the room there is nothing to test "file this into that" against when it is built. It is
-    /// a real, issued sheet of the same island — not a fake — so the verb, when it exists,
-    /// will be exercised against the real thing. Turn <c>looseDebugSheet</c> off and the crate
-    /// delivers a binder and nothing else, which is what it should eventually do.</para>
-    ///
-    /// <para><b>The delivery is a fixed debug set</b>, and a debug set is all it is — this is a
-    /// development tool, not the game's supply (Q7.2), and Q7.1 has the collection already in the
-    /// room. One opening puts down <b>one folder holding a whole island</b>, every office in it,
-    /// and <b>two folders of a second island</b> with one office each.</para>
-    ///
-    /// <para>Those are the two cases a table has to handle. The full folder shows three layers
-    /// on a table that takes one binder, so <c>Q</c>/<c>E</c> has something to cycle without
-    /// anything being merged first (Q3.4, Q4.5). The pair is what a merge is tried on — and,
-    /// being a different island from the first folder, is also what a merge has to refuse.</para>
-    ///
-        /// <para><c>everySheetOfTheIsland</c> files the whole survey into the delivery, so a table
-    /// can be composed in full. It is the opposite of what the crate is for — the count is what
-    /// makes the ledger's exclusion visible, and an archive whose islands arrive complete has no
-    /// backlog — hence TEMPORARY in the Inspector. The loose debug sheet still comes out of that
-    /// total, so filing it completes the island: a better test of the filing verb than a spare
-    /// sheet from an island nobody has laid out.</para>
+    /// <para><b>What it delivers is a debug set, not the game's supply</b> (Q7.2; Q7.1 has the
+    /// collection already in the room). <c>everySheetOfTheIsland</c>, <c>looseDebugSheet</c> and
+    /// <c>openNewIslandEachTime</c> are debug settings and each defaults to on, so each hides
+    /// something the game is about: an archive whose islands arrive complete has no backlog, and
+    /// nothing in the design puts a loose sheet on the floor.</para>
     /// </summary>
     public sealed class MapCrate : Interactable
     {
@@ -95,9 +70,7 @@ namespace Archivist.Building.Interactables
 
         /// <summary>
         /// R1.8: generation takes long enough to be a state, so the crate says so. The reason
-        /// travels in the refusal and no longer in the label — this class was the one that
-        /// smuggled "Working…" through <c>Label</c> for want of anywhere else to put it, and
-        /// <see cref="InteractionState"/> records why that was tolerable exactly once.
+        /// travels in the refusal, never in the label — see <see cref="InteractionState"/>.
         /// </summary>
         public override InteractionState CanInteract(PlayerInteractor by)
         {
@@ -375,12 +348,7 @@ namespace Archivist.Building.Interactables
         }
 
         /// <summary>
-        /// Rasterises an explicit list of sheets. Split out so that a case can be reproduced
-        /// by naming its sheets instead of hoping the picker chooses them again — which is the
-        /// difference between a bug you can look at and a bug you have to wait for.
-        /// </summary>
-        /// <summary>
-        /// The same, for a board: sheets rendered at a target GROUND resolution rather than a
+        /// Rasterises an explicit list of sheets, for a board: sheets rendered at a target GROUND resolution rather than a
         /// paper one, because a board lays every plate at its ground size and a chart at
         /// 1:25000 would otherwise come out softer than a quarter at 1:10000. See
         /// <c>RenderRequest.ForSheetAtGroundResolution</c>.
@@ -391,6 +359,11 @@ namespace Archivist.Building.Interactables
             return Render(island, sheets, pixelsPerMetre, true);
         }
 
+        /// <summary>
+        /// Rasterises an explicit list of sheets at a paper resolution. Taking the list rather
+        /// than a count is what lets a case be reproduced by naming its sheets instead of hoping
+        /// the picker chooses them again.
+        /// </summary>
         public static List<SheetRender> Render(Island island, IList<Sheet> sheets,
                                                double pixelsPerPaperMm)
         {

@@ -283,9 +283,7 @@ namespace Archivist.Building.Interactables
 
             if (held != null) return InteractionState.Unavailable;
 
-            // C8.1, finally able to be true. It refused nothing before this because the table
-            // had no contents to refuse for, and "no binders on this table" would have been a
-            // permanent state dressed up as a temporary one.
+            // C8.1: an empty table has no board to open.
             if (placed.Count == 0)
                 return InteractionState.Refused("Nothing on this table");
 
@@ -371,7 +369,7 @@ namespace Archivist.Building.Interactables
         /// a new roll would not be it. The pile is rebuilt in the order the file lists, so the
         /// anchor is taken as given rather than counted.</para>
         ///
-        /// <para>The island check is <see cref="Add"/>-shaped and deliberate: C4.3 says a table
+        /// <para>The island check is <see cref="Place"/>-shaped and deliberate: C4.3 says a table
         /// carries one island, and a save that claimed otherwise is a save that would bind this
         /// table to whichever binder happened to be written first.</para>
         /// </summary>

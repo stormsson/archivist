@@ -8,9 +8,7 @@ namespace Archivist.Building.Table
     ///
     /// <para><b>One asset.</b> These numbers are read from a board space, a draw-order stack, a
     /// texture budget and an input handler, none of which owns them; scattered, there is no
-    /// place to answer "what is this table set to". Two of them are also the
-    /// <i>same</i> number seen twice (C5.5: the board slab and the cabinet thumbnail share one
-    /// render, so they must share one pixel density or the cache silently renders twice).</para>
+    /// place to answer "what is this table set to".</para>
     ///
     /// <para><b>A ScriptableObject rather than consts</b>, for the reason
     /// <see cref="Archivist.Building.Handling.HandlingOptions"/> gives: these are feel values,
@@ -35,34 +33,10 @@ namespace Archivist.Building.Table
         public const float DefaultSheetSeparation = 0.004f;
 
         /// <summary>
-        /// Where the board camera starts, as a divisor of "the whole board fits" (§3.1, C5.1).
-        /// 1 is C8.13's original framing; 2 draws every sheet at twice the size.
-        ///
-        /// <para><b>C8.13 is superseded outright, both halves</b> (G10.1,
-        /// <see cref="BoardViewport"/>). This is no longer the board's framing but only where the
-        /// framing <b>starts</b>: the wheel moves it between <see cref="BoardZoomMin"/> and
-        /// <see cref="BoardZoomMax"/> and a right-drag pans, and both reset to this number on
-        /// every opening, because a camera is not a player fact and does not belong in
-        /// <c>BoardStore</c> (§4.2, G4.4).</para>
-        ///
-        /// <para><b>Why 2 rather than 1 as the resting view.</b> At 1 a Land Survey slab is 35%
-        /// of the viewport height on island 0 — small paper for the thing the whole activity
-        /// consists of reading — and at 2 it is 70%. The cost G10.1 named is now paid rather
-        /// than deferred: at 2 the camera shows half the board's height and width, so roughly
-        /// three quarters of the mounting sheet is off screen, and a group retrieved from the
-        /// drawer or a board restored from a save can put paper outside the view. Panning is
-        /// what reaches it.</para>
-        /// </summary>
-        /// <summary>
-        /// 1, which is <see cref="DefaultBoardZoomMin"/> — the whole board, framed as C8.13
-        /// composed it, and as far out as the camera goes.
-        ///
-        /// <para><b>Was 2.</b> The board is a thing to look at rather than to work on (Q4.1,
-        /// Q4.2): nothing is placed, so there is nothing to lean in on, and an island that
-        /// opened half in frame asked the player to pan before they could see what they had
-        /// come to see. At 1 the pan travel is zero by construction
-        /// (<c>max(0, boardHalf - viewHalf)</c>), so the framing is fixed rather than merely
-        /// starting there.</para>
+        /// Where the board camera starts, as a divisor of "the whole board fits" (§3.1, C5.1):
+        /// 1, which is also <see cref="DefaultBoardZoomMin"/>. At 1 the pan travel is zero by
+        /// construction (<c>max(0, boardHalf - viewHalf)</c>), so this is a fixed framing rather
+        /// than merely where the framing starts.
         /// </summary>
         public const float DefaultBoardZoom = 1f;
 
@@ -83,15 +57,14 @@ namespace Archivist.Building.Table
         /// <summary>
         /// The zoom-in stop. 4, and the ceiling is the <b>raster</b>, not the geometry.
         ///
-        /// <para>C5.5 renders one texture per sheet at <see cref="BoardPixelsPerMetre"/> —
-        /// 0.6 px per millimetre of paper — and it serves both the board slab and the cabinet
-        /// thumbnail, so there is no second, finer copy to zoom into. At 1:2500 that works out
+        /// <para>C5.5 renders one texture per sheet at <see cref="BoardPixelsPerMetre"/> and
+        /// there is no second, finer copy to zoom into. At 1:2500 that works out
         /// at 24 texels per board unit, and on a 1080-high viewport island 0's board draws
         /// 19.67 screen pixels per board unit at zoom 1 — so texel parity, one screen pixel per
-        /// texel, falls at zoom 1.22. Every zoom this table has ever shipped is already
-        /// magnifying. At the default 2 one texel covers 1.6 screen pixels; at 4 it covers 3.3,
-        /// which is about where paper stops reading as paper and starts reading as pixels. Past
-        /// that the player is being shown the render settings.</para>
+        /// texel, falls at zoom 1.22, and everything above it is magnification. At 2 one texel
+        /// covers 1.6 screen pixels; at 4 it covers 3.3, which is about where paper stops
+        /// reading as paper and starts reading as pixels. Past that the player is being shown
+        /// the render settings.</para>
         ///
         /// <para>4 also lands on a framing that means something: it puts 13.73 board units
         /// across the viewport's height on island 0, and a Land Survey A1 slab is 12.85 units
@@ -107,18 +80,16 @@ namespace Archivist.Building.Table
         /// sixteenth at zoom 4, so the same notch feels violent zoomed out and glacial zoomed
         /// in; a constant ratio is the same apparent step everywhere.
         ///
-        /// <para>1.15 puts the full range at about 10 notches — five either side of the default
-        /// 2 — which is one comfortable sweep of a wheel from stop to stop without being able to
-        /// cross it by accident.</para>
+        /// <para>1.15 puts the full range at about 10 notches, which is one comfortable sweep of
+        /// a wheel from stop to stop without being able to cross it by accident.</para>
         /// </summary>
         public const float DefaultBoardZoomStep = 1.15f;
 
         /// <summary>
         /// How many notches one raw unit of wheel travel is worth, after <see cref="Wheel"/>
-        /// has bucketed the reading. <b>The device dial, and it is one dial for both wheels</b>
-        /// — the board's zoom and the cabinet's accordion are turned by the same hand on the
-        /// same hardware, so a table that needed two numbers for that would be stating the same
-        /// fact twice and drifting.
+        /// has bucketed the reading. <b>The device dial, and it is one dial for every wheel on
+        /// this table</b> — they are all turned by the same hand on the same hardware, so a
+        /// second number for it would be the same fact stated twice and drifting.
         ///
         /// <para><b>Why a dial rather than a smaller zoom step.</b> The Input System does not
         /// normalise scroll: a Windows detent reports 120, a macOS one about 1, and a trackpad a
