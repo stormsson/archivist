@@ -147,8 +147,28 @@ a rack you file into, a table you lay a sheet on. S7 is the contract they share.
 - **S7.3** The ray is stopped by geometry. Nothing is reachable through a wall or
   through furniture, and no interactable carries a rule saying so.
 - **S7.4** The collider that stops the ray need not be the interactable. Resolution
-  walks up the hierarchy, so one object with many colliders — a rack with a
-  collider per slot (R4.2) — is one interactable, not thirty.
+  walks up the hierarchy — **never down** — so a collider anywhere in an object
+  resolves to the component that owns the interaction. *Amended*: the original
+  clause read "one object with many colliders — a rack with a collider per slot
+  (R4.2) — is one interactable, not thirty", and the rack is the one case where
+  that does not hold. Which component owns the interaction follows from S7.1, not
+  from the collider count:
+  - **Many colliders, one act.** A crate hit anywhere is the same crate: one
+    label, one gate, one act. The walk passes the colliders and the interactable
+    sits at the root. This is what the original clause described.
+  - **Many colliders, one act each.** A rack's slots are not interchangeable
+    surfaces of one object — each is a filing address with its own occupancy, and
+    its label and availability differ by which is aimed at. Each slot's own object
+    is the interactable, and the walk exists to pass decoration above it. A
+    rack-level component could not answer S7.1's three members without first
+    deriving which slot the ray hit, which is a second hit resolution behind the
+    one S7.10 already did. `ShelfSlot : Interactable`, forty-eight to a rack at
+    the default four rows of twelve.
+
+  Because the walk only goes up, a slot volume enclosing the binder standing in it
+  shadows that binder's own verbs — which is how `BinderPickup`'s merge is kept
+  off the rack (Q3.3). That follows from the collider geometry, not from where the
+  interactable sits.
 - **S7.5 (the point of the other nine)** An interactable decides **what** happens
   and **what it is called**. It never decides reach, input binding, highlight, or
   how the label is drawn. Adding a kind of interactable is one class and no edit
