@@ -12,24 +12,44 @@ its own 100-seed sweeps.
 
 ## R1 — the quarter cutter works, and the suite says so
 
-`Tools/run-acceptance.sh`, everything except A8:
+`Tools/run-acceptance.sh all`, re-measured at `7067eaf`. Every number below is
+from that run, not carried forward.
 
 | check | result |
 |---|---|
-| A2 determinism | **PASS** — 100 generations identical, hash `B7F03092AEF93B76` |
-| A3 no seams | **PASS** — 3 border vertices agree within 4×10⁻⁶ m |
-| A4 numbering | **PASS** — 100 surveys numbered 1..N, contiguous |
-| A5 no blank sheets | **PASS** — 328 sheets all carry a drawn class |
-| A6 cross-office coverage | **PASS** — 90.8% of 717 pairs share a class |
-| C2–C4 POI detail sheets | **PASS** — unchanged, `DetailSheetCutter` untouched |
-| B2, B3 render | **PASS** |
+| A2 determinism | **PASS** — 100 generations identical, hash `EAE9079FFB296B86` |
+| A3 no seams | **PASS** — 3 border vertices agree within 4×10⁻⁶ m (worst 0) |
+| A4 numbering | **PASS** — 100 surveys numbered 1..N, contiguous, no duplicates |
+| A5 no blank sheets | **PASS** — 328 sheets; every one that holds land carries a drawn class |
+| A6 cross-office coverage | 79.7% of 591 overlapping pairs share a class (target ≥ 90%) — **reported, not gated** |
+| A8 budgets | **PASS** — generation median 53.8 ms, plate re-contour median 58.0 ms (both < 250) |
+| C2–C4 POI detail sheets | **PASS** — 8 islands × 6 generations identical; 68 detail sheets; 260 + 68 numbered contiguously |
+| B2, B3 render | **PASS** — 100 renders identical, hash `F4FA754FA139AB46`; B3 agrees on 100.00% of 14618 points |
 | S1–S3 save | **PASS** |
+
+**A2's hash was recorded here as `B7F03092AEF93B76` and was wrong.** Measured at
+`d0c5d8a` in a worktree and again at `1d94297` and `7067eaf`, it is
+`EAE9079FFB296B86` at all three. The old value predates some earlier change on
+this branch and was never re-measured; nothing in the refactor commits moved it.
+Two other rows drifted the same way and are corrected above: A5 was recorded as
+"all carry a drawn class" and A6 as "90.8% of 717 pairs".
+
+**A5 carries one blank plate, and that is the rule working.** *Sud' Skerholm*
+LandSurvey NE — a quarter with no land in it, allowed by Q1.7 and F-R9.4, since
+the land bounds are a rectangle and an island is not. One plate in 328.
+
+**A6 is below its target and is not gated.** 79.7% against ≥ 90%. Q2.4 makes
+offices differ by omission, and A5b shows where the shortfall is: Garrison draws
+coast or grid only on 61.2% of its plates (49 of 80), against 1.2% for LandSurvey
+and 0% for Hydrographic and Antiquarian. A plate carrying nothing but coast and
+grid shares no *class* with the office it is paired against. This is a finding
+about Garrison's layer set, not about the cut.
 
 **A5 and A6 needed no porting.** `01-removal.md` §4.1 predicted both would need
 work — A5 because "thin" changes meaning, A6 because identical rects make
 overlap total. Both were wrong. A5 passes because a quarter of a real island
-always carries something; A6 still measures what it always did, because the
-question it asks is whether two offices *draw a shared class* in the
+almost always carries something; A6 still measures what it always did, because
+the question it asks is whether two offices *draw a shared class* in the
 intersection, and `FeatureMatrix` decides that, not geometry.
 
 **A7 was not run** — it is `Cost.VerySlow` and off the gate. It still needs the
@@ -68,6 +88,28 @@ worse than linear in output length, which is the rest of the 50×.
 **This is not a bug in the cutter.** It is the arithmetic of Q1.5 + Q1.6: fixed
 paper and a per-island scale mean one plate holds a quarter of an island instead
 of a fifteenth of one.
+
+### R2.1 — re-measured at `7067eaf`: A8 passes
+
+The finding above stands as measured and is left as it was recorded. It no longer
+describes the suite's behaviour:
+
+```
+PASS  A8  island generation median 53.8 ms (< 250)
+PASS  A8  plate re-contour at 1:10000, 8 m cell, in hand, no fill median 58.0 ms (< 250)
+----  A8  contouring runs at 284 ms per million cells (0.20 M cells on a plate covering 13.1 km2)
+```
+
+Two things moved, and neither is the cutter. The budget is **250 ms**, not the
+100 ms R2 was judged against (`Acceptance.A8SheetRecontourBudgetMs`). And the
+plate is contoured at an **8 m cell**, not the 4 m floor R2's table assumes, on
+**13.1 km²** rather than 39.1 km² — the check measures a plate in hand with no
+fill, which is the once-per-plate case R3.1 frames, and the LOD it resolves to
+under that request is one rung coarser than the cap.
+
+R2's arithmetic is unchanged and still explains the shape of the cost: 284 ms per
+million cells, against 0.20 M cells on this plate. What changed is which plate
+and which budget the check asks about, not what contouring costs per cell.
 
 ---
 
