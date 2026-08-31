@@ -8,7 +8,7 @@ namespace Archivist.Building.Editor
 {
     /// <summary>
     /// Makes a shelf's slots: one empty per grid position, each carrying the collider the player
-    /// aims at, a debug cube and an aim box.
+    /// aims at, and an aim box.
     ///
     /// <para><b>Edit-time work, and it stays out of the runtime assembly.</b> It asks with a
     /// dialog, destroys through <c>Undo</c> and writes materials into the project — none of which
@@ -46,15 +46,13 @@ namespace Archivist.Building.Editor
                 if (existing[i] != null)
                     Undo.DestroyObjectImmediate(existing[i].gameObject);
 
-            Material debug = DebugMaterial();
             Material aim = AimMaterial();
 
             for (int r = 0; r < shelf.RowAmount; r++)
                 for (int c = 0; c < shelf.SlotsPerRow; c++)
-                    BuildSlot(shelf, r, c, debug, aim);
+                    BuildSlot(shelf, r, c, aim);
 
             shelf.Rescan();
-            shelf.ApplyDebugVolumes();
 
             EditorUtility.SetDirty(shelf);
             EditorSceneManager.MarkSceneDirty(shelf.gameObject.scene);
@@ -65,7 +63,7 @@ namespace Archivist.Building.Editor
                       $"{shelf.Depth:0.###} m.", shelf);
         }
 
-        static void BuildSlot(Shelf shelf, int row, int column, Material debug, Material aim)
+        static void BuildSlot(Shelf shelf, int row, int column, Material aim)
         {
             var go = new GameObject("Slot_r" + (row + 1) + "c" + (column + 1));
             Undo.RegisterCreatedObjectUndo(go, "Rebuild shelf slots");
@@ -78,54 +76,45 @@ namespace Archivist.Building.Editor
             var slot = go.AddComponent<ShelfSlot>();
             slot.Configure(row, column, shelf.SlotWidth, shelf.SlotHeight, shelf.Depth);
 
-            Box(shelf, go.transform, Shelf.VolumeName, 1f, debug);
-            Box(shelf, go.transform, ShelfSlot.AimName, ShelfSlot.AimSwell, aim);
+            BuildAim(shelf, go.transform, aim);
         }
 
-        /// <summary>One of a slot's two boxes: the debug cube and the aim light are the same shape
-        /// in the same place, and differ only in size and material.</summary>
-        static void Box(Shelf shelf, Transform slot, string name, float swell, Material material)
+        /// <summary>
+        /// The box that lights under the player's aim — the slot's only renderer.
+        ///
+        /// <para>A slot used to carry a second, always-visible cube so the grid could be seen
+        /// while it was being tuned. The gizmos do that without costing a renderer per slot, and
+        /// K1.1 counts what the cubes would come to across an archive.</para>
+        /// </summary>
+        static void BuildAim(Shelf shelf, Transform slot, Material material)
         {
             // A primitive brings its own collider; the slot's own box is the one the player aims
-            // at, and a second one here would be a target that vanishes with the debug view.
+            // at, and a second one here would be a target that comes and goes with a highlight.
             var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Object.DestroyImmediate(cube.GetComponent<BoxCollider>());
 
             Vector3 centre, size;
             ShelfSlot.SlotBox(shelf.SlotWidth, shelf.SlotHeight, shelf.Depth, out centre, out size);
 
-            cube.name = name;
+            cube.name = ShelfSlot.AimName;
             cube.transform.SetParent(slot, false);
             cube.transform.localPosition = centre;
-            cube.transform.localScale = size * swell;
+            cube.transform.localScale = size * ShelfSlot.AimSwell;
             cube.layer = shelf.gameObject.layer;
 
             var renderer = cube.GetComponent<MeshRenderer>();
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
 
-            // Both start dark: Shelf.ApplyDebugVolumes decides the debug cube a moment later,
-            // and a shelf that lit every aim box at once would say nothing about which slot is
-            // under the aim.
+            // Dark until aimed at: a shelf that lit every box at once would say nothing about
+            // which slot is under the pointer.
             renderer.enabled = false;
 
             if (material != null) renderer.sharedMaterial = material;
         }
 
         /// <summary>
-        /// The translucent material the debug cubes share.
-        ///
-        /// <para>Translucent rather than solid, and that is the point of it: a wall of forty
-        /// opaque boxes hides the shelf they are supposed to be lined up against.</para>
-        /// </summary>
-        static Material DebugMaterial()
-        {
-            return SceneParts.MakeTranslucent(Shader.Find(LitShader), "M_ShelfSlot_Debug",
-                                              new Color(0.95f, 0.75f, 0.25f, 0.18f));
-        }
-
-        /// <summary>
-        /// The aim light's material — <b>Unlit</b>, unlike the debug cube's.
+        /// The aim light's material — <b>Unlit</b>, deliberately.
         ///
         /// <para>A highlight that took the room's lighting would be dimmest exactly where the
         /// shelves are darkest, which is where a player most needs to see which slot they are

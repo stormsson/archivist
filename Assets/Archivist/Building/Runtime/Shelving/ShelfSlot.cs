@@ -54,9 +54,8 @@ namespace Archivist.Building.Shelving
         /// <see cref="Shelf"/> builds on an empty slot, and the one this makes on a binder standing
         /// in a full one.
         ///
-        /// <para>Unlike the debug cube it sits beside, this is <b>not</b> a debug affordance: it
-        /// is the only thing that says which of a hundred identical slots the player is pointing
-        /// at, so it survives into the game after the cubes are turned off.</para>
+        /// <para>It is the slot's <b>only</b> renderer, and not a debug affordance: it is the
+        /// one thing that says which of a hundred identical slots the player is pointing at.</para>
         /// </summary>
         public const string AimName = "Aim";
 
@@ -195,7 +194,7 @@ namespace Archivist.Building.Shelving
 
         /// <summary>
         /// The shape of a slot's opening in its own local metres, and the one statement of it —
-        /// the collider, the debug cube and the shelf's preview gizmo all ask here, so changing
+        /// the collider, the aim box and the shelf's preview gizmo all ask here, so changing
         /// which way a slot runs back cannot leave one of the three promising the old shape.
         ///
         /// <para>Behind the face, not through it: the anchor is the bottom-front-centre of the
@@ -466,8 +465,8 @@ namespace Archivist.Building.Shelving
         }
 
 #if UNITY_EDITOR
-        /// <summary>The opening, drawn whether or not the debug volumes are on — so a shelf whose
-        /// cubes are hidden can still be lined up against the furniture it belongs to.</summary>
+        /// <summary>The opening, in the scene view — the only way to see a slot while authoring,
+        /// now that nothing draws one at runtime until it is aimed at.</summary>
         void OnDrawGizmosSelected()
         {
             BoxCollider box = Volume;

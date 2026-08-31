@@ -43,11 +43,6 @@ namespace Archivist.Building.Shelving
     [AddComponentMenu("Archivist/Shelf")]
     public sealed class Shelf : MonoBehaviour
     {
-        /// <summary>The debug cube's name under each slot. One name, so hiding them is a lookup
-        /// rather than a second marker component on an object that draws and does nothing.
-        /// </summary>
-        public const string VolumeName = "Volume";
-
         [Header("The grid")]
         [Tooltip("Rows, running DOWN from this transform.")]
         [SerializeField, Min(0)] int rowAmount = 4;
@@ -73,11 +68,6 @@ namespace Archivist.Building.Shelving
 
         [Tooltip("Space BETWEEN two slots, edge to edge. Slot pitch is slotWidth + this.")]
         [SerializeField] float slotHorizontalGap = 0.004f;
-
-        [Header("Debug")]
-        [Tooltip("Draws each slot as a translucent cube. The volume the player aims at is the " +
-                 "collider and is unaffected — turning this off hides the marker, not the slot.")]
-        [SerializeField] bool showDebugVolumes = true;
 
         [SerializeField] bool logFiling = true;
 
@@ -106,8 +96,6 @@ namespace Archivist.Building.Shelving
         public float SlotWidth { get { return slotWidth; } }
         public float SlotHeight { get { return slotHeight; } }
         public float Depth { get { return depth; } }
-
-        void Awake() { ApplyDebugVolumes(); }
 
         /// <summary>
         /// Keeps the reachable set in step with what the player is carrying.
@@ -217,23 +205,6 @@ namespace Archivist.Building.Shelving
             return new Vector3(x, y, 0f);
         }
 
-        /// <summary>Shows or hides every debug cube without touching a collider. Live: the field
-        /// can be flipped while the game is running and the shelf follows.</summary>
-        public void ApplyDebugVolumes()
-        {
-            IReadOnlyList<ShelfSlot> here = Slots;
-            for (int i = 0; i < here.Count; i++)
-            {
-                if (here[i] == null) continue;
-
-                Transform cube = here[i].transform.Find(VolumeName);
-                if (cube == null) continue;
-
-                var renderer = cube.GetComponent<MeshRenderer>();
-                if (renderer != null) renderer.enabled = showDebugVolumes;
-            }
-        }
-
         // ---- filing ----------------------------------------------------------------------------
 
         /// <summary>
@@ -334,11 +305,9 @@ namespace Archivist.Building.Shelving
         // ---- identity ---------------------------------------------------------------------------
 
 #if UNITY_EDITOR
-        /// <summary>Pins this shelf's id, and keeps the debug cubes in step with the
-        /// checkbox.</summary>
+        /// <summary>Pins this shelf's id.</summary>
         void OnValidate()
         {
-            ApplyDebugVolumes();
             SceneIdentity.Pin(this, ref shelfId);
         }
 
